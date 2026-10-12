@@ -44,6 +44,10 @@
       <option value="whisper-large-v3-turbo">whisper-large-v3-turbo</option>
     </select>
   </p>
+  <!-- Temporal (hasta la 6.4): comparar la transcripción con y sin vocabulario -->
+  <p>
+    <label><input type="checkbox" id="vocabulario" checked> Usar vocabulario</label>
+  </p>
 
   <button id="boton" type="button">Grabar</button>
   <p id="estado">Listo</p>
@@ -68,6 +72,7 @@
 
   <h2>Tiempos</h2>
   <dl>
+    <dt>ms_vocabulario</dt><dd id="ms-vocabulario">—</dd>
     <dt>ms_groq</dt><dd id="ms-groq">—</dd>
     <dt>ms_interpretar</dt><dd id="ms-interpretar">—</dd>
     <dt>Total</dt><dd id="ms-total">—</dd>
@@ -75,7 +80,8 @@
 
   <p><a href="#" id="borrar-token">Borrar token</a></p>
 
-  <script src="config.js"></script>
-  <script src="app.js"></script>
+  <!-- ?v= obliga al navegador a descargar los scripts nuevos en cada versión -->
+  <script src="config.js?v=6.2"></script>
+  <script src="app.js?v=6.2"></script>
 </body>
 </html>

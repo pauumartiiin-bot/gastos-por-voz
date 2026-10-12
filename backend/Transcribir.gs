@@ -1,6 +1,7 @@
 /**
  * Transcribir.gs — audio → texto con Whisper vía Groq.
- * Solo contiene transcribir_(); la entrada web (doPost) está en Api.gs.
+ * Solo contiene transcribir_(); la entrada web (doPost) está en Api.gs
+ * y el vocabulario que se pasa como prompt, en Vocabulario.gs.
  *
  * Propiedad del script necesaria: GROQ_API_KEY.
  */
@@ -11,8 +12,11 @@ const MODELO_POR_DEFECTO_ = 'whisper-large-v3'; // en la 6.0 acertó más que tu
 const MAX_AUDIO_B64_ = 3 * 1024 * 1024; // ~3 MB en base64
 const EXTENSIONES_ = { 'audio/mp4': 'mp4', 'audio/webm': 'webm' };
 
-/** Envía el audio a Groq y devuelve { ok, texto, modelo, ms_groq } o { ok:false, error }. */
-function transcribir_(audioB64, mime, modelo) {
+/**
+ * Envía el audio a Groq y devuelve { ok, texto, modelo, ms_groq } o { ok:false, error }.
+ * "prompt" (opcional) es el vocabulario de Vocabulario.gs.
+ */
+function transcribir_(audioB64, mime, modelo, prompt) {
   modelo = modelo || MODELO_POR_DEFECTO_;
   if (MODELOS_PERMITIDOS_.indexOf(modelo) === -1) return { ok: false, error: 'entrada' };
   if (!EXTENSIONES_[mime]) return { ok: false, error: 'entrada' };
@@ -24,12 +28,15 @@ function transcribir_(audioB64, mime, modelo) {
   const blob = Utilities.newBlob(bytes, mime, 'audio.' + EXTENSIONES_[mime]);
   const clave = PropertiesService.getScriptProperties().getProperty('GROQ_API_KEY');
 
-  const inicio = Date.now();
   // Payload como objeto con un Blob: UrlFetchApp monta el multipart solo.
+  const payload = { file: blob, model: modelo, language: 'es', response_format: 'json' };
+  if (prompt) payload.prompt = prompt;
+
+  const inicio = Date.now();
   const res = UrlFetchApp.fetch(GROQ_URL_, {
     method: 'post',
     headers: { Authorization: 'Bearer ' + clave },
-    payload: { file: blob, model: modelo, language: 'es', response_format: 'json' },
+    payload: payload,
     muteHttpExceptions: true
   });
   const msGroq = Date.now() - inicio;

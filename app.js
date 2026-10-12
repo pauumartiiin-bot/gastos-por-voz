@@ -1,4 +1,4 @@
-// Fase 6.1: dictar un gasto → vista previa → guardar (o corregir por voz) → deshacer.
+// Fases 6.1–6.2: dictar un gasto → vista previa → guardar (o corregir por voz) → deshacer.
 
 const CLAVE_TOKEN = 'gastos_token';
 
@@ -120,6 +120,8 @@ function pintarPrevia(v) {
 }
 
 function pintarTiempos(r, inicio) {
+  $('ms-vocabulario').textContent = r.ms_vocabulario != null
+    ? r.ms_vocabulario + ' ms' + (r.vocabulario ? '' : ' (sin vocabulario)') : '—';
   $('ms-groq').textContent = r.ms_groq != null ? r.ms_groq + ' ms' : '—';
   $('ms-interpretar').textContent = r.ms_interpretar != null ? r.ms_interpretar + ' ms' : '—';
   $('ms-total').textContent = Math.round(performance.now() - inicio) + ' ms';
@@ -201,7 +203,12 @@ function aBase64(blob) {
 async function dictar(blob) {
   const inicio = performance.now();
   try {
-    const params = { audio: await aBase64(blob), mime, modelo: $('modelo').value };
+    const params = {
+      audio: await aBase64(blob),
+      mime,
+      modelo: $('modelo').value,
+      vocabulario: $('vocabulario').checked
+    };
     // En una corrección se manda la frase original y la interpretación anterior.
     if (corrigiendo && ultima) {
       let anterior = ultima.interpretacion;
