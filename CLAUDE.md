@@ -179,9 +179,9 @@ Resultados (1 pasada por configuración; aciertos · marca bien escrita · aluci
 - `ms_interpretar` sin leer la hoja ~1,8 s frente a 2,6–3,9 s en la app → leer la hoja cuesta ~1 s.
   `ms_groq` ~400 ms en todas: la latencia no distingue modelos.
 
-**Fase 6.5 — README de portfolio (en curso).** Problema, cómo funciona (diagrama Mermaid), evaluación
-con modo de fallo, decisiones, latencia, seguridad, limitaciones, "Qué he aprendido" (borrador para que Pau
-lo reescriba) y puesta en marcha. El código de la v1 no está publicado: se explica en una línea.
+**Fase 6.5 — README de portfolio — hecha.** Problema, cómo funciona (diagrama Mermaid), evaluación
+con modo de fallo, decisiones, latencia, seguridad, limitaciones, "Qué he aprendido" y puesta en
+marcha. El código de la v1 no está publicado: se explica en una línea. **Con esto, la v2 queda cerrada.**
 
 ## Forma de trabajar
 - Antes de escribir código, presentar un plan breve y esperar confirmación.
