@@ -19,13 +19,19 @@
       padding: calc(16px + env(safe-area-inset-top)) 16px 16px;
       max-width: 520px;
     }
-    button { font-size: 1.4rem; width: 100%; padding: 24px; border-radius: 12px; }
-    button.grabando { background: #c62828; color: #fff; }
+    button { font-size: 1.1rem; padding: 14px; border-radius: 12px; }
+    #boton { font-size: 1.4rem; width: 100%; padding: 24px; }
+    #boton.grabando { background: #c62828; color: #fff; }
+    .acciones { display: flex; gap: 8px; margin: 12px 0; }
+    .acciones button { flex: 1; }
     label, select { font-size: 1rem; }
     dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; }
     dt { font-weight: 600; }
     dd { margin: 0; word-break: break-word; }
+    ul { margin: 4px 0 12px; padding-left: 20px; }
     .error { color: #c62828; }
+    .oculto { display: none; }
+    small { color: #666; }
   </style>
 </head>
 <body>
@@ -34,19 +40,37 @@
   <p>
     <label for="modelo">Modelo</label>
     <select id="modelo">
-      <option value="whisper-large-v3-turbo">whisper-large-v3-turbo</option>
       <option value="whisper-large-v3">whisper-large-v3</option>
+      <option value="whisper-large-v3-turbo">whisper-large-v3-turbo</option>
     </select>
   </p>
 
   <button id="boton" type="button">Grabar</button>
+  <p id="estado">Listo</p>
 
+  <!-- Vista previa: nada se guarda hasta pulsar Guardar -->
+  <section id="previa" class="oculto">
+    <h2>Vista previa</h2>
+    <p><small>Has dicho: «<span id="texto"></span>»</small></p>
+    <dl id="datos"></dl>
+    <div id="listas"></div>
+    <div class="acciones">
+      <button id="guardar" type="button">Guardar</button>
+      <button id="corregir" type="button">Corregir por voz</button>
+      <button id="descartar" type="button">Descartar</button>
+    </div>
+  </section>
+
+  <section id="resultado" class="oculto">
+    <p id="resultado-texto"></p>
+    <button id="deshacer" type="button">Deshacer</button>
+  </section>
+
+  <h2>Tiempos</h2>
   <dl>
-    <dt>Estado</dt><dd id="estado">Listo</dd>
-    <dt>Texto</dt><dd id="texto">—</dd>
     <dt>ms_groq</dt><dd id="ms-groq">—</dd>
+    <dt>ms_interpretar</dt><dd id="ms-interpretar">—</dd>
     <dt>Total</dt><dd id="ms-total">—</dd>
-    <dt>Mime</dt><dd id="mime">—</dd>
   </dl>
 
   <p><a href="#" id="borrar-token">Borrar token</a></p>
