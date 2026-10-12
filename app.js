@@ -47,7 +47,9 @@ async function api(accion, params = {}) {
   const datos = await res.json();
   if (!datos.ok) {
     if (datos.error === 'token') localStorage.removeItem(CLAVE_TOKEN);
-    throw new Error(datos.mensaje || MENSAJES[datos.error] || 'Error: ' + datos.error);
+    const err = new Error(datos.mensaje || MENSAJES[datos.error] || 'Error: ' + datos.error);
+    err.datos = datos; // por si el llamador necesita más campos (p. ej. prob_sin_voz)
+    throw err;
   }
   return datos;
 }
@@ -123,8 +125,14 @@ function pintarTiempos(r, inicio) {
   $('ms-vocabulario').textContent = r.ms_vocabulario != null
     ? r.ms_vocabulario + ' ms' + (r.vocabulario ? '' : ' (sin vocabulario)') : '—';
   $('ms-groq').textContent = r.ms_groq != null ? r.ms_groq + ' ms' : '—';
+  pintarProbSinVoz(r);
   $('ms-interpretar').textContent = r.ms_interpretar != null ? r.ms_interpretar + ' ms' : '—';
   $('ms-total').textContent = Math.round(performance.now() - inicio) + ' ms';
+}
+
+// Temporal (hasta la 6.4): "—" significa que Groq no devolvió el dato.
+function pintarProbSinVoz(r) {
+  $('prob-sin-voz').textContent = r && r.prob_sin_voz != null ? r.prob_sin_voz : '—';
 }
 
 /* ---------- Grabación ---------- */
@@ -226,6 +234,7 @@ async function dictar(blob) {
     estado(corrigiendo ? 'Responde grabando: ' + v.preguntas[0] : 'Revisa y guarda.');
   } catch (err) {
     $('ms-total').textContent = Math.round(performance.now() - inicio) + ' ms';
+    pintarProbSinVoz(err.datos); // en el silencio llega con el error
     estado(err.message, true);
   } finally {
     boton.disabled = false;

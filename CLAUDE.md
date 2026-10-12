@@ -37,11 +37,11 @@ Petición: un único `doPost` (en `backend/Api.gs`) que enruta por `accion`. Cue
 ```
 | `accion` | Parámetros | Llama a (v1, sin modificar) | Devuelve (además de `ok: true`) |
 |---|---|---|---|
-| `dictar` | `audio`, `mime`, `modelo?`, `vocabulario?`, `corrige?: {frase, anterior}` | `transcribir_` + `interpretar` | la propuesta de `interpretar` (`bloqueado`, `destino`, `datos`, `errores`, `avisos`, `preguntas`, `supuestos`, `interpretacion`, `frase`) + `texto`, `modelo`, `vocabulario`, `ms_vocabulario`, `ms_groq`, `ms_interpretar` |
+| `dictar` | `audio`, `mime`, `modelo?`, `vocabulario?`, `corrige?: {frase, anterior}` | `transcribir_` + `interpretar` | la propuesta de `interpretar` (`bloqueado`, `destino`, `datos`, `errores`, `avisos`, `preguntas`, `supuestos`, `interpretacion`, `frase`) + `texto`, `modelo`, `vocabulario`, `ms_vocabulario`, `ms_groq`, `prob_sin_voz`, `ms_interpretar` |
 | `interpretar` | `frase`, `correccion?: {anterior, texto}` | `interpretar` | la propuesta (con `ms`) |
 | `guardar` | `interpretacion`, `frase` | `guardar` | `hoja`, `id`, `datos` |
 | `deshacer` | — | `deshacer` | `desc` |
-| `transcribir` | `audio`, `mime`, `modelo?`, `vocabulario?` | `transcribir_` | `texto`, `modelo`, `vocabulario`, `ms_vocabulario`, `ms_groq` |
+| `transcribir` | `audio`, `mime`, `modelo?`, `vocabulario?` | `transcribir_` | `texto`, `modelo`, `vocabulario`, `ms_vocabulario`, `ms_groq`, `prob_sin_voz` |
 | `registros` | — | `listarRegistros` | `recurrentes`, `movimientos`, `categorias`, `hoy` |
 | `editar` | `hoja`, `id`, `cambios` | `editarRegistro` | `desc` |
 | `baja` | `id`, `fecha_fin` | `darDeBaja` | `desc` |
@@ -49,10 +49,14 @@ Petición: un único `doPost` (en `backend/Api.gs`) que enruta por `accion`. Cue
 
 - En `dictar` con `corrige`, lo dictado es el cambio pedido y `frase` es la frase original (así lo espera `interpretar`).
 - `ms_interpretar` incluye leer el contexto de la hoja + Haiku + validación.
-- `vocabulario` (por defecto `true`): se envía a Whisper como `prompt` un texto con conceptos y categorías de la hoja
+- `vocabulario` (por defecto `false`; solo se usa si llega `true`): se envía a Whisper como `prompt` un texto con conceptos y categorías de la hoja
   (`backend/Vocabulario.gs`, caché de 1 h, máx. 600 caracteres ≈ 224 tokens). Prioridad: reglas activas →
   últimos 50 movimientos → categorías. Si falla la lectura, se transcribe sin vocabulario (`vocabulario: false`).
   El prompt de Whisper no es de instrucciones: es texto de contexto cuya ortografía y formato imita.
+- Silencio: se pide `verbose_json` y se descartan los segmentos con `no_speech_prob` > 0,6; un texto sin letras
+  cuenta como vacío. Si queda vacío, `dictar` responde `rechazado` ("No se ha entendido nada en el audio.") con
+  `prob_sin_voz`. `prob_sin_voz` = máxima `no_speech_prob` de los segmentos, o `null` si Groq no la da
+  (temporal, para ajustar el umbral en la 6.4).
 
 Errores: `{ "ok": false, "error": "...", "mensaje"?: "..." }`
 - `token`, `entrada` (JSON roto, acción desconocida, audio/mime/modelo no válidos), `groq`.
@@ -66,8 +70,8 @@ Reglas:
 - `modelo` solo admite `whisper-large-v3` (por defecto) o `whisper-large-v3-turbo` (lista blanca en el servidor).
 - Rechazar audio vacío o de más de ~3 MB en base64.
 - Groq: `https://api.groq.com/openai/v1/audio/transcriptions`, multipart (`UrlFetchApp` lo monta solo si el
-  payload es un objeto con un Blob), `language: 'es'`, `response_format: 'json'`, cabecera
-  `Authorization: Bearer <GROQ_API_KEY>`, `muteHttpExceptions: true`. El nombre del archivo debe llevar
+  payload es un objeto con un Blob), `language: 'es'`, cabecera
+  `Authorization: Bearer <GROQ_API_KEY>`, `muteHttpExceptions: true`, `response_format: 'verbose_json'`. El nombre del archivo debe llevar
   extensión acorde al mime (`audio.mp4`, `audio.webm`).
 - Los errores nunca devuelven claves, trazas ni el cuerpo de la respuesta de Groq o Anthropic.
 - El cliente pinta todo lo que viene del modelo con `textContent`, nunca con `innerHTML`.
@@ -96,10 +100,13 @@ silencio y la v1 intacta. Latencia real 5,7–7,6 s: `ms_interpretar` 2,6–3,9 
 `evaluarCerebro`; hipótesis: leer la hoja), Groq ~0,5 s, resto ~2,5 s. Haiku entiende transcripciones
 imperfectas ("Son 13'99" → 13,99 €). Fuera de alcance: "Guardar directo" y el fallo del cambio de precio.
 
-**Fase 6.2 — vocabulario para Whisper (en curso).** `prompt` de Whisper construido desde la hoja con caché;
-`ms_vocabulario` mide cuánto cuesta leer la hoja cuando no está en caché. Casilla temporal "Usar vocabulario"
-en el cliente para comparar hasta la 6.4. Riesgo a vigilar: con prompt, Whisper puede alucinar palabras del
-vocabulario ante silencio.
+**Fase 6.2 — vocabulario para Whisper (en validación).** Resultados (1 intento por celda, orientativos):
+leer la hoja cuesta ~720 ms (47 ms con caché) → también está dentro de `ms_interpretar`, que lee la hoja en
+cada dictado. El vocabulario ayudó a turbo (3/3) pero empeoró a large-v3 (1/3: se come palabras que están
+en el vocabulario, p. ej. "Claude"); large-v3 sin vocabulario 3/3 → **por defecto, sin vocabulario**.
+Whisper alucina ante el silencio ("Gracias por ver el video") con y sin vocabulario → filtro por
+`no_speech_prob` + texto sin letras. Pendiente para la 6.4: vocabulario solo con nombres propios y ajustar
+el umbral de silencio con datos.
 
 Fases siguientes (no implementar aún): 6.3 interfaz e icono (y panel "Mis registros"),
 6.4 evaluación con audios reales, 6.5 README de portfolio (con los resultados de cada fase).
