@@ -56,7 +56,7 @@ Petición: un único `doPost` (en `backend/Api.gs`) que enruta por `accion`. Cue
 - Silencio: se pide `verbose_json` y se descartan los segmentos con `no_speech_prob` > 0,3; un texto sin letras
   cuenta como vacío. Si queda vacío, `dictar` responde `rechazado` ("No se ha entendido nada en el audio.") con
   `prob_sin_voz`. `prob_sin_voz` = máxima `no_speech_prob` de los segmentos, o `null` si Groq no la da
-  (temporal, para ajustar el umbral en la 6.4).
+  (se mantiene: el umbral quedó en el límite en la 6.4 y conviene seguir midiendo).
 
 Errores: `{ "ok": false, "error": "...", "mensaje"?: "..." }`
 - `token`, `entrada` (JSON roto, acción desconocida, audio/mime/modelo no válidos), `groq`.
@@ -106,6 +106,7 @@ README.md
   `UMBRAL_VOZ` (0,02) no se envía nada. El filtro del servidor (`no_speech_prob`) sigue como segunda red.
 - Modo pruebas (interruptor en Ajustes, `gastos_pruebas`): muestra modelo, vocabulario, volumen máximo,
   tiempos y prob. sin voz. Fuera de él el cliente no envía `modelo` ni `vocabulario` (valores del servidor).
+  Se mantiene tras la 6.4 para seguir midiendo en uso real.
 - Deshacer: una sola notificación flotante sobre la barra, común a Dictar y Mis registros (el servidor solo
   deshace la última acción). Se oculta a los 8 s (`MS_NOTIFICACION`).
 
@@ -138,13 +139,44 @@ uno se despliega su editor: importe y categoría (`editar`, en recurrentes "Corr
 desde"), "Dar de baja" con fecha (`baja`) y "Eliminar" (`eliminar`). Baja y eliminar piden un segundo toque;
 cada acción muestra Deshacer y recarga la lista. Sin cambios en Apps Script.
 
-**Fase 6.4 — evaluación con audios reales (en curso).** 30 audios grabados una vez (Notas de voz → carpeta
+**Fase 6.4 — evaluación con audios reales — hecha.** 30 audios grabados una vez (Notas de voz → carpeta
 de Drive, propiedad `CARPETA_EVALUACION`) y pasados por 6 configuraciones: 2 modelos × vocabulario
 (ninguno, completo de la hoja, solo nombres propios). `evaluarAudios()` (`backend/Evaluacion.gs`) sigue el
 camino de un dictado con el contexto controlado de `evaluarCerebro` y no guarda gastos; escribe en las
 pestañas "Evaluación" y "Evaluación resumen" y se puede relanzar si se agota el tiempo (sigue donde lo dejó).
 Grupos: A fáciles, B números hablados, C marcas, D fechas y frecuencias, E ambiguas (deben preguntar),
 F silencio/ruido (deben rechazarse), G condiciones reales.
+Resultados (1 pasada por configuración; aciertos · marca bien escrita · alucinaciones en F):
+
+| Configuración | Aciertos | Marca | Alucinaciones |
+|---|---|---|---|
+| large-v3 · ninguno | 25/30 | 19/25 | 0/2 |
+| large-v3 · completo | 16/30 | 17/25 | 2/2 |
+| large-v3 · propios | 21/30 | 18/25 | 1/2 |
+| turbo · ninguno | 24/30 | 22/25 | 2/2 |
+| turbo · completo | 24/30 | 22/25 | 2/2 |
+| turbo · propios | 25/30 | 24/25 | 2/2 |
+
+- **Decisión: large-v3 sin vocabulario, umbral 0,3 (sin cambios de código).** Empata arriba, es la única
+  en la que el filtro de silencio funciona y no tiene errores silenciosos.
+- Modo de fallo, no solo acierto: los 5 ❌ de large-v3 sin vocabulario son 2 preguntas razonables (09, 17),
+  2 marcas mal escritas visibles en la vista previa ("Vindet", "Globo") y 1 voz real rechazada (15).
+  **0 errores silenciosos** (dato erróneo guardado sin pregunta). Los únicos aparecen con vocabulario en
+  large-v3 (se come el "ayer" en 03, 09, 14).
+- large-v3 borra justo las palabras del vocabulario ("Spotify 10,99" → "10,99 € al mes"; también Mercadona,
+  Wallapop, Gasolina, Barbero, Creatina): confirma la 6.2. El vocabulario queda en el código, apagado.
+- Turbo da `no_speech_prob` 0,0 siempre, incluso al alucinar ("Gracias por ver el video"; con vocabulario
+  de nombres propios escribe "Gastos", la primera palabra del prompt) → ningún umbral lo filtra. Descartado
+  pese a escribir mejor las marcas (24/25).
+- Umbral en el límite (large-v3 sin vocabulario): silencio 0,99, ruido 0,34, voz real 0,00–0,24 salvo una
+  a 0,39 (rechazada). Se deja en 0,3: repetir una frase es mejor que un gasto inventado.
+- El "ruido" del audio 27 tenía voces de fondo: turbo las transcribió ("…de Barajas a Lucero"). Whisper no
+  sabe quién habla; la última red es Haiku (sin importe, bloquea).
+- Fallos comunes a todas las configuraciones (no son de Whisper): "diecinueve noventa y nueve" → 1999
+  (Haiku pregunta; decir "con" lo evita, el caso 10 sale siempre), Glovo → "Globo" incluso con vocabulario,
+  y Decathlon/Vinted → Haiku pregunta la categoría (legítimo; se arreglaría con datos en Categorías).
+- `ms_interpretar` sin leer la hoja ~1,8 s frente a 2,6–3,9 s en la app → leer la hoja cuesta ~1 s.
+  `ms_groq` ~400 ms en todas: la latencia no distingue modelos.
 
 Fases siguientes (no implementar aún): 6.5 README de portfolio (con los resultados de cada fase).
 
