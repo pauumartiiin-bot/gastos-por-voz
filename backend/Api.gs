@@ -48,7 +48,9 @@ function doPost(e) {
 function dictar_(p, token) {
   const tr = transcribirConVocabulario_(p);
   if (!tr.ok) return tr;
-  if (!tr.texto) return { ok: false, error: 'rechazado', mensaje: 'No se ha entendido nada en el audio.' };
+  if (!tr.texto) {
+    return { ok: false, error: 'rechazado', mensaje: 'No se ha entendido nada en el audio.', prob_sin_voz: tr.prob_sin_voz };
+  }
 
   // Sin "corrige": lo dictado es la frase. Con "corrige": lo dictado es el cambio pedido.
   const c = p.corrige;
@@ -61,10 +63,10 @@ function dictar_(p, token) {
   return Object.assign(v, tr, { ms_interpretar: ms });
 }
 
-/** Transcribe usando el vocabulario de la hoja salvo que llegue "vocabulario: false". */
+/** Transcribe sin vocabulario salvo que llegue "vocabulario: true" (en la 6.2 empeoró a large-v3). */
 function transcribirConVocabulario_(p) {
   const inicio = Date.now();
-  let usar = p.vocabulario !== false;
+  let usar = p.vocabulario === true;
   let prompt = '';
   try {
     if (usar) prompt = vocabulario_();

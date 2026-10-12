@@ -11,9 +11,10 @@ const MODELOS_PERMITIDOS_ = ['whisper-large-v3', 'whisper-large-v3-turbo'];
 const MODELO_POR_DEFECTO_ = 'whisper-large-v3'; // en la 6.0 acertó más que turbo con la misma latencia
 const MAX_AUDIO_B64_ = 3 * 1024 * 1024; // ~3 MB en base64
 const EXTENSIONES_ = { 'audio/mp4': 'mp4', 'audio/webm': 'webm' };
+const UMBRAL_SIN_VOZ_ = 0.6; // segmentos con más probabilidad de "no hay voz" se descartan (alucinaciones)
 
 /**
- * Envía el audio a Groq y devuelve { ok, texto, modelo, ms_groq } o { ok:false, error }.
+ * Envía el audio a Groq y devuelve { ok, texto, modelo, ms_groq, prob_sin_voz } o { ok:false, error }.
  * "prompt" (opcional) es el vocabulario de Vocabulario.gs.
  */
 function transcribir_(audioB64, mime, modelo, prompt) {
@@ -29,7 +30,7 @@ function transcribir_(audioB64, mime, modelo, prompt) {
   const clave = PropertiesService.getScriptProperties().getProperty('GROQ_API_KEY');
 
   // Payload como objeto con un Blob: UrlFetchApp monta el multipart solo.
-  const payload = { file: blob, model: modelo, language: 'es', response_format: 'json' };
+  const payload = { file: blob, model: modelo, language: 'es', response_format: 'verbose_json' };
   if (prompt) payload.prompt = prompt;
 
   const inicio = Date.now();
@@ -47,5 +48,27 @@ function transcribir_(audioB64, mime, modelo, prompt) {
   }
 
   const datos = JSON.parse(res.getContentText());
-  return { ok: true, texto: (datos.text || '').trim(), modelo: modelo, ms_groq: msGroq };
+  const limpio = quitarSilencio_(datos);
+  return { ok: true, texto: limpio.texto, modelo: modelo, ms_groq: msGroq, prob_sin_voz: limpio.prob };
+}
+
+/**
+ * Whisper inventa frases ante el silencio ("Gracias por ver el video").
+ * A) Si Groq da no_speech_prob por segmento, se quitan los segmentos por encima del umbral.
+ *    Si no lo da, se usa el texto tal cual (prob: null).
+ * B) Un texto sin ninguna letra ("." o "…") se trata como vacío.
+ */
+function quitarSilencio_(datos) {
+  const segmentos = datos.segments || [];
+  const conProb = segmentos.length > 0 && segmentos.every((s) => typeof s.no_speech_prob === 'number');
+
+  let texto = datos.text || '';
+  let prob = null;
+  if (conProb) {
+    prob = Math.round(Math.max(...segmentos.map((s) => s.no_speech_prob)) * 100) / 100;
+    texto = segmentos.filter((s) => s.no_speech_prob <= UMBRAL_SIN_VOZ_).map((s) => s.text).join('');
+  }
+  texto = texto.trim();
+  if (!/\p{L}/u.test(texto)) texto = '';
+  return { texto, prob };
 }
