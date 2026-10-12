@@ -78,16 +78,33 @@ Reglas:
 
 ## Estructura del repo
 ```
-index.html              página: dictar → vista previa → guardar / corregir / deshacer
-app.js                  lógica del cliente
+index.html              página: token, dictar (vista previa → guardar / corregir / deshacer), mis registros, ajustes
+styles.css              estilos; colores como variables CSS para tema claro y oscuro
+app.js                  lógica del cliente (tema, vistas, detección de silencio, llamadas a la API)
 config.js               URL del endpoint de Apps Script (no secreta)
 manifest.webmanifest    para instalarla como app (display: standalone)
+icons/                  icono.svg (fuente) y PNG 180/192/512 generados a partir de él
 backend/Api.gs          doPost (enrutador) y clasificación de errores; se copia a mano a Apps Script
 backend/Transcribir.gs  transcribir_() con Groq; se copia a mano a Apps Script
 backend/Vocabulario.gs  vocabulario de la hoja para Whisper (con caché); se copia a mano a Apps Script
 CLAUDE.md               este archivo
 README.md
 ```
+
+## Diseño (fase 6.3)
+- Paleta "Lavanda y ciruela". Claro: fondo crema `#F4EEE4`, tarjeta `#FAF6EF`, principal `#5A4A8C`,
+  acento `#8C3A55`. Oscuro: fondo berenjena `#15121F`, tarjeta `#201B2E`, principal `#A99BE0`, acento `#E28AA5`.
+  Todos los colores viven como variables en `styles.css` (`:root` y `:root[data-tema="oscuro"]`); no se
+  escriben colores sueltos en el HTML ni en el JS.
+- Tema: por defecto el del sistema; el botón luna/sol lo fija y se guarda en `localStorage` (`gastos_tema`).
+- Estilo: botón de grabar e importe con degradado principal → acento, tarjeta con borde degradado, halos de
+  fondo al 40 %. Tipografía Manrope (Google Fonts) con la del sistema como respaldo.
+- Icono: "euro que suena" en vino con degradado y onda lavanda. iOS exige PNG cuadrado sin esquinas
+  (aplica su propia máscara); el `€` va dibujado como trazos para no depender de una fuente.
+- Silencio en el cliente: la Web Audio API mide el volumen (RMS) mientras se graba; si el máximo no supera
+  `UMBRAL_VOZ` (0,02) no se envía nada. El filtro del servidor (`no_speech_prob`) sigue como segunda red.
+- Modo pruebas (interruptor en Ajustes, `gastos_pruebas`): muestra modelo, vocabulario, volumen máximo,
+  tiempos y prob. sin voz. Fuera de él el cliente no envía `modelo` ni `vocabulario` (valores del servidor).
 
 ## Estado actual
 **Fase 6.0 — hecha.** El micrófono funciona en la app instalada (iOS pide permiso solo la primera vez),
@@ -100,20 +117,23 @@ silencio y la v1 intacta. Latencia real 5,7–7,6 s: `ms_interpretar` 2,6–3,9 
 `evaluarCerebro`; hipótesis: leer la hoja), Groq ~0,5 s, resto ~2,5 s. Haiku entiende transcripciones
 imperfectas ("Son 13'99" → 13,99 €). Fuera de alcance: "Guardar directo" y el fallo del cambio de precio.
 
-**Fase 6.2 — vocabulario para Whisper (en validación).** Resultados (1 intento por celda, orientativos):
+**Fase 6.2 — hecha.** Resultados (1 intento por celda, orientativos):
 leer la hoja cuesta ~720 ms (47 ms con caché) → también está dentro de `ms_interpretar`, que lee la hoja en
 cada dictado. El vocabulario ayudó a turbo (3/3) pero empeoró a large-v3 (1/3: se come palabras que están
 en el vocabulario, p. ej. "Claude"); large-v3 sin vocabulario 3/3 → **por defecto, sin vocabulario**.
 Whisper alucina ante el silencio ("Gracias por ver el video") con y sin vocabulario → filtro por
 `no_speech_prob` + texto sin letras. Medido: voz real 0,01–0,06, silencios alucinados 0,38–0,55 → umbral
-0,3 (el 0,6 habitual no los paraba; ruido sí filtrado). Pendiente: en la 6.3, no enviar audio sin volumen
-(Web Audio API en el cliente); en la 6.4, vocabulario solo con nombres propios y revisar el umbral con más datos.
+0,3 (el 0,6 habitual no los paraba; ruido sí filtrado); revalidado: silencios 0,67–0,77 descartados.
+Pendiente para la 6.4: vocabulario solo con nombres propios y revisar el umbral con más datos.
 
-Fases siguientes (no implementar aún): 6.3 interfaz e icono (y panel "Mis registros" y detección de silencio en el cliente),
+**Fase 6.3a — interfaz (en curso).** Diseño final, temas, icono, pantalla del token, detección de silencio
+en el cliente y modo pruebas. Sin cambios en Apps Script.
+
+Fases siguientes (no implementar aún): 6.3b panel "Mis registros" (listar, editar, baja, eliminar),
 6.4 evaluación con audios reales, 6.5 README de portfolio (con los resultados de cada fase).
 
 ## Forma de trabajar
 - Antes de escribir código, presentar un plan breve y esperar confirmación.
 - Commits pequeños con mensajes en español que digan qué y por qué.
-- Cada cambio en `app.js` o `config.js` sube el `?v=` de sus `<script>` en `index.html` (evita la caché de iOS).
+- Cada cambio en `app.js`, `config.js` o `styles.css` sube su `?v=` en `index.html` (evita la caché de iOS).
 - Al terminar una tarea, explicar qué se ha hecho y cómo probarlo.
