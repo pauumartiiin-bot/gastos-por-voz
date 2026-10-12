@@ -30,7 +30,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800&display=swap">
   <!-- ?v= obliga al navegador a descargar los archivos nuevos en cada versión -->
-  <link rel="stylesheet" href="styles.css?v=6.3.1">
+  <link rel="stylesheet" href="styles.css?v=6.4.0">
 </head>
 <body>
   <div class="halo halo-a" aria-hidden="true"></div>
@@ -86,11 +86,6 @@
         </div>
       </article>
 
-      <div id="resultado" class="tarjeta resultado oculto">
-        <p id="resultado-texto"></p>
-        <button id="deshacer" class="btn-suave" type="button">Deshacer</button>
-      </div>
-
       <!-- Modo pruebas (hasta la 6.4): parámetros y medidas -->
       <section id="pruebas" class="tarjeta pruebas oculto" aria-labelledby="titulo-pruebas">
         <h2 id="titulo-pruebas">Modo pruebas</h2>
@@ -112,12 +107,8 @@
       </section>
     </section>
 
-    <!-- Mis registros (llega en la 6.3b) + ajustes -->
+    <!-- Mis registros + ajustes -->
     <section id="vista-registros" class="oculto" style="display: flex; flex-direction: column; gap: 20px">
-      <div id="aviso-registros" class="tarjeta resultado oculto">
-        <p id="aviso-registros-texto"></p>
-        <button id="deshacer-registro" class="btn-suave" type="button">Deshacer</button>
-      </div>
       <p id="estado-registros" class="estado" role="status" aria-live="polite"></p>
 
       <section class="seccion" aria-labelledby="titulo-recurrentes">
@@ -138,6 +129,12 @@
     </section>
   </main>
 
+  <!-- Notificación flotante: confirma la última acción y permite deshacerla (en las dos vistas) -->
+  <div id="notificacion" class="tarjeta notificacion oculto" role="status" aria-live="polite">
+    <p id="notificacion-texto"></p>
+    <button id="deshacer" class="btn-suave" type="button">Deshacer</button>
+  </div>
+
   <nav id="barra" class="barra oculto" aria-label="Secciones">
     <button type="button" data-vista="dictar" aria-current="page">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v4"/></svg>
@@ -149,7 +146,7 @@
     </button>
   </nav>
 
-  <script src="config.js?v=6.3.1"></script>
-  <script src="app.js?v=6.3.1"></script>
+  <script src="config.js?v=6.4.0"></script>
+  <script src="app.js?v=6.4.0"></script>
 </body>
 </html>

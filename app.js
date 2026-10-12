@@ -1,4 +1,4 @@
-// Fase 6.3: dictar → vista previa → guardar (o corregir por voz) → deshacer, y «Mis registros».
+// Fase 6.4: dictar → vista previa → guardar (o corregir por voz) → deshacer, y «Mis registros».
 
 const CLAVE_TOKEN = 'gastos_token';
 const CLAVE_TEMA = 'gastos_tema';
@@ -7,6 +7,9 @@ const CLAVE_PRUEBAS = 'gastos_pruebas';
 // Volumen (RMS, 0–1) por debajo del cual se considera que no se habló. Ajustable en la 6.4
 // con el dato «Volumen máx.» del modo pruebas.
 const UMBRAL_VOZ = 0.02;
+
+// Tiempo que la notificación con Deshacer sigue visible (ms).
+const MS_NOTIFICACION = 8000;
 
 const $ = (id) => document.getElementById(id);
 const boton = $('boton');
@@ -38,10 +41,7 @@ function mostrar(id, visible) {
 function irA(vista) {
   mostrar('vista-dictar', vista === 'dictar');
   mostrar('vista-registros', vista === 'registros');
-  if (vista === 'registros') {
-    mostrar('aviso-registros', false);
-    cargarRegistros(); // siempre datos frescos: la hoja puede haber cambiado
-  }
+  if (vista === 'registros') cargarRegistros(); // siempre datos frescos: la hoja puede haber cambiado
   document.querySelectorAll('.barra button').forEach((b) => {
     if (b.dataset.vista === vista) b.setAttribute('aria-current', 'page');
     else b.removeAttribute('aria-current');
@@ -189,7 +189,6 @@ function pintarPrevia(v) {
   }));
 
   $('guardar').disabled = v.bloqueado;
-  mostrar('resultado', false);
   mostrar('previa', true);
 }
 
@@ -317,7 +316,6 @@ async function empezar() {
   empezarMedidor(stream);
 
   botonGrabando(true);
-  mostrar('resultado', false);
   estado(corrigiendo ? 'Grabando la corrección…' : 'Te escucho…');
 }
 
@@ -395,6 +393,21 @@ async function ejecutar(btn, mensajeEspera, fn) {
     estado(err.message, true);
     btn.disabled = false;
   }
+}
+
+/* ---------- Notificación flotante con Deshacer ---------- */
+
+// Una sola para las dos vistas: el servidor solo puede deshacer la última acción.
+let temporizador = 0;
+
+function notificar(texto, conDeshacer, esError = false) {
+  clearTimeout(temporizador);
+  $('notificacion-texto').textContent = texto;
+  $('notificacion-texto').classList.toggle('error', esError);
+  mostrar('deshacer', conDeshacer);
+  $('deshacer').disabled = false;
+  mostrar('notificacion', true);
+  temporizador = setTimeout(() => mostrar('notificacion', false), conDeshacer ? MS_NOTIFICACION : 3000);
 }
 
 /* ---------- Mis registros ---------- */
@@ -582,10 +595,8 @@ async function ejecutarRegistro(btn, mensajeEspera, fn) {
   try {
     const r = await fn();
     abierto = null;
-    mostrar('resultado', false); // el Deshacer de Dictar ya no deshace lo último
-    $('aviso-registros-texto').textContent = r.desc;
-    $('deshacer-registro').disabled = false;
-    mostrar('aviso-registros', true);
+    estadoRegistros('');
+    notificar(r.desc, true);
     await cargarRegistros();
   } catch (err) {
     estadoRegistros(err.message, true);
@@ -602,15 +613,11 @@ boton.addEventListener('click', () => {
 
 $('guardar').addEventListener('click', () => ejecutar($('guardar'), 'Guardando…', async () => {
   const r = await api('guardar', { interpretacion: ultima.interpretacion, frase: ultima.frase });
-  $('resultado-texto').textContent =
-    '✓ ' + r.datos.concepto + ' · ' + euros(r.datos.importe) + ' guardado en ' + r.hoja;
   ultima = null;
   corrigiendo = false;
   mostrar('previa', false);
-  mostrar('resultado', true);
-  mostrar('aviso-registros', false); // el Deshacer de Mis registros ya no deshace lo último
-  $('deshacer').disabled = false;
   estado('Toca y di tu gasto');
+  notificar('✓ ' + r.datos.concepto + ' · ' + euros(r.datos.importe) + ' guardado en ' + r.hoja, true);
 }));
 
 $('corregir').addEventListener('click', () => {
@@ -625,23 +632,16 @@ $('descartar').addEventListener('click', () => {
   estado('Descartado. No se ha guardado nada.');
 });
 
-$('deshacer').addEventListener('click', () => ejecutar($('deshacer'), 'Deshaciendo…', async () => {
-  const r = await api('deshacer');
-  $('resultado-texto').textContent = '↩︎ Deshecho: ' + r.desc;
-  estado('Toca y di tu gasto');
-}));
-
-$('deshacer-registro').addEventListener('click', async () => {
-  const btn = $('deshacer-registro');
-  btn.disabled = true;
-  estadoRegistros('Deshaciendo…');
+$('deshacer').addEventListener('click', async () => {
+  clearTimeout(temporizador); // no se oculta mientras se deshace
+  $('deshacer').disabled = true;
+  $('notificacion-texto').textContent = 'Deshaciendo…';
   try {
     const r = await api('deshacer');
-    $('aviso-registros-texto').textContent = '↩︎ Deshecho: ' + r.desc;
-    await cargarRegistros();
+    notificar('↩︎ Deshecho: ' + r.desc, false);
+    if (!$('vista-registros').classList.contains('oculto')) await cargarRegistros();
   } catch (err) {
-    estadoRegistros(err.message, true);
-    btn.disabled = false;
+    notificar(err.message, true, true); // se puede reintentar
   }
 });
 
