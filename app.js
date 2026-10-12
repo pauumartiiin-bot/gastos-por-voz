@@ -1,4 +1,4 @@
-// Fase 6.3a: interfaz final. Dictar → vista previa → guardar (o corregir por voz) → deshacer.
+// Fase 6.3: dictar → vista previa → guardar (o corregir por voz) → deshacer, y «Mis registros».
 
 const CLAVE_TOKEN = 'gastos_token';
 const CLAVE_TEMA = 'gastos_tema';
@@ -38,6 +38,10 @@ function mostrar(id, visible) {
 function irA(vista) {
   mostrar('vista-dictar', vista === 'dictar');
   mostrar('vista-registros', vista === 'registros');
+  if (vista === 'registros') {
+    mostrar('aviso-registros', false);
+    cargarRegistros(); // siempre datos frescos: la hoja puede haber cambiado
+  }
   document.querySelectorAll('.barra button').forEach((b) => {
     if (b.dataset.vista === vista) b.setAttribute('aria-current', 'page');
     else b.removeAttribute('aria-current');
@@ -393,6 +397,202 @@ async function ejecutar(btn, mensajeEspera, fn) {
   }
 }
 
+/* ---------- Mis registros ---------- */
+
+let registros = null; // última respuesta de "registros": { recurrentes, movimientos, categorias, hoy }
+let abierto = null;   // id del registro desplegado (solo uno a la vez)
+
+function estadoRegistros(mensaje, esError = false) {
+  $('estado-registros').textContent = mensaje;
+  $('estado-registros').classList.toggle('error', esError);
+}
+
+async function cargarRegistros() {
+  estadoRegistros('Cargando…');
+  try {
+    registros = await api('registros');
+    estadoRegistros('');
+    pintarRegistros();
+  } catch (err) {
+    estadoRegistros(err.message, true);
+  }
+}
+
+function pintarRegistros() {
+  pintarLista('lista-recurrentes', registros.recurrentes, 'Recurrentes', 'No tienes gastos recurrentes activos.');
+  pintarLista('lista-movimientos', registros.movimientos, 'Movimientos', 'Todavía no hay gastos puntuales.');
+}
+
+function pintarLista(id, items, hoja, textoVacio) {
+  $(id).replaceChildren(...(items.length
+    ? items.map((r) => tarjetaRegistro(r, hoja))
+    : [crear('p', 'vacio', textoVacio)]));
+}
+
+function tarjetaRegistro(r, hoja) {
+  const esRec = hoja === 'Recurrentes';
+  const estaAbierto = abierto === r.id;
+  const tarjeta = crear('article', 'registro' + (estaAbierto ? ' abierto' : ''));
+
+  const cabecera = crear('button', 'registro-cabecera');
+  cabecera.type = 'button';
+  cabecera.setAttribute('aria-expanded', String(estaAbierto));
+  const fila = crear('span', 'registro-fila');
+  fila.append(crear('span', 'registro-concepto', r.concepto), crear('span', 'registro-importe', euros(r.importe)));
+
+  const meta = crear('span', 'registro-meta');
+  if (esRec) meta.append(crear('span', 'chip chip-prim', textoFrecuencia({ frecuencia: r.frecuencia, cada_meses: r.cada_meses })));
+  else meta.append(crear('span', 'chip', fecha(r.fecha)));
+  if (r.categoria) meta.append(crear('span', 'chip chip-acento', r.categoria));
+  if (esRec && r.tipo === 'presupuesto') meta.append(crear('span', 'chip', 'Presupuesto'));
+  if (esRec) meta.append(crear('span', 'chip', 'Desde ' + fecha(r.inicio)));
+  if (esRec && r.fin) meta.append(crear('span', 'chip', 'Hasta ' + fecha(r.fin)));
+
+  cabecera.append(fila, meta);
+  cabecera.addEventListener('click', () => {
+    abierto = estaAbierto ? null : r.id;
+    pintarRegistros();
+  });
+  tarjeta.append(cabecera);
+  if (estaAbierto) tarjeta.append(editorRegistro(r, hoja));
+  return tarjeta;
+}
+
+function campo(texto, control) {
+  const label = crear('label', 'campo', texto);
+  label.append(control);
+  return label;
+}
+
+function entrada(tipo, valor) {
+  const input = document.createElement('input');
+  input.type = tipo;
+  input.value = valor;
+  return input;
+}
+
+function opcion(nombre, valor, titulo, ayuda, marcada) {
+  const label = crear('label', 'opcion');
+  const radio = entrada('radio', valor);
+  radio.name = nombre;
+  radio.checked = marcada;
+  const texto = crear('span', null, titulo);
+  texto.append(document.createElement('br'), crear('small', null, ayuda));
+  label.append(radio, texto);
+  return { label, radio };
+}
+
+// Panel de edición de un registro desplegado.
+function editorRegistro(r, hoja) {
+  const esRec = hoja === 'Recurrentes';
+  const editor = crear('div', 'editor');
+
+  const importe = entrada('text', String(r.importe).replace('.', ','));
+  importe.inputMode = 'decimal';
+  const categoria = document.createElement('select');
+  registros.categorias.forEach((c) => {
+    const o = crear('option', null, c);
+    o.value = c;
+    o.selected = c === r.categoria;
+    categoria.append(o);
+  });
+  editor.append(campo('Importe (€)', importe), campo('Categoría', categoria));
+
+  // Recurrentes: un cambio de importe puede ser una corrección o un cambio de precio desde una fecha.
+  let esCambioPrecio = () => false;
+  let desde = null;
+  if (esRec) {
+    const grupo = document.createElement('fieldset');
+    grupo.append(crear('legend', null, 'Si cambia el importe…'));
+    const correccion = opcion('modo-' + r.id, 'correccion', 'Corrección',
+      'El importe siempre fue este; cambia también los meses pasados.', true);
+    const cambio = opcion('modo-' + r.id, 'cambioPrecio', 'Cambio de precio',
+      'Desde una fecha; los meses anteriores se quedan como estaban.', false);
+    desde = entrada('date', registros.hoy);
+    const campoDesde = campo('Desde', desde);
+    campoDesde.classList.add('oculto');
+    grupo.addEventListener('change', () => campoDesde.classList.toggle('oculto', !cambio.radio.checked));
+    grupo.append(correccion.label, cambio.label, campoDesde);
+    editor.append(grupo);
+    esCambioPrecio = () => cambio.radio.checked;
+  }
+
+  const guardar = crear('button', 'btn-primario', 'Guardar cambios');
+  guardar.type = 'button';
+  guardar.addEventListener('click', () => ejecutarRegistro(guardar, 'Guardando…', () => {
+    const cambios = {};
+    const nuevo = Math.round(Number(importe.value.replace(',', '.')) * 100) / 100;
+    if (!(nuevo > 0)) throw new Error('Escribe un importe válido.');
+    if (nuevo !== r.importe) cambios.importe = nuevo;
+    if (categoria.value !== r.categoria) cambios.categoria = categoria.value;
+    if (!Object.keys(cambios).length) throw new Error('No hay cambios que guardar.');
+    if (cambios.importe != null && esCambioPrecio()) {
+      cambios.modo = 'cambioPrecio';
+      cambios.desde = desde.value;
+    } else {
+      cambios.modo = 'correccion';
+    }
+    return api('editar', { hoja, id: r.id, cambios });
+  }));
+  editor.append(guardar);
+
+  const acciones = crear('div', 'fila');
+  if (esRec) {
+    const fechaBaja = entrada('date', registros.hoy);
+    editor.append(campo('Fecha de baja', fechaBaja));
+    const baja = crear('button', 'btn-borde', 'Dar de baja');
+    baja.type = 'button';
+    dosToques(baja, () => ejecutarRegistro(baja, 'Dando de baja…',
+      () => api('baja', { id: r.id, fecha_fin: fechaBaja.value })));
+    acciones.append(baja);
+  }
+  const eliminar = crear('button', 'btn-peligro', 'Eliminar');
+  eliminar.type = 'button';
+  dosToques(eliminar, () => ejecutarRegistro(eliminar, 'Eliminando…',
+    () => api('eliminar', { hoja, id: r.id })));
+  acciones.append(eliminar);
+  editor.append(acciones);
+  return editor;
+}
+
+// Acciones con consecuencias: el primer toque pide confirmación y el segundo la ejecuta.
+function dosToques(boton, accion) {
+  const texto = boton.textContent;
+  let espera = 0;
+  const restaurar = () => {
+    boton.classList.remove('confirmar');
+    boton.textContent = texto;
+  };
+  boton.addEventListener('click', () => {
+    if (boton.classList.contains('confirmar')) {
+      clearTimeout(espera);
+      restaurar();
+      accion();
+      return;
+    }
+    boton.classList.add('confirmar');
+    boton.textContent = '¿Seguro? Toca otra vez';
+    espera = setTimeout(restaurar, 4000);
+  });
+}
+
+async function ejecutarRegistro(btn, mensajeEspera, fn) {
+  btn.disabled = true;
+  estadoRegistros(mensajeEspera);
+  try {
+    const r = await fn();
+    abierto = null;
+    mostrar('resultado', false); // el Deshacer de Dictar ya no deshace lo último
+    $('aviso-registros-texto').textContent = r.desc;
+    $('deshacer-registro').disabled = false;
+    mostrar('aviso-registros', true);
+    await cargarRegistros();
+  } catch (err) {
+    estadoRegistros(err.message, true);
+    btn.disabled = false;
+  }
+}
+
 /* ---------- Eventos ---------- */
 
 boton.addEventListener('click', () => {
@@ -408,6 +608,7 @@ $('guardar').addEventListener('click', () => ejecutar($('guardar'), 'Guardando�
   corrigiendo = false;
   mostrar('previa', false);
   mostrar('resultado', true);
+  mostrar('aviso-registros', false); // el Deshacer de Mis registros ya no deshace lo último
   $('deshacer').disabled = false;
   estado('Toca y di tu gasto');
 }));
@@ -429,6 +630,20 @@ $('deshacer').addEventListener('click', () => ejecutar($('deshacer'), 'Deshacien
   $('resultado-texto').textContent = '↩︎ Deshecho: ' + r.desc;
   estado('Toca y di tu gasto');
 }));
+
+$('deshacer-registro').addEventListener('click', async () => {
+  const btn = $('deshacer-registro');
+  btn.disabled = true;
+  estadoRegistros('Deshaciendo…');
+  try {
+    const r = await api('deshacer');
+    $('aviso-registros-texto').textContent = '↩︎ Deshecho: ' + r.desc;
+    await cargarRegistros();
+  } catch (err) {
+    estadoRegistros(err.message, true);
+    btn.disabled = false;
+  }
+});
 
 $('form-token').addEventListener('submit', (e) => {
   e.preventDefault();

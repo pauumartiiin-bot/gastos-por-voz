@@ -30,7 +30,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800&display=swap">
   <!-- ?v= obliga al navegador a descargar los archivos nuevos en cada versión -->
-  <link rel="stylesheet" href="styles.css?v=6.3">
+  <link rel="stylesheet" href="styles.css?v=6.3.1">
 </head>
 <body>
   <div class="halo halo-a" aria-hidden="true"></div>
@@ -114,10 +114,22 @@
 
     <!-- Mis registros (llega en la 6.3b) + ajustes -->
     <section id="vista-registros" class="oculto" style="display: flex; flex-direction: column; gap: 20px">
-      <div class="tarjeta">
-        <h2>Mis registros</h2>
-        <p class="aviso">Próximamente: aquí podrás ver, editar, dar de baja y eliminar tus gastos.</p>
+      <div id="aviso-registros" class="tarjeta resultado oculto">
+        <p id="aviso-registros-texto"></p>
+        <button id="deshacer-registro" class="btn-suave" type="button">Deshacer</button>
       </div>
+      <p id="estado-registros" class="estado" role="status" aria-live="polite"></p>
+
+      <section class="seccion" aria-labelledby="titulo-recurrentes">
+        <h2 id="titulo-recurrentes" class="titulo-seccion">Recurrentes</h2>
+        <div id="lista-recurrentes" class="lista"></div>
+      </section>
+
+      <section class="seccion" aria-labelledby="titulo-movimientos">
+        <h2 id="titulo-movimientos" class="titulo-seccion">Últimos gastos</h2>
+        <div id="lista-movimientos" class="lista"></div>
+      </section>
+
       <div class="tarjeta" aria-label="Ajustes">
         <h2>Ajustes</h2>
         <label class="ajuste" for="modo-pruebas">Modo pruebas <input type="checkbox" id="modo-pruebas"></label>
@@ -137,7 +149,7 @@
     </button>
   </nav>
 
-  <script src="config.js?v=6.3"></script>
-  <script src="app.js?v=6.3"></script>
+  <script src="config.js?v=6.3.1"></script>
+  <script src="app.js?v=6.3.1"></script>
 </body>
 </html>

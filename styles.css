@@ -280,3 +280,73 @@ button:disabled { cursor: default; opacity: 0.5; }
 .barra button[aria-current="page"] { font-weight: 800; color: var(--primario-tinta); }
 .barra button[aria-current="page"]::before { background: var(--degradado); }
 .barra svg { width: 22px; height: 22px; }
+
+/* ---------- Casillas y opciones (iguales en claro y oscuro) ---------- */
+
+input[type="checkbox"], input[type="radio"] {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  border: 1.5px solid var(--secundario);
+  border-radius: 6px;
+  background: var(--superficie);
+}
+input[type="radio"] { border-radius: 50%; }
+/* Marcada: relleno principal con un borde interior del color de la tarjeta */
+input[type="checkbox"]:checked, input[type="radio"]:checked {
+  border-color: var(--primario);
+  background: var(--primario);
+  box-shadow: inset 0 0 0 4px var(--superficie);
+}
+
+/* ---------- Mis registros ---------- */
+
+.seccion { display: flex; flex-direction: column; gap: 10px; }
+.titulo-seccion {
+  margin: 0 4px;
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--secundario);
+}
+.lista { display: flex; flex-direction: column; gap: 10px; }
+.vacio { margin: 0 4px; font-size: 14px; color: var(--secundario); }
+
+.registro {
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 18px;
+  overflow: hidden;
+}
+.registro.abierto { border: 2px solid transparent; background: linear-gradient(var(--superficie), var(--superficie)) padding-box, var(--degradado) border-box; }
+
+.registro-cabecera {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border: none;
+  background: transparent;
+  text-align: left;
+}
+.registro-fila { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.registro-concepto { font-size: 17px; font-weight: 800; overflow-wrap: anywhere; }
+.registro-importe { font-size: 17px; font-weight: 800; white-space: nowrap; color: var(--primario-tinta); }
+.registro-meta { display: flex; gap: 6px; flex-wrap: wrap; }
+.registro-meta .chip { font-size: 12px; padding: 3px 9px; }
+
+.editor { display: flex; flex-direction: column; gap: 14px; padding: 4px 16px 16px; border-top: 1px solid var(--borde); padding-top: 16px; }
+.editor fieldset { margin: 0; padding: 0; border: none; display: flex; flex-direction: column; gap: 10px; }
+.editor legend { padding: 0; margin-bottom: 8px; font-size: 14px; font-weight: 600; color: var(--secundario); }
+.opcion { display: flex; align-items: center; gap: 10px; font-size: 15px; }
+.opcion small { color: var(--secundario); }
+
+.btn-peligro { flex: 1; height: 46px; border-radius: 14px; font-size: 15px; font-weight: 600; background: transparent; color: var(--error); border: 1px solid var(--error); }
+/* Segundo toque pendiente: el botón pide confirmación */
+.btn-peligro.confirmar, .btn-borde.confirmar { background: var(--error); color: var(--superficie); border-color: var(--error); font-weight: 800; }
+#estado-registros:empty { display: none; }
