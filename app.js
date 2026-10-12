@@ -1,6 +1,12 @@
-// Fases 6.1–6.2: dictar un gasto → vista previa → guardar (o corregir por voz) → deshacer.
+// Fase 6.3a: interfaz final. Dictar → vista previa → guardar (o corregir por voz) → deshacer.
 
 const CLAVE_TOKEN = 'gastos_token';
+const CLAVE_TEMA = 'gastos_tema';
+const CLAVE_PRUEBAS = 'gastos_pruebas';
+
+// Volumen (RMS, 0–1) por debajo del cual se considera que no se habló. Ajustable en la 6.4
+// con el dato «Volumen máx.» del modo pruebas.
+const UMBRAL_VOZ = 0.02;
 
 const $ = (id) => document.getElementById(id);
 const boton = $('boton');
@@ -8,34 +14,96 @@ const boton = $('boton');
 let grabador = null;
 let trozos = [];
 let mime = '';
-let ultima = null;      // última propuesta del servidor (para Guardar / Corregir)
+let ultima = null;       // última propuesta del servidor (para Guardar / Corregir)
 let corrigiendo = false; // si es true, la próxima grabación es una corrección
 
-/* ---------- Token ---------- */
+/* ---------- Almacenamiento (puede fallar en modo privado) ---------- */
 
-function obtenerToken() {
-  let token = localStorage.getItem(CLAVE_TOKEN);
-  if (!token) {
-    token = (prompt('Introduce el token de la API (se guarda solo en este dispositivo):') || '').trim();
-    if (token) localStorage.setItem(CLAVE_TOKEN, token);
+function leer(clave) {
+  try { return localStorage.getItem(clave); } catch (e) { return null; }
+}
+function escribir(clave, valor) {
+  try {
+    if (valor == null) localStorage.removeItem(clave);
+    else localStorage.setItem(clave, valor);
+  } catch (e) { /* sin almacenamiento: la app sigue funcionando en esta sesión */ }
+}
+
+/* ---------- Vistas ---------- */
+
+function mostrar(id, visible) {
+  $(id).classList.toggle('oculto', !visible);
+}
+
+function irA(vista) {
+  mostrar('vista-dictar', vista === 'dictar');
+  mostrar('vista-registros', vista === 'registros');
+  document.querySelectorAll('.barra button').forEach((b) => {
+    if (b.dataset.vista === vista) b.setAttribute('aria-current', 'page');
+    else b.removeAttribute('aria-current');
+  });
+}
+
+// Sin token solo se ve la pantalla para introducirlo.
+function pantallaInicial() {
+  const hayToken = !!leer(CLAVE_TOKEN);
+  mostrar('vista-token', !hayToken);
+  mostrar('barra', hayToken);
+  if (hayToken) irA('dictar');
+  else {
+    mostrar('vista-dictar', false);
+    mostrar('vista-registros', false);
   }
-  return token;
+}
+
+/* ---------- Tema ---------- */
+
+function aplicarTema(tema) {
+  document.documentElement.dataset.tema = tema;
+  $('tema').setAttribute('aria-label', tema === 'oscuro' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro');
+  // La barra de estado de iOS toma el color del fondo.
+  const fondo = getComputedStyle(document.documentElement).getPropertyValue('--fondo').trim();
+  document.querySelector('meta[name="theme-color"]').setAttribute('content', fondo);
+}
+
+const prefiereOscuro = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
+
+function temaDelSistema() {
+  return prefiereOscuro && prefiereOscuro.matches ? 'oscuro' : 'claro';
+}
+
+/* ---------- Modo pruebas ---------- */
+
+function modoPruebas() {
+  return leer(CLAVE_PRUEBAS) === '1';
+}
+
+function aplicarModoPruebas() {
+  $('modo-pruebas').checked = modoPruebas();
+  mostrar('pruebas', modoPruebas());
+}
+
+function dato(id, valor) {
+  $(id).textContent = valor == null ? '—' : valor;
 }
 
 /* ---------- Llamada a la API ---------- */
 
 const MENSAJES = {
-  token: 'Token incorrecto. Se pedirá de nuevo.',
+  token: 'El token no es válido. Vuelve a introducirlo.',
   entrada: 'Petición no válida.',
-  groq: 'Falló la transcripción (Groq).',
-  llm: 'Falló la interpretación (Claude).',
-  interno: 'Error interno del servidor.'
+  groq: 'Falló la transcripción. Inténtalo de nuevo.',
+  llm: 'Falló la interpretación. Inténtalo de nuevo.',
+  interno: 'Error del servidor. Inténtalo de nuevo.'
 };
 
 // Envía { t, accion, ...params } y devuelve la respuesta, o lanza un Error con un mensaje legible.
 async function api(accion, params = {}) {
-  const token = obtenerToken();
-  if (!token) throw new Error('Falta el token.');
+  const token = leer(CLAVE_TOKEN);
+  if (!token) {
+    pantallaInicial();
+    throw new Error('Falta el token.');
+  }
 
   // text/plain evita el preflight de CORS; Apps Script responde con una redirección.
   const res = await fetch(CONFIG.API_URL, {
@@ -46,7 +114,10 @@ async function api(accion, params = {}) {
   });
   const datos = await res.json();
   if (!datos.ok) {
-    if (datos.error === 'token') localStorage.removeItem(CLAVE_TOKEN);
+    if (datos.error === 'token') {
+      escribir(CLAVE_TOKEN, null);
+      pantallaInicial();
+    }
     const err = new Error(datos.mensaje || MENSAJES[datos.error] || 'Error: ' + datos.error);
     err.datos = datos; // por si el llamador necesita más campos (p. ej. prob_sin_voz)
     throw err;
@@ -54,15 +125,11 @@ async function api(accion, params = {}) {
   return datos;
 }
 
-/* ---------- Interfaz ---------- */
+/* ---------- Estado y vista previa ---------- */
 
 function estado(mensaje, esError = false) {
   $('estado').textContent = mensaje;
-  $('estado').className = esError ? 'error' : '';
-}
-
-function mostrar(id, visible) {
-  $(id).classList.toggle('oculto', !visible);
+  $('estado').classList.toggle('error', esError);
 }
 
 function euros(n) {
@@ -73,66 +140,121 @@ function fecha(iso) {
   return iso ? iso.split('-').reverse().join('/') : '—';
 }
 
+const FRECUENCIAS = { puntual: 'Puntual', semanal: 'Semanal', mensual: 'Mensual', anual: 'Anual' };
+
+function textoFrecuencia(d) {
+  if (!d.frecuencia) return '¿Frecuencia?';
+  const partes = [FRECUENCIAS[d.frecuencia] || d.frecuencia];
+  if (d.cada_meses) partes.push('cada ' + d.cada_meses + ' meses');
+  if (d.dia_de_cobro) partes.push('día ' + d.dia_de_cobro);
+  return partes.join(' · ');
+}
+
+function crear(etiqueta, clase, texto) {
+  const el = document.createElement(etiqueta);
+  if (clase) el.className = clase;
+  if (texto != null) el.textContent = texto;
+  return el;
+}
+
 // Todo lo que viene del modelo se pinta con textContent (nunca innerHTML): es texto, no código.
 function pintarPrevia(v) {
   const d = v.datos || {};
   $('texto').textContent = v.texto || v.frase || '';
+  $('concepto').textContent = d.concepto || '¿Concepto?';
+  $('importe').textContent = euros(d.importe);
 
-  const frecuencia = d.frecuencia === 'mensual' && d.cada_meses ? 'cada ' + d.cada_meses + ' meses' : d.frecuencia;
-  const filas = [
-    ['Concepto', d.concepto || '¿concepto?'],
-    ['Importe', euros(d.importe)],
-    ['Categoría', d.categoria],
-    ['Frecuencia', frecuencia || '¿frecuencia?'],
-    [d.frecuencia === 'puntual' ? 'Fecha' : 'Desde', fecha(d.fecha_referencia)],
-    ['Hasta', d.fecha_fin && fecha(d.fecha_fin)],
-    ['Día de cobro', d.dia_de_cobro],
-    ['Se guarda en', v.destino]
-  ];
-  $('datos').replaceChildren(...filas.filter((f) => f[1]).flatMap(([k, val]) => {
-    const dt = document.createElement('dt');
-    const dd = document.createElement('dd');
-    dt.textContent = k;
-    dd.textContent = val;
-    return [dt, dd];
-  }));
+  const chips = [crear('span', 'chip chip-prim', textoFrecuencia(d))];
+  if (d.categoria) chips.push(crear('span', 'chip chip-acento', d.categoria));
+  chips.push(crear('span', 'chip', (d.frecuencia === 'puntual' ? '' : 'Desde ') + fecha(d.fecha_referencia)));
+  if (d.fecha_fin) chips.push(crear('span', 'chip', 'Hasta ' + fecha(d.fecha_fin)));
+  $('chips').replaceChildren(...chips);
 
-  const listas = [
-    ['Necesito que me aclares', v.preguntas],
-    ['No se puede guardar', v.errores],
-    ['He supuesto', v.supuestos],
-    ['Ajustes del sistema', v.avisos]
+  const bloques = [
+    ['Necesito que me aclares', v.preguntas, 'aviso aviso-pregunta'],
+    ['No se puede guardar', v.errores, 'aviso aviso-error'],
+    ['He supuesto', v.supuestos, 'aviso'],
+    ['Ajustes del sistema', v.avisos, 'aviso']
   ];
-  $('listas').replaceChildren(...listas.filter((l) => l[1] && l[1].length).map(([titulo, items]) => {
-    const div = document.createElement('div');
-    const b = document.createElement('b');
-    const ul = document.createElement('ul');
-    b.textContent = titulo;
-    items.forEach((t) => {
-      const li = document.createElement('li');
-      li.textContent = t;
-      ul.appendChild(li);
-    });
-    div.append(b, ul);
+  $('avisos').replaceChildren(...bloques.filter((b) => b[1] && b[1].length).map(([titulo, items, clase]) => {
+    const div = crear('div', clase);
+    const ul = crear('ul');
+    items.forEach((t) => ul.appendChild(crear('li', null, t)));
+    div.append(crear('b', null, titulo), ul);
     return div;
   }));
 
   $('guardar').disabled = v.bloqueado;
+  mostrar('resultado', false);
   mostrar('previa', true);
 }
 
 function pintarTiempos(r, inicio) {
-  $('ms-vocabulario').textContent = r.ms_vocabulario != null
-    ? r.ms_vocabulario + ' ms' + (r.vocabulario ? '' : ' (sin vocabulario)') : '—';
-  $('ms-groq').textContent = r.ms_groq != null ? r.ms_groq + ' ms' : '—';
-  pintarProbSinVoz(r);
-  $('ms-interpretar').textContent = r.ms_interpretar != null ? r.ms_interpretar + ' ms' : '—';
-  $('ms-total').textContent = Math.round(performance.now() - inicio) + ' ms';
+  dato('ms-vocabulario', r.ms_vocabulario != null
+    ? r.ms_vocabulario + ' ms' + (r.vocabulario ? '' : ' (sin vocabulario)') : null);
+  dato('ms-groq', r.ms_groq != null ? r.ms_groq + ' ms' : null);
+  dato('ms-interpretar', r.ms_interpretar != null ? r.ms_interpretar + ' ms' : null);
+  dato('ms-total', Math.round(performance.now() - inicio) + ' ms');
+  dato('prob-sin-voz', r.prob_sin_voz);
 }
 
-// Temporal (hasta la 6.4): "—" significa que Groq no devolvió el dato.
-function pintarProbSinVoz(r) {
-  $('prob-sin-voz').textContent = r && r.prob_sin_voz != null ? r.prob_sin_voz : '—';
+/* ---------- Nivel de volumen (Web Audio API) ---------- */
+
+// Forma del indicador: más alto en el centro.
+const FORMA = [0.35, 0.55, 0.75, 0.9, 1, 0.9, 0.75, 0.55, 0.35];
+const barras = Array.from(document.querySelectorAll('#nivel span'));
+let audioCtx = null;
+let medidor = null; // { fuente, analizador, datos, pico, animacion }
+
+function pintarNivel(nivel) {
+  barras.forEach((b, i) => { b.style.height = (6 + Math.round(nivel * FORMA[i] * 22)) + 'px'; });
+}
+
+function pintarNivelReposo() {
+  barras.forEach((b, i) => { b.style.height = (6 + Math.round(FORMA[i] * 18)) + 'px'; });
+}
+
+// Debe llamarse dentro del gesto del usuario (iOS solo deja arrancar el audio así).
+function prepararAudio() {
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return null;
+  if (!audioCtx) audioCtx = new Ctx();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+
+function empezarMedidor(stream) {
+  if (!audioCtx) return;
+  const fuente = audioCtx.createMediaStreamSource(stream);
+  const analizador = audioCtx.createAnalyser();
+  analizador.fftSize = 1024;
+  fuente.connect(analizador);
+  medidor = { fuente, analizador, datos: new Uint8Array(analizador.fftSize), pico: 0, animacion: 0 };
+
+  const medir = () => {
+    analizador.getByteTimeDomainData(medidor.datos);
+    let suma = 0;
+    for (const v of medidor.datos) {
+      const x = (v - 128) / 128;
+      suma += x * x;
+    }
+    const rms = Math.sqrt(suma / medidor.datos.length);
+    medidor.pico = Math.max(medidor.pico, rms);
+    pintarNivel(Math.min(1, rms * 6));
+    medidor.animacion = requestAnimationFrame(medir);
+  };
+  medir();
+}
+
+// Devuelve el volumen máximo detectado (null si no se pudo medir).
+function pararMedidor() {
+  if (!medidor) return null;
+  cancelAnimationFrame(medidor.animacion);
+  medidor.fuente.disconnect();
+  const pico = medidor.pico;
+  medidor = null;
+  pintarNivelReposo();
+  return pico;
 }
 
 /* ---------- Grabación ---------- */
@@ -148,7 +270,7 @@ function elegirMime() {
 function mensajeErrorMicro(err) {
   switch (err.name) {
     case 'NotAllowedError':
-      return 'Permiso de micrófono denegado. Actívalo en Ajustes > Safari > Micrófono (o en los ajustes del navegador) y vuelve a intentarlo.';
+      return 'Permiso de micrófono denegado. Actívalo en Ajustes > Safari > Micrófono y vuelve a intentarlo.';
     case 'NotFoundError':
       return 'No se ha encontrado ningún micrófono.';
     case 'NotReadableError':
@@ -158,12 +280,18 @@ function mensajeErrorMicro(err) {
   }
 }
 
+function botonGrabando(grabando) {
+  boton.classList.toggle('grabando', grabando);
+  boton.setAttribute('aria-label', grabando ? 'Parar' : 'Grabar');
+}
+
 async function empezar() {
   mime = elegirMime();
   if (!navigator.mediaDevices || !mime) {
-    estado('Este navegador no puede grabar audio (sin MediaRecorder compatible).', true);
+    estado('Este navegador no puede grabar audio.', true);
     return;
   }
+  prepararAudio();
 
   let stream;
   try {
@@ -177,23 +305,31 @@ async function empezar() {
   grabador = new MediaRecorder(stream, { mimeType: mime });
   grabador.ondataavailable = (e) => { if (e.data.size > 0) trozos.push(e.data); };
   grabador.onstop = () => {
+    const pico = pararMedidor();
     stream.getTracks().forEach((t) => t.stop()); // libera el micrófono
-    dictar(new Blob(trozos, { type: mime }));
+    terminarGrabacion(new Blob(trozos, { type: mime }), pico);
   };
   grabador.start();
+  empezarMedidor(stream);
 
-  boton.textContent = 'Parar';
-  boton.classList.add('grabando');
+  botonGrabando(true);
   mostrar('resultado', false);
-  estado(corrigiendo ? 'Grabando la corrección…' : 'Grabando…');
+  estado(corrigiendo ? 'Grabando la corrección…' : 'Te escucho…');
 }
 
 function parar() {
-  boton.textContent = 'Grabar';
-  boton.classList.remove('grabando');
-  boton.disabled = true;
-  estado('Interpretando…');
+  botonGrabando(false);
   grabador.stop();
+}
+
+// Si no se oyó nada, no se envía: evita el viaje al servidor y las alucinaciones de Whisper.
+function terminarGrabacion(blob, pico) {
+  dato('vol-max', pico == null ? null : pico.toFixed(3));
+  if (pico != null && pico < UMBRAL_VOZ) {
+    estado('No te he oído. Prueba a hablar un poco más cerca.', true);
+    return;
+  }
+  dictar(blob);
 }
 
 // Blob → base64 sin el prefijo "data:...;base64,".
@@ -210,13 +346,16 @@ function aBase64(blob) {
 
 async function dictar(blob) {
   const inicio = performance.now();
+  boton.disabled = true;
+  boton.setAttribute('aria-busy', 'true');
+  estado('Interpretando…');
   try {
-    const params = {
-      audio: await aBase64(blob),
-      mime,
-      modelo: $('modelo').value,
-      vocabulario: $('vocabulario').checked
-    };
+    const params = { audio: await aBase64(blob), mime };
+    // Fuera del modo pruebas se usan los valores por defecto del servidor.
+    if (modoPruebas()) {
+      params.modelo = $('modelo').value;
+      params.vocabulario = $('vocabulario').checked;
+    }
     // En una corrección se manda la frase original y la interpretación anterior.
     if (corrigiendo && ultima) {
       let anterior = ultima.interpretacion;
@@ -233,11 +372,12 @@ async function dictar(blob) {
     corrigiendo = v.preguntas && v.preguntas.length > 0;
     estado(corrigiendo ? 'Responde grabando: ' + v.preguntas[0] : 'Revisa y guarda.');
   } catch (err) {
-    $('ms-total').textContent = Math.round(performance.now() - inicio) + ' ms';
-    pintarProbSinVoz(err.datos); // en el silencio llega con el error
+    dato('ms-total', Math.round(performance.now() - inicio) + ' ms');
+    dato('prob-sin-voz', err.datos && err.datos.prob_sin_voz); // en el silencio llega con el error
     estado(err.message, true);
   } finally {
     boton.disabled = false;
+    boton.removeAttribute('aria-busy');
   }
 }
 
@@ -263,18 +403,18 @@ boton.addEventListener('click', () => {
 $('guardar').addEventListener('click', () => ejecutar($('guardar'), 'Guardando…', async () => {
   const r = await api('guardar', { interpretacion: ultima.interpretacion, frase: ultima.frase });
   $('resultado-texto').textContent =
-    '✓ ' + r.datos.concepto + ' (' + euros(r.datos.importe) + ') guardado en ' + r.hoja + ' como ' + r.id;
+    '✓ ' + r.datos.concepto + ' · ' + euros(r.datos.importe) + ' guardado en ' + r.hoja;
   ultima = null;
   corrigiendo = false;
   mostrar('previa', false);
   mostrar('resultado', true);
   $('deshacer').disabled = false;
-  estado('Guardado.');
+  estado('Toca y di tu gasto');
 }));
 
 $('corregir').addEventListener('click', () => {
   corrigiendo = true;
-  estado('Pulsa Grabar y di qué cambio: «no, es anual», «son 12,99»…');
+  estado('Graba qué cambio: «no, es anual», «son 12,99»…');
 });
 
 $('descartar').addEventListener('click', () => {
@@ -287,14 +427,47 @@ $('descartar').addEventListener('click', () => {
 $('deshacer').addEventListener('click', () => ejecutar($('deshacer'), 'Deshaciendo…', async () => {
   const r = await api('deshacer');
   $('resultado-texto').textContent = '↩︎ Deshecho: ' + r.desc;
-  estado('Deshecho.');
+  estado('Toca y di tu gasto');
 }));
 
-$('borrar-token').addEventListener('click', (e) => {
+$('form-token').addEventListener('submit', (e) => {
   e.preventDefault();
-  localStorage.removeItem(CLAVE_TOKEN);
-  estado('Token borrado. Se pedirá en el próximo envío.');
+  const token = $('campo-token').value.trim();
+  if (!token) return;
+  escribir(CLAVE_TOKEN, token);
+  $('campo-token').value = '';
+  pantallaInicial();
 });
 
-// Pide el token la primera vez que se abre la página.
-obtenerToken();
+$('borrar-token').addEventListener('click', () => {
+  escribir(CLAVE_TOKEN, null);
+  pantallaInicial();
+});
+
+$('tema').addEventListener('click', () => {
+  const nuevo = document.documentElement.dataset.tema === 'oscuro' ? 'claro' : 'oscuro';
+  escribir(CLAVE_TEMA, nuevo); // elegirlo a mano lo fija; si no, se sigue el del iPhone
+  aplicarTema(nuevo);
+});
+
+if (prefiereOscuro && prefiereOscuro.addEventListener) {
+  prefiereOscuro.addEventListener('change', () => {
+    if (!leer(CLAVE_TEMA)) aplicarTema(temaDelSistema());
+  });
+}
+
+$('modo-pruebas').addEventListener('change', (e) => {
+  escribir(CLAVE_PRUEBAS, e.target.checked ? '1' : null);
+  aplicarModoPruebas();
+});
+
+document.querySelectorAll('.barra button').forEach((b) => {
+  b.addEventListener('click', () => irA(b.dataset.vista));
+});
+
+/* ---------- Inicio ---------- */
+
+aplicarTema(document.documentElement.dataset.tema || temaDelSistema());
+aplicarModoPruebas();
+pintarNivelReposo();
+pantallaInicial();

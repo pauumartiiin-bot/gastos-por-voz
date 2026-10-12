@@ -1,0 +1,282 @@
+/* Gastos por voz — estilos (fase 6.3a). Paleta "Lavanda y ciruela".
+   Los colores son variables: el tema oscuro solo cambia sus valores. */
+
+:root {
+  --fondo: #F4EEE4;
+  --superficie: #FAF6EF;
+  --texto: #2B2622;
+  --secundario: #685F55;
+  --borde: #E4DACB;
+  --primario: #5A4A8C;
+  --sobre-primario: #FFFFFF;
+  --primario-suave: #E7E0EC;
+  --primario-tinta: #4A3C76;
+  --acento: #8C3A55;
+  --acento-suave: #F3DFE2;
+  --acento-tinta: #8C3A55;
+  --error: #A3283D;
+  --prim-rgb: 90, 74, 140;
+  --acento-rgb: 140, 58, 85;
+  --cristal: rgba(250, 246, 239, 0.78);
+  --sombra-tarjeta: 0 16px 40px rgba(74, 52, 30, 0.12);
+  --velo: 0.08;
+  --degradado: linear-gradient(135deg, var(--primario), var(--acento));
+  color-scheme: light;
+}
+
+:root[data-tema="oscuro"] {
+  --fondo: #15121F;
+  --superficie: #201B2E;
+  --texto: #EEE9F3;
+  --secundario: #A8A0B6;
+  --borde: #322B44;
+  --primario: #A99BE0;
+  --sobre-primario: #15121F;
+  --primario-suave: #2E2747;
+  --primario-tinta: #BDB1EC;
+  --acento: #E28AA5;
+  --acento-suave: #3D2230;
+  --acento-tinta: #EBA2B8;
+  --error: #F2A0AE;
+  --prim-rgb: 169, 155, 224;
+  --acento-rgb: 226, 138, 165;
+  --cristal: rgba(32, 27, 46, 0.78);
+  --sombra-tarjeta: 0 16px 40px rgba(0, 0, 0, 0.45);
+  --velo: 0.14;
+  color-scheme: dark;
+}
+
+/* ---------- Base ---------- */
+
+* { box-sizing: border-box; }
+
+html, body { margin: 0; }
+
+body {
+  min-height: 100dvh;
+  font-family: Manrope, system-ui, -apple-system, sans-serif;
+  color: var(--texto);
+  background:
+    linear-gradient(180deg, rgba(var(--prim-rgb), var(--velo)) 0%, var(--fondo) 320px),
+    var(--fondo);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+button:disabled { cursor: default; opacity: 0.5; }
+:focus-visible { outline: 3px solid rgba(var(--prim-rgb), 0.5); outline-offset: 2px; }
+
+.oculto { display: none !important; }
+
+/* Halos difuminados del fondo (40 %) */
+.halo {
+  position: fixed;
+  width: 420px;
+  height: 420px;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+}
+.halo-a { top: -140px; left: -120px; background: radial-gradient(circle, rgba(var(--prim-rgb), 0.27) 0%, transparent 70%); }
+.halo-b { bottom: 60px; right: -160px; background: radial-gradient(circle, rgba(var(--acento-rgb), 0.21) 0%, transparent 70%); }
+
+.app {
+  position: relative;
+  z-index: 1;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: calc(env(safe-area-inset-top) + 20px) 16px calc(env(safe-area-inset-bottom) + 110px);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ---------- Cabecera ---------- */
+
+.cabecera { display: flex; align-items: center; justify-content: space-between; padding: 4px 4px 0; }
+.cabecera h1 { margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.02em; }
+
+.icono-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--cristal);
+  border: 1px solid var(--borde);
+  color: var(--secundario);
+}
+.icono-btn svg { width: 20px; height: 20px; }
+:root[data-tema="oscuro"] .icono-luna,
+:root:not([data-tema="oscuro"]) .icono-sol { display: none; }
+
+/* ---------- Grabar ---------- */
+
+.grabar { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 12px 0 4px; }
+
+.btn-grabar {
+  width: 104px;
+  height: 104px;
+  border-radius: 50%;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--degradado);
+  color: var(--sobre-primario);
+  box-shadow: 0 0 0 8px rgba(var(--acento-rgb), 0.12), 0 16px 40px rgba(var(--acento-rgb), 0.37);
+  transition: transform 0.15s ease;
+}
+.btn-grabar:active { transform: scale(0.96); }
+.btn-grabar svg { width: 40px; height: 40px; }
+.btn-grabar .icono-parar { display: none; }
+.btn-grabar.grabando .icono-micro { display: none; }
+.btn-grabar.grabando .icono-parar { display: block; }
+.btn-grabar.grabando { animation: latido 1.4s ease-in-out infinite; }
+.btn-grabar[aria-busy="true"] { opacity: 0.6; }
+
+@keyframes latido {
+  0%, 100% { box-shadow: 0 0 0 8px rgba(var(--acento-rgb), 0.18), 0 16px 40px rgba(var(--acento-rgb), 0.37); }
+  50% { box-shadow: 0 0 0 16px rgba(var(--acento-rgb), 0.10), 0 16px 40px rgba(var(--acento-rgb), 0.37); }
+}
+@media (prefers-reduced-motion: reduce) { .btn-grabar.grabando { animation: none; } }
+
+/* Indicador de volumen: las 4 primeras barras en primario, el resto en acento */
+.nivel { display: flex; align-items: center; gap: 4px; height: 28px; }
+.nivel span { width: 4px; height: 6px; border-radius: 2px; background: var(--primario); transition: height 0.08s linear; }
+.nivel span:nth-child(n+5) { background: var(--acento); }
+
+.estado { margin: 0; min-height: 20px; font-size: 14px; text-align: center; color: var(--secundario); }
+.estado.error { color: var(--error); font-weight: 600; }
+
+/* ---------- Tarjetas ---------- */
+
+.tarjeta {
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 24px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: var(--sombra-tarjeta);
+}
+
+/* Borde degradado: relleno opaco + degradado detrás que solo asoma en el borde */
+.tarjeta-degradado {
+  border: 2px solid transparent;
+  background: linear-gradient(var(--superficie), var(--superficie)) padding-box, var(--degradado) border-box;
+}
+
+.tarjeta h2 { margin: 0; font-size: 20px; font-weight: 800; }
+.tarjeta p { margin: 0; }
+
+.dicho { font-size: 13px; color: var(--secundario); }
+
+.titular { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.titular .concepto { font-size: 28px; font-weight: 800; letter-spacing: -0.02em; overflow-wrap: anywhere; }
+.importe {
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  background: var(--degradado);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip { font-size: 13px; font-weight: 600; padding: 5px 11px; border-radius: 999px; border: 1px solid var(--borde); color: var(--secundario); }
+.chip-prim { background: var(--primario-suave); color: var(--primario-tinta); border-color: rgba(var(--prim-rgb), 0.30); }
+.chip-acento { background: var(--acento-suave); color: var(--acento-tinta); border-color: rgba(var(--acento-rgb), 0.30); }
+
+.aviso { font-size: 13px; line-height: 1.45; color: var(--secundario); }
+.aviso b { font-weight: 800; }
+.aviso ul { margin: 4px 0 0; padding-left: 18px; }
+.aviso-pregunta { padding: 12px 14px; border-radius: 14px; background: var(--acento-suave); color: var(--acento-tinta); }
+.aviso-error { padding: 12px 14px; border-radius: 14px; border: 1px solid var(--error); color: var(--error); }
+
+/* ---------- Botones ---------- */
+
+.btn-primario, .btn-suave, .btn-borde { border-radius: 16px; font-weight: 800; }
+.btn-primario {
+  height: 52px;
+  border: none;
+  font-size: 16px;
+  background: var(--primario);
+  color: var(--sobre-primario);
+  box-shadow: 0 10px 24px rgba(var(--prim-rgb), 0.28);
+}
+.btn-suave, .btn-borde { flex: 1; height: 46px; border-radius: 14px; font-size: 15px; font-weight: 600; }
+.btn-suave { background: var(--primario-suave); color: var(--primario-tinta); border: 1px solid rgba(var(--prim-rgb), 0.30); }
+.btn-borde { background: transparent; color: var(--secundario); border: 1px solid var(--borde); }
+.fila { display: flex; gap: 8px; }
+
+.resultado { flex-direction: row; align-items: center; }
+.resultado p { flex: 1; font-size: 15px; font-weight: 600; }
+.resultado .btn-suave { flex: 0 0 auto; padding: 0 18px; }
+
+/* ---------- Token ---------- */
+
+.campo { display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 600; color: var(--secundario); }
+.campo input, .campo select {
+  height: 48px;
+  padding: 0 14px;
+  border-radius: 14px;
+  border: 1px solid var(--borde);
+  background: var(--fondo);
+  color: var(--texto);
+  font-weight: 400;
+}
+
+/* ---------- Ajustes y modo pruebas ---------- */
+
+.ajuste { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 15px; }
+.ajuste input[type="checkbox"] { width: 22px; height: 22px; accent-color: var(--primario); }
+.enlace { background: none; border: none; padding: 0; color: var(--primario-tinta); font-weight: 600; text-align: left; }
+
+.pruebas { border-style: dashed; box-shadow: none; gap: 12px; }
+.pruebas h2 { font-size: 15px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--secundario); }
+.pruebas dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 14px; }
+.pruebas dt { color: var(--secundario); }
+.pruebas dd { margin: 0; font-variant-numeric: tabular-nums; }
+
+/* ---------- Barra inferior ---------- */
+
+.barra {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 24px calc(env(safe-area-inset-bottom) + 10px);
+  background: var(--cristal);
+  border-top: 1px solid var(--borde);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+.barra button {
+  flex: 1;
+  max-width: 200px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px 6px;
+  border: none;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--secundario);
+}
+.barra button::before { content: ""; width: 40px; height: 3px; border-radius: 0 0 3px 3px; margin-bottom: 4px; }
+.barra button[aria-current="page"] { font-weight: 800; color: var(--primario-tinta); }
+.barra button[aria-current="page"]::before { background: var(--degradado); }
+.barra svg { width: 22px; height: 22px; }
