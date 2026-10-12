@@ -87,6 +87,7 @@ icons/                  icono.svg (fuente) y PNG 180/192/512 generados a partir 
 backend/Api.gs          doPost (enrutador) y clasificación de errores; se copia a mano a Apps Script
 backend/Transcribir.gs  transcribir_() con Groq; se copia a mano a Apps Script
 backend/Vocabulario.gs  vocabulario de la hoja para Whisper (con caché); se copia a mano a Apps Script
+backend/Evaluacion.gs   evaluación 6.4 con audios de Drive (se ejecuta desde el editor); se copia a mano
 CLAUDE.md               este archivo
 README.md
 ```
@@ -105,6 +106,8 @@ README.md
   `UMBRAL_VOZ` (0,02) no se envía nada. El filtro del servidor (`no_speech_prob`) sigue como segunda red.
 - Modo pruebas (interruptor en Ajustes, `gastos_pruebas`): muestra modelo, vocabulario, volumen máximo,
   tiempos y prob. sin voz. Fuera de él el cliente no envía `modelo` ni `vocabulario` (valores del servidor).
+- Deshacer: una sola notificación flotante sobre la barra, común a Dictar y Mis registros (el servidor solo
+  deshace la última acción). Se oculta a los 8 s (`MS_NOTIFICACION`).
 
 ## Estado actual
 **Fase 6.0 — hecha.** El micrófono funciona en la app instalada (iOS pide permiso solo la primera vez),
@@ -130,12 +133,20 @@ Pendiente para la 6.4: vocabulario solo con nombres propios y revisar el umbral 
 modo pruebas. Volumen máx. medido en el iPhone: silencio 0,007–0,008, voz baja 0,086, voz normal 0,222 →
 `UMBRAL_VOZ` 0,02 se mantiene (separación ×10, más limpia que `no_speech_prob`).
 
-**Fase 6.3b — "Mis registros" (en curso).** Lista de recurrentes y últimos 20 gastos (`registros`); al tocar
+**Fase 6.3b — "Mis registros" — hecha.** Lista de recurrentes y últimos 20 gastos (`registros`); al tocar
 uno se despliega su editor: importe y categoría (`editar`, en recurrentes "Corrección" o "Cambio de precio
 desde"), "Dar de baja" con fecha (`baja`) y "Eliminar" (`eliminar`). Baja y eliminar piden un segundo toque;
 cada acción muestra Deshacer y recarga la lista. Sin cambios en Apps Script.
 
-Fases siguientes (no implementar aún): 6.4 evaluación con audios reales, 6.5 README de portfolio (con los resultados de cada fase).
+**Fase 6.4 — evaluación con audios reales (en curso).** 30 audios grabados una vez (Notas de voz → carpeta
+de Drive, propiedad `CARPETA_EVALUACION`) y pasados por 6 configuraciones: 2 modelos × vocabulario
+(ninguno, completo de la hoja, solo nombres propios). `evaluarAudios()` (`backend/Evaluacion.gs`) sigue el
+camino de un dictado con el contexto controlado de `evaluarCerebro` y no guarda gastos; escribe en las
+pestañas "Evaluación" y "Evaluación resumen" y se puede relanzar si se agota el tiempo (sigue donde lo dejó).
+Grupos: A fáciles, B números hablados, C marcas, D fechas y frecuencias, E ambiguas (deben preguntar),
+F silencio/ruido (deben rechazarse), G condiciones reales.
+
+Fases siguientes (no implementar aún): 6.5 README de portfolio (con los resultados de cada fase).
 
 ## Forma de trabajar
 - Antes de escribir código, presentar un plan breve y esperar confirmación.
