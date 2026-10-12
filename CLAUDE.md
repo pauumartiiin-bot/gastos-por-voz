@@ -126,11 +126,16 @@ Whisper alucina ante el silencio ("Gracias por ver el video") con y sin vocabula
 0,3 (el 0,6 habitual no los paraba; ruido sí filtrado); revalidado: silencios 0,67–0,77 descartados.
 Pendiente para la 6.4: vocabulario solo con nombres propios y revisar el umbral con más datos.
 
-**Fase 6.3a — interfaz (en curso).** Diseño final, temas, icono, pantalla del token, detección de silencio
-en el cliente y modo pruebas. Sin cambios en Apps Script.
+**Fase 6.3a — hecha.** Diseño final, temas, icono, pantalla del token, detección de silencio en el cliente y
+modo pruebas. Volumen máx. medido en el iPhone: silencio 0,007–0,008, voz baja 0,086, voz normal 0,222 →
+`UMBRAL_VOZ` 0,02 se mantiene (separación ×10, más limpia que `no_speech_prob`).
 
-Fases siguientes (no implementar aún): 6.3b panel "Mis registros" (listar, editar, baja, eliminar),
-6.4 evaluación con audios reales, 6.5 README de portfolio (con los resultados de cada fase).
+**Fase 6.3b — "Mis registros" (en curso).** Lista de recurrentes y últimos 20 gastos (`registros`); al tocar
+uno se despliega su editor: importe y categoría (`editar`, en recurrentes "Corrección" o "Cambio de precio
+desde"), "Dar de baja" con fecha (`baja`) y "Eliminar" (`eliminar`). Baja y eliminar piden un segundo toque;
+cada acción muestra Deshacer y recarga la lista. Sin cambios en Apps Script.
+
+Fases siguientes (no implementar aún): 6.4 evaluación con audios reales, 6.5 README de portfolio (con los resultados de cada fase).
 
 ## Forma de trabajar
 - Antes de escribir código, presentar un plan breve y esperar confirmación.
