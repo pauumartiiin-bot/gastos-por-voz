@@ -9,7 +9,7 @@
 
 // Cada acción recibe los parámetros de la petición y el token (ya comprobado).
 const ACCIONES_ = {
-  transcribir: (p) => transcribir_(p.audio, p.mime, p.modelo),
+  transcribir: (p) => transcribirConVocabulario_(p),
   dictar: (p, t) => dictar_(p, t),
   interpretar: (p, t) => interpretar(t, p.frase, p.correccion || null),
   guardar: (p, t) => guardar(t, p.interpretacion, p.frase),
@@ -46,7 +46,7 @@ function doPost(e) {
 
 /** Audio → texto (Groq) → interpretación (v1). Una sola petición para pagar una vez el viaje. */
 function dictar_(p, token) {
-  const tr = transcribir_(p.audio, p.mime, p.modelo);
+  const tr = transcribirConVocabulario_(p);
   if (!tr.ok) return tr;
   if (!tr.texto) return { ok: false, error: 'rechazado', mensaje: 'No se ha entendido nada en el audio.' };
 
@@ -58,7 +58,25 @@ function dictar_(p, token) {
 
   const ms = v.ms;
   delete v.ms;
-  return Object.assign(v, { texto: tr.texto, modelo: tr.modelo, ms_groq: tr.ms_groq, ms_interpretar: ms });
+  return Object.assign(v, tr, { ms_interpretar: ms });
+}
+
+/** Transcribe usando el vocabulario de la hoja salvo que llegue "vocabulario: false". */
+function transcribirConVocabulario_(p) {
+  const inicio = Date.now();
+  let usar = p.vocabulario !== false;
+  let prompt = '';
+  try {
+    if (usar) prompt = vocabulario_();
+  } catch (err) {
+    console.error(err); // si falla la hoja, se transcribe igual, sin vocabulario
+    usar = false;
+  }
+  const msVocabulario = Date.now() - inicio;
+
+  const tr = transcribir_(p.audio, p.mime, p.modelo, prompt);
+  if (!tr.ok) return tr;
+  return Object.assign(tr, { vocabulario: usar, ms_vocabulario: msVocabulario });
 }
 
 /**
