@@ -11,7 +11,9 @@ const MODELOS_PERMITIDOS_ = ['whisper-large-v3', 'whisper-large-v3-turbo'];
 const MODELO_POR_DEFECTO_ = 'whisper-large-v3'; // en la 6.0 acertó más que turbo con la misma latencia
 const MAX_AUDIO_B64_ = 3 * 1024 * 1024; // ~3 MB en base64
 const EXTENSIONES_ = { 'audio/mp4': 'mp4', 'audio/webm': 'webm' };
-const UMBRAL_SIN_VOZ_ = 0.6; // segmentos con más probabilidad de "no hay voz" se descartan (alucinaciones)
+// Segmentos con más probabilidad de "no hay voz" se descartan (alucinaciones).
+// Medido en la 6.2: voz real 0,01–0,06; silencios alucinados 0,38–0,55 (el 0,6 habitual no los paraba).
+const UMBRAL_SIN_VOZ_ = 0.3;
 
 /**
  * Envía el audio a Groq y devuelve { ok, texto, modelo, ms_groq, prob_sin_voz } o { ok:false, error }.

@@ -53,7 +53,7 @@ Petición: un único `doPost` (en `backend/Api.gs`) que enruta por `accion`. Cue
   (`backend/Vocabulario.gs`, caché de 1 h, máx. 600 caracteres ≈ 224 tokens). Prioridad: reglas activas →
   últimos 50 movimientos → categorías. Si falla la lectura, se transcribe sin vocabulario (`vocabulario: false`).
   El prompt de Whisper no es de instrucciones: es texto de contexto cuya ortografía y formato imita.
-- Silencio: se pide `verbose_json` y se descartan los segmentos con `no_speech_prob` > 0,6; un texto sin letras
+- Silencio: se pide `verbose_json` y se descartan los segmentos con `no_speech_prob` > 0,3; un texto sin letras
   cuenta como vacío. Si queda vacío, `dictar` responde `rechazado` ("No se ha entendido nada en el audio.") con
   `prob_sin_voz`. `prob_sin_voz` = máxima `no_speech_prob` de los segmentos, o `null` si Groq no la da
   (temporal, para ajustar el umbral en la 6.4).
@@ -105,10 +105,11 @@ leer la hoja cuesta ~720 ms (47 ms con caché) → también está dentro de `ms_
 cada dictado. El vocabulario ayudó a turbo (3/3) pero empeoró a large-v3 (1/3: se come palabras que están
 en el vocabulario, p. ej. "Claude"); large-v3 sin vocabulario 3/3 → **por defecto, sin vocabulario**.
 Whisper alucina ante el silencio ("Gracias por ver el video") con y sin vocabulario → filtro por
-`no_speech_prob` + texto sin letras. Pendiente para la 6.4: vocabulario solo con nombres propios y ajustar
-el umbral de silencio con datos.
+`no_speech_prob` + texto sin letras. Medido: voz real 0,01–0,06, silencios alucinados 0,38–0,55 → umbral
+0,3 (el 0,6 habitual no los paraba; ruido sí filtrado). Pendiente: en la 6.3, no enviar audio sin volumen
+(Web Audio API en el cliente); en la 6.4, vocabulario solo con nombres propios y revisar el umbral con más datos.
 
-Fases siguientes (no implementar aún): 6.3 interfaz e icono (y panel "Mis registros"),
+Fases siguientes (no implementar aún): 6.3 interfaz e icono (y panel "Mis registros" y detección de silencio en el cliente),
 6.4 evaluación con audios reales, 6.5 README de portfolio (con los resultados de cada fase).
 
 ## Forma de trabajar
