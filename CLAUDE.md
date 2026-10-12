@@ -30,44 +30,68 @@ iPhone (esta app, GitHub Pages, instalada en pantalla de inicio)
   `redirect: 'follow'` (Apps Script responde con una redirección).
 - Interfaz en español. Comentarios del código en español, breves.
 
-## Contrato de la API (fase 6.0)
-Petición (cuerpo JSON enviado como texto plano):
+## Contrato de la API (fase 6.1)
+Petición: un único `doPost` (en `backend/Api.gs`) que enruta por `accion`. Cuerpo JSON enviado como texto plano:
 ```json
-{ "t": "<token>", "accion": "transcribir", "audio": "<base64 sin prefijo data:>",
-  "mime": "audio/mp4", "modelo": "whisper-large-v3-turbo" }
+{ "t": "<token>", "accion": "dictar", ...parámetros }
 ```
-Respuesta:
-```json
-{ "ok": true, "texto": "...", "modelo": "...", "ms_groq": 812 }
-{ "ok": false, "error": "token" | "entrada" | "groq" | "interno" }
-```
-- El servidor comprueba el token (propiedad `TOKEN`) **antes** de hacer nada más.
-- `modelo` solo admite `whisper-large-v3` o `whisper-large-v3-turbo` (lista blanca en el servidor).
+| `accion` | Parámetros | Llama a (v1, sin modificar) | Devuelve (además de `ok: true`) |
+|---|---|---|---|
+| `dictar` | `audio`, `mime`, `modelo?`, `corrige?: {frase, anterior}` | `transcribir_` + `interpretar` | la propuesta de `interpretar` (`bloqueado`, `destino`, `datos`, `errores`, `avisos`, `preguntas`, `supuestos`, `interpretacion`, `frase`) + `texto`, `modelo`, `ms_groq`, `ms_interpretar` |
+| `interpretar` | `frase`, `correccion?: {anterior, texto}` | `interpretar` | la propuesta (con `ms`) |
+| `guardar` | `interpretacion`, `frase` | `guardar` | `hoja`, `id`, `datos` |
+| `deshacer` | — | `deshacer` | `desc` |
+| `transcribir` | `audio`, `mime`, `modelo?` | `transcribir_` | `texto`, `modelo`, `ms_groq` |
+| `registros` | — | `listarRegistros` | `recurrentes`, `movimientos`, `categorias`, `hoy` |
+| `editar` | `hoja`, `id`, `cambios` | `editarRegistro` | `desc` |
+| `baja` | `id`, `fecha_fin` | `darDeBaja` | `desc` |
+| `eliminar` | `hoja`, `id` | `eliminarRegistro` | `desc` |
+
+- En `dictar` con `corrige`, lo dictado es el cambio pedido y `frase` es la frase original (así lo espera `interpretar`).
+- `ms_interpretar` incluye leer el contexto de la hoja + Haiku + validación.
+
+Errores: `{ "ok": false, "error": "...", "mensaje"?: "..." }`
+- `token`, `entrada` (JSON roto, acción desconocida, audio/mime/modelo no válidos), `groq`.
+- `rechazado`: regla de negocio de la v1 (lanza `Error` con un mensaje pensado para el usuario) → se devuelve `mensaje`.
+- `llm`: falló la llamada a Anthropic (el mensaje de la v1 lleva texto de la API) → sin mensaje.
+- `interno`: cualquier otra excepción → sin mensaje.
+
+Reglas:
+- El servidor comprueba el token **antes** de hacer nada más, con `tokenValido_` de la v1.
+- Solo puede haber un `doPost` y un `respuesta_` en todo el proyecto de Apps Script (espacio global compartido).
+- `modelo` solo admite `whisper-large-v3` (por defecto) o `whisper-large-v3-turbo` (lista blanca en el servidor).
 - Rechazar audio vacío o de más de ~3 MB en base64.
 - Groq: `https://api.groq.com/openai/v1/audio/transcriptions`, multipart (`UrlFetchApp` lo monta solo si el
   payload es un objeto con un Blob), `language: 'es'`, `response_format: 'json'`, cabecera
   `Authorization: Bearer <GROQ_API_KEY>`, `muteHttpExceptions: true`. El nombre del archivo debe llevar
   extensión acorde al mime (`audio.mp4`, `audio.webm`).
-- Los errores nunca devuelven claves, trazas ni el cuerpo de la respuesta de Groq.
+- Los errores nunca devuelven claves, trazas ni el cuerpo de la respuesta de Groq o Anthropic.
+- El cliente pinta todo lo que viene del modelo con `textContent`, nunca con `innerHTML`.
 
 ## Estructura del repo
 ```
-index.html              página (en 6.0: prueba de concepto de grabación)
+index.html              página (en 6.1: dictar → vista previa → guardar / corregir / deshacer)
 app.js                  lógica del cliente
 config.js               URL del endpoint de Apps Script (no secreta)
 manifest.webmanifest    para instalarla como app (display: standalone)
-backend/Transcribir.gs  código del servidor; se copia a mano al proyecto de Apps Script
+backend/Api.gs          doPost (enrutador) y clasificación de errores; se copia a mano a Apps Script
+backend/Transcribir.gs  transcribir_() con Groq; se copia a mano a Apps Script
 CLAUDE.md               este archivo
 README.md
 ```
 
 ## Estado actual
-**Fase 6.0 — prueba de concepto (spike).** Objetivo: demostrar que (1) el micrófono funciona con la app
-instalada en la pantalla de inicio del iPhone, (2) el audio llega a Apps Script y (3) vuelve la
-transcripción de Groq, midiendo el tiempo. Nada de diseño todavía: la interfaz es mínima y funcional.
+**Fase 6.0 — hecha.** El micrófono funciona en la app instalada (iOS pide permiso solo la primera vez),
+Groq tarda ~0,5 s y el viaje completo ~3 s (el sobrecoste es Apps Script, no el modelo).
+`whisper-large-v3` acertó más que turbo con la misma latencia → modelo por defecto.
 
-Fases siguientes (no implementar aún): 6.1 API completa, 6.2 vocabulario para Whisper desde la hoja,
-6.3 interfaz e icono, 6.4 evaluación con audios reales, 6.5 README de portfolio.
+**Fase 6.1 — API completa (en curso).** `doPost` como enrutador sobre las funciones de la v1; acción `dictar`
+(audio → texto → interpretación en una sola petición) para no pagar dos veces el sobrecoste de Apps Script.
+El cliente usa dictar, guardar, corregir por voz y deshacer; el panel "Mis registros" queda para la 6.3.
+Fuera de alcance: el ajuste "Guardar directo" de la v1 y el fallo conocido del cambio de precio.
+
+Fases siguientes (no implementar aún): 6.2 vocabulario para Whisper desde la hoja, 6.3 interfaz e icono,
+6.4 evaluación con audios reales, 6.5 README de portfolio (con los resultados de cada fase).
 
 ## Forma de trabajar
 - Antes de escribir código, presentar un plan breve y esperar confirmación.
