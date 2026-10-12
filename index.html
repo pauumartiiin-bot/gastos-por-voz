@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Gastos por voz</title>
+
+  <!-- Instalable en la pantalla de inicio: se abre sin las barras de Safari -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Gastos">
+
+  <style>
+    body {
+      font-family: -apple-system, system-ui, sans-serif;
+      margin: 0;
+      padding: calc(16px + env(safe-area-inset-top)) 16px 16px;
+      max-width: 520px;
+    }
+    button { font-size: 1.4rem; width: 100%; padding: 24px; border-radius: 12px; }
+    button.grabando { background: #c62828; color: #fff; }
+    label, select { font-size: 1rem; }
+    dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; }
+    dt { font-weight: 600; }
+    dd { margin: 0; word-break: break-word; }
+    .error { color: #c62828; }
+  </style>
+</head>
+<body>
+  <h1>Gastos por voz · prueba</h1>
+
+  <p>
+    <label for="modelo">Modelo</label>
+    <select id="modelo">
+      <option value="whisper-large-v3-turbo">whisper-large-v3-turbo</option>
+      <option value="whisper-large-v3">whisper-large-v3</option>
+    </select>
+  </p>
+
+  <button id="boton" type="button">Grabar</button>
+
+  <dl>
+    <dt>Estado</dt><dd id="estado">Listo</dd>
+    <dt>Texto</dt><dd id="texto">—</dd>
+    <dt>ms_groq</dt><dd id="ms-groq">—</dd>
+    <dt>Total</dt><dd id="ms-total">—</dd>
+    <dt>Mime</dt><dd id="mime">—</dd>
+  </dl>
+
+  <p><a href="#" id="borrar-token">Borrar token</a></p>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
