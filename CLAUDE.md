@@ -88,8 +88,9 @@ backend/Api.gs          doPost (enrutador) y clasificación de errores; se copia
 backend/Transcribir.gs  transcribir_() con Groq; se copia a mano a Apps Script
 backend/Vocabulario.gs  vocabulario de la hoja para Whisper (con caché); se copia a mano a Apps Script
 backend/Evaluacion.gs   evaluación 6.4 con audios de Drive (se ejecuta desde el editor); se copia a mano
+docs/                   capturas del README (generadas con datos inventados)
 CLAUDE.md               este archivo
-README.md
+README.md               README de portfolio (fase 6.5)
 ```
 
 ## Diseño (fase 6.3)
@@ -178,7 +179,9 @@ Resultados (1 pasada por configuración; aciertos · marca bien escrita · aluci
 - `ms_interpretar` sin leer la hoja ~1,8 s frente a 2,6–3,9 s en la app → leer la hoja cuesta ~1 s.
   `ms_groq` ~400 ms en todas: la latencia no distingue modelos.
 
-Fases siguientes (no implementar aún): 6.5 README de portfolio (con los resultados de cada fase).
+**Fase 6.5 — README de portfolio (en curso).** Problema, cómo funciona (diagrama Mermaid), evaluación
+con modo de fallo, decisiones, latencia, seguridad, limitaciones, "Qué he aprendido" (borrador para que Pau
+lo reescriba) y puesta en marcha. El código de la v1 no está publicado: se explica en una línea.
 
 ## Forma de trabajar
 - Antes de escribir código, presentar un plan breve y esperar confirmación.
