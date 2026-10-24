@@ -190,7 +190,7 @@ marcha. El código de la v1 no está publicado: se explica en una línea. **Con 
   Resumen; mes por defecto octubre (mes en curso); etiqueta inventada → `entrada`; B1 restaurado; 893 ms.
   Las reglas semanales salen con `fecha_cargo: null` (la hoja no les calcula fecha): revisar la clave
   `id` + `fecha_cargo` en la fase 8.
-- **7.2 — en curso.** Pestaña en la barra (Dictar · Mes · Mis registros). Las reglas de tipo «presupuesto» se
+- **7.2 — hecha.** Pestaña en la barra (Dictar · Mes · Mis registros). Las reglas de tipo «presupuesto» se
   pintan como barra, no como línea. Respuestas desordenadas: solo vale la última petición (`peticionMes`).
   Sin caché. En modo pruebas, al pie: `ms` y `cuadra`.
   7.2b (tras probarla en el iPhone): las flechas ya no se bloquean al cargar (con tres toques rápidos solo
@@ -198,6 +198,19 @@ marcha. El código de la v1 no está publicado: se explica en una línea. **Con 
   una sola petición para el mes final. Comportamiento de app: sin zoom por doble toque ni pellizco
   (`touch-action: pan-x pan-y` y viewport `maximum-scale=1`), campos a 16 px (iOS amplía al escribir con menos),
   sin rebote (`overscroll-behavior: none`) ni selección o menú al mantener pulsado un botón.
+  Probado en el iPhone: todo OK. Cambiar de mes: 2.516 ms en el servidor y ~3 s en total (con B1 ya en ese
+  mes, 893 ms → escribir B1, recalcular y restaurar cuesta ~1,6 s). Propuesta sin implementar: caché en el
+  móvil de los meses ya vistos, si con el uso se hace lento.
+- **7.3 — en curso.** `probarMes()` evalúa noviembre, enero y febrero (`MES_CASOS_`): `cuadra`, total esperado
+  y reglas que deben estar o no (por ID). Si un mes tiene movimientos, un total distinto es ⚠️, no ❌.
+  Al cerrar la fase: sección de la pestaña «Mes» en el README.
+
+**Siguiente, ya decidida: «Crear categorías» (fase propia, después de la 7 y antes de la 8).**
+La pestaña «Dictar» pasa a llamarse **«Crear»**: el micrófono sigue arriba y debajo va una tarjeta plegada
+«+ Nueva categoría» con nombre y descripción (la descripción la lee Haiku para clasificar). Caso de uso: «Aina»
+(hoy un gasto de 86 € en Otros) pasa a ser una categoría con sus gastos recurrentes dentro. Límites de la hoja:
+el Resumen tiene 12 bloques de categoría (filas 10–129, 10 filas cada uno; hoy hay 9) y cada bloque muestra
+9 reglas de detalle → la app debe impedir la categoría 13. Plan detallado antes de empezar.
 
 ## Fase 7 — Pestaña «Mes» (v2.1)
 
