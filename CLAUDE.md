@@ -79,7 +79,7 @@ Reglas:
 
 ## Estructura del repo
 ```
-index.html              página: token, dictar (vista previa → guardar / corregir / deshacer), mis registros, ajustes
+index.html              página: token, dictar (vista previa → guardar / corregir / deshacer), mes, mis registros, ajustes
 styles.css              estilos; colores como variables CSS para tema claro y oscuro
 app.js                  lógica del cliente (tema, vistas, detección de silencio, llamadas a la API)
 config.js               URL del endpoint de Apps Script (no secreta)
@@ -186,6 +186,13 @@ con modo de fallo, decisiones, latencia, seguridad, limitaciones, "Qué he apren
 marcha. El código de la v1 no está publicado: se explica en una línea. **Con esto, la v2 queda cerrada.**
 
 **Fase 7 — en curso.** Pestaña «Mes» (v2.1); detalle en la sección «Fase 7».
+- **7.1 — hecha.** `probarMes()` en Apps Script: noviembre 1.239 € · restante 131 · `cuadra` ✅, coincide con el
+  Resumen; mes por defecto octubre (mes en curso); etiqueta inventada → `entrada`; B1 restaurado; 893 ms.
+  Las reglas semanales salen con `fecha_cargo: null` (la hoja no les calcula fecha): revisar la clave
+  `id` + `fecha_cargo` en la fase 8.
+- **7.2 — en curso.** Pestaña en la barra (Dictar · Mes · Mis registros). Las reglas de tipo «presupuesto» se
+  pintan como barra, no como línea. Respuestas desordenadas: solo vale la última petición (`peticionMes`).
+  Sin caché: cada flecha es una petición. En modo pruebas, al pie: `ms` y `cuadra`.
 
 ## Fase 7 — Pestaña «Mes» (v2.1)
 
