@@ -38,7 +38,7 @@ con Claude Haiku y la validaba con código. La **v2** (este repositorio) añade:
 
 ```mermaid
 flowchart LR
-  A[🎙️ iPhone<br>graba el audio] -->|¿hay voz?<br>volumen RMS| B[POST a<br>Apps Script]
+  A[🎙️ iPhone<br>graba el audio] --> B[POST a<br>Apps Script]
   B --> C[Groq Whisper<br>audio → texto]
   C -->|¿hay voz?<br>no_speech_prob| D[Claude Haiku<br>texto → JSON]
   D --> E[Validación<br>con código]
@@ -151,7 +151,7 @@ o pellizco, ni rebote.
 | Decisión | Alternativa descartada | Por qué |
 |---|---|---|
 | `whisper-large-v3` sin vocabulario | turbo, o usar vocabulario | La evaluación anterior |
-| Doble filtro de silencio: volumen en el móvil + `no_speech_prob` en el servidor | Solo el del servidor | El volumen separa silencio (0,007) y voz (0,086–0,222) por ×10, sin gastar un viaje al servidor. El servidor queda como segunda red |
+| Filtro de silencio solo en el servidor (`no_speech_prob`) | Medir también el volumen en el móvil (Web Audio) | Lo tuve y lo quité: en el iPhone, tener Web Audio abierto mientras se graba bajaba el nivel del micrófono y bloqueaba dictados reales («No te he oído» tras el primero). El filtro del servidor ya frenaba el silencio (0,99) sin falsos bloqueos |
 | Una sola petición `dictar` | Transcribir e interpretar por separado | Cada viaje a Apps Script cuesta ~2,5 s |
 | `fetch` con `Content-Type: text/plain` y `redirect: 'follow'` | JSON normal | Evita el *preflight* de CORS, que Apps Script no admite, y sigue su redirección |
 | Vista previa antes de guardar | Guardar directamente | El modelo puede equivocarse; la persona tiene la última palabra |
@@ -209,7 +209,7 @@ En la pestaña «Mes», cambiar de mes tarda ~3 s (detalle en [su sección](#pes
 ```
 index.html              página: token, dictar, mes, mis registros y ajustes
 styles.css              estilos; colores como variables para tema claro y oscuro
-app.js                  lógica del cliente: grabación, detección de silencio, llamadas a la API
+app.js                  lógica del cliente: grabación, vistas, llamadas a la API
 config.js               URL del endpoint de Apps Script (no es secreta)
 manifest.webmanifest    para instalarla en la pantalla de inicio
 icons/                  icono (SVG fuente y PNG generados)
