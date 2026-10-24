@@ -89,6 +89,7 @@ backend/Api.gs          doPost (enrutador) y clasificación de errores; se copia
 backend/Transcribir.gs  transcribir_() con Groq; se copia a mano a Apps Script
 backend/Vocabulario.gs  vocabulario de la hoja para Whisper (con caché); se copia a mano a Apps Script
 backend/Evaluacion.gs   evaluación 6.4 con audios de Drive (se ejecuta desde el editor); se copia a mano
+backend/Mes.gs          acción mes (fase 7): lee el mes de la hoja y restaura Resumen!B1; se copia a mano
 docs/                   capturas del README (generadas con datos inventados)
 CLAUDE.md               este archivo
 README.md               README de portfolio (fase 6.5)
