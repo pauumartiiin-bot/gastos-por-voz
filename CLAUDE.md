@@ -222,6 +222,12 @@ marcha. El código de la v1 no está publicado: se explica en una línea. **Con 
   Probado en el iPhone (K1–K7 OK): «Aina» creada antes de «Otros», visible en el Resumen y con 2 huecos libres;
   sin zoom al escribir. **K7: «luz 30 euros al mes», dicho sin categoría, Haiku lo propuso en «Aina»** solo por
   la descripción → la descripción de la categoría funciona como instrucción para el modelo.
+- **7b.3 — en curso: micrófono que solo funcionaba una vez.** En el iPhone, tras el primer dictado todos decían
+  «No te he oído» hasta cerrar la app. Volumen máx. medido en el fallo: 0,009 (≈ ruido de fondo, no 0) → el medidor
+  recibía señal pero no la voz. Arreglo: un `AudioContext` nuevo en cada grabación (creado en el toque y cerrado al
+  terminar) en vez de reutilizar uno. Red de seguridad: si el medidor retiene la grabación, «Enviar igualmente» la
+  manda y decide el filtro del servidor; además sirve de diagnóstico (si el servidor transcribe tu voz, fallaba
+  solo el medidor; si no, el micrófono entero).
 
 ## Fase 7b — Crear categorías (v2.2)
 
