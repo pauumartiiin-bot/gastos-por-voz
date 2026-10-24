@@ -1,4 +1,4 @@
-// Fase 7: dictar → vista previa → guardar (o corregir por voz) → deshacer, «Mes» y «Mis registros».
+// Fase 7b: «Crear» (dictar → vista previa → guardar o corregir, y nueva categoría), «Mes» y «Mis registros».
 
 const CLAVE_TOKEN = 'gastos_token';
 const CLAVE_TEMA = 'gastos_tema';
@@ -413,6 +413,45 @@ function notificar(texto, conDeshacer, esError = false) {
   $('deshacer').disabled = false;
   mostrar('notificacion', true);
   temporizador = setTimeout(() => mostrar('notificacion', false), conDeshacer ? MS_NOTIFICACION : 3000);
+}
+
+/* ---------- Nueva categoría (fase 7b) ---------- */
+
+function estadoCategoria(mensaje, esError = false) {
+  $('estado-categoria').textContent = mensaje;
+  $('estado-categoria').classList.toggle('error', esError);
+}
+
+function textoHuecos(n) {
+  if (n <= 0) return 'el Resumen ya está completo';
+  return n === 1 ? 'queda 1 hueco' : 'quedan ' + n + ' huecos';
+}
+
+async function crearCategoria(e) {
+  e.preventDefault();
+  const nombre = $('categoria-nombre').value.trim();
+  const descripcion = $('categoria-descripcion').value.trim();
+  // Aviso rápido antes de enviar; quien decide de verdad es el servidor.
+  if (!nombre) return estadoCategoria('Escribe un nombre para la categoría.', true);
+  if (descripcion.length < 10) {
+    return estadoCategoria('Describe en unas palabras qué gastos entran: así se clasifican bien los dictados.', true);
+  }
+
+  const btn = $('crear-categoria');
+  btn.disabled = true;
+  btn.textContent = 'Creando…';
+  estadoCategoria('');
+  try {
+    const r = await api('categoria', { nombre, descripcion });
+    $('form-categoria').reset();
+    $('nueva-categoria').open = false;
+    notificar('✓ ' + r.desc + ' · ' + textoHuecos(r.huecos_libres), true);
+  } catch (err) {
+    estadoCategoria(err.message, true); // lo escrito se conserva para corregirlo
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Crear categoría';
+  }
 }
 
 /* ---------- Mes (fase 7): solo lectura ---------- */
@@ -847,6 +886,8 @@ $('modo-pruebas').addEventListener('change', (e) => {
   escribir(CLAVE_PRUEBAS, e.target.checked ? '1' : null);
   aplicarModoPruebas();
 });
+
+$('form-categoria').addEventListener('submit', crearCategoria);
 
 $('mes-anterior').addEventListener('click', () => moverMes(-1));
 $('mes-siguiente').addEventListener('click', () => moverMes(1));
