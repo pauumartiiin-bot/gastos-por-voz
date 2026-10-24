@@ -417,8 +417,14 @@ function notificar(texto, conDeshacer, esError = false) {
 
 /* ---------- Mes (fase 7): solo lectura ---------- */
 
-let mesDatos = null;  // última respuesta de "mes"
-let peticionMes = 0;  // si se pulsa rápido, las respuestas pueden llegar desordenadas: solo vale la última
+let mesDatos = null;    // última respuesta de "mes"
+let mesDestino = null;  // mes al que apuntan las flechas: cambia en cada toque, antes de que llegue la respuesta
+let esperaMes = 0;      // temporizador de la petición
+let peticionMes = 0;    // red de seguridad: si llegan respuestas desordenadas, solo vale la última
+
+// Los toques seguidos se agrupan: la petición sale cuando dejas de tocar. Cada petición reescribe
+// Resumen!B1 en el servidor y espera su turno, así que pedir los meses intermedios solo retrasaría el final.
+const MS_ESPERA_MES = 300;
 
 const MESES_CORTOS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 
@@ -429,39 +435,65 @@ function estadoMes(mensaje, esError = false) {
 
 // Sin etiqueta, el servidor devuelve el mes por defecto.
 async function cargarMes(etiqueta) {
+  clearTimeout(esperaMes);
   const n = ++peticionMes;
-  estadoMes('Cargando…');
-  activarNavMes(false);
-  $('mes-categorias').classList.add('cargando');
+  atenuarMes(true);
   try {
     const r = await api('mes', etiqueta ? { etiqueta } : {});
     if (n !== peticionMes) return;
     mesDatos = r;
+    mesDestino = r.etiqueta;
     estadoMes('');
     pintarMes();
   } catch (err) {
     if (n !== peticionMes) return;
     estadoMes(err.message, true);
+    // Vuelve al mes que se está viendo: el título no puede quedarse en uno que no ha cargado.
+    mesDestino = mesDatos ? mesDatos.etiqueta : null;
+    if (mesDatos) pintarTituloMes(mesDatos.etiqueta);
   } finally {
     if (n === peticionMes) {
-      activarNavMes(true);
-      $('mes-categorias').classList.remove('cargando');
+      atenuarMes(false);
+      actualizarNavMes();
     }
   }
 }
 
-// Flechas desactivadas mientras carga y en los extremos de la lista de meses.
-function activarNavMes(activo) {
-  const i = mesDatos ? mesDatos.meses.indexOf(mesDatos.etiqueta) : -1;
-  $('mes-anterior').disabled = !activo || i <= 0;
-  $('mes-siguiente').disabled = !activo || i < 0 || i >= mesDatos.meses.length - 1;
-  $('mes-hoy').disabled = !activo;
+// Flechas y «Hoy»: el título cambia al instante y la petición sale al dejar de tocar.
+function irAMes(etiqueta) {
+  mesDestino = etiqueta;
+  pintarTituloMes(etiqueta);
+  actualizarNavMes();
+  atenuarMes(true);
+  clearTimeout(esperaMes);
+  esperaMes = setTimeout(() => cargarMes(etiqueta), MS_ESPERA_MES);
 }
 
 function moverMes(paso) {
-  const i = mesDatos.meses.indexOf(mesDatos.etiqueta);
+  const i = mesDatos.meses.indexOf(mesDestino);
   const destino = mesDatos.meses[i + paso];
-  if (destino) cargarMes(destino);
+  if (destino) irAMes(destino);
+}
+
+// Las flechas nunca se bloquean mientras carga; solo en los extremos de la lista de meses.
+function actualizarNavMes() {
+  const meses = mesDatos ? mesDatos.meses : [];
+  const i = meses.indexOf(mesDestino);
+  $('mes-anterior').disabled = i <= 0;
+  $('mes-siguiente').disabled = i < 0 || i >= meses.length - 1;
+  mostrar('mes-hoy', !!mesDatos && mesDestino !== mesDatos.por_defecto);
+}
+
+function atenuarMes(activo) {
+  if (activo) estadoMes('Cargando…');
+  $('mes-cifras').classList.toggle('cargando', activo);
+  $('mes-categorias').classList.toggle('cargando', activo);
+}
+
+function pintarTituloMes(etiqueta) {
+  const [nombre, nomina] = partirEtiqueta(etiqueta);
+  $('mes-nombre').textContent = nombre;
+  $('mes-nomina').textContent = nomina;
 }
 
 // "Noviembre 2026 (nómina de octubre)" → ["Noviembre 2026", "nómina de octubre"]
@@ -479,10 +511,8 @@ function fechaCorta(iso) {
 function pintarMes() {
   const r = mesDatos;
   const c = r.cabecera;
-  const [nombre, nomina] = partirEtiqueta(r.etiqueta);
-  $('mes-nombre').textContent = nombre;
-  $('mes-nomina').textContent = nomina;
-  mostrar('mes-hoy', r.etiqueta !== r.por_defecto);
+  pintarTituloMes(r.etiqueta);
+  actualizarNavMes();
 
   $('mes-ingreso').textContent = euros(c.ingreso);
   $('mes-origen').textContent = c.origen;
@@ -820,7 +850,7 @@ $('modo-pruebas').addEventListener('change', (e) => {
 
 $('mes-anterior').addEventListener('click', () => moverMes(-1));
 $('mes-siguiente').addEventListener('click', () => moverMes(1));
-$('mes-hoy').addEventListener('click', () => cargarMes(mesDatos.por_defecto));
+$('mes-hoy').addEventListener('click', () => irAMes(mesDatos.por_defecto));
 
 document.querySelectorAll('.barra button').forEach((b) => {
   b.addEventListener('click', () => irA(b.dataset.vista));
