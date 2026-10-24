@@ -30,7 +30,7 @@ iPhone (esta app, GitHub Pages, instalada en pantalla de inicio)
   `redirect: 'follow'` (Apps Script responde con una redirección).
 - Interfaz en español. Comentarios del código en español, breves.
 
-## Contrato de la API (fases 6.1–6.2)
+## Contrato de la API (fases 6.1–7)
 Petición: un único `doPost` (en `backend/Api.gs`) que enruta por `accion`. Cuerpo JSON enviado como texto plano:
 ```json
 { "t": "<token>", "accion": "dictar", ...parámetros }
@@ -46,6 +46,7 @@ Petición: un único `doPost` (en `backend/Api.gs`) que enruta por `accion`. Cue
 | `editar` | `hoja`, `id`, `cambios` | `editarRegistro` | `desc` |
 | `baja` | `id`, `fecha_fin` | `darDeBaja` | `desc` |
 | `eliminar` | `hoja`, `id` | `eliminarRegistro` | `desc` |
+| `mes` | `etiqueta?` (sin ella, el mes por defecto) | `mes_` (nuevo, `backend/Mes.gs`) con `libro_` y `conBloqueo_` | `etiqueta`, `mes_inicio`, `por_defecto`, `meses`, `cabecera`, `categorias`, `cuadra`, `ms` (detalle en «Fase 7») |
 
 - En `dictar` con `corrige`, lo dictado es el cambio pedido y `frase` es la frase original (así lo espera `interpretar`).
 - `ms_interpretar` incluye leer el contexto de la hoja + Haiku + validación.
@@ -182,6 +183,119 @@ Resultados (1 pasada por configuración; aciertos · marca bien escrita · aluci
 **Fase 6.5 — README de portfolio — hecha.** Problema, cómo funciona (diagrama Mermaid), evaluación
 con modo de fallo, decisiones, latencia, seguridad, limitaciones, "Qué he aprendido" y puesta en
 marcha. El código de la v1 no está publicado: se explica en una línea. **Con esto, la v2 queda cerrada.**
+
+**Fase 7 — en curso.** Pestaña «Mes» (v2.1); detalle en la sección «Fase 7».
+
+## Fase 7 — Pestaña «Mes» (v2.1)
+
+### Objetivo
+Una pestaña nueva, «Mes», entre «Dictar» y «Mis registros», que enseña el mes elegido:
+cabecera (ingreso, previsto, restante), gastos agrupados por categoría y, en las categorías con
+presupuesto (Ocio, Comida), una barra con lo gastado y lo que queda. Es de **solo lectura**.
+
+### Alcance
+**Entra:** pestaña «Mes»; mes por defecto según la nómina apuntada; flechas ‹ › y botón «Hoy»;
+acción `mes` en la API; evaluación con 3 meses.
+**No entra:** marcar pagos como hechos (fase 8, semana 4; la estructura se deja preparada, pero sin casilla);
+añadir ingresos desde la app (se hace en la pestaña Ingresos de la hoja); editar desde la tabla (se hace
+en «Mis registros»); un botón «Añadir a este mes» (no hace falta: un gasto dictado con fecha, por ejemplo
+«250 euros tratamiento, 25 de enero de 2028», ya se guarda en Movimientos con esa fecha y sale en ese mes;
+el validador acepta hasta 730 días en el futuro); cambios en el prompt o en archivos de la v1.
+
+### Datos de partida (hoja, v2.1)
+- `Meses`: `Mes_inicio` (A), `Etiqueta` (B), `Ingreso_previsto` (C). Etiqueta = "Noviembre 2026 (nómina de octubre)".
+- `Ingresos`: `ID, Fecha, Mes, Concepto, Tipo, Importe, Notas, Registrado`. `Mes` es una etiqueta de `Meses`;
+  `Tipo` ∈ nómina | comisiones | extra.
+- `Resumen`: B1 = etiqueta del mes elegido (desplegable); B2/B3 inicio y fin; B4 ingreso del mes; B5 total previsto;
+  B6 restante; E4 previsto; E5 cobrado; E6 "previsto" | "cobrado". Tabla por categoría en filas 10–129:
+  A nombre, B fijos, C presupuesto, D gastos puntuales, E total previsto, F presupuesto disponible,
+  G = "cat" (fila de categoría) | "det" (detalle). Fila 130 = totales.
+- `Cálculo` (fila 2 en adelante): A ID, B Concepto, C Categoría, D Tipo, N Fecha_cargo, O Veces_en_mes,
+  P Importe_en_mes. Se calcula para el mes de `Resumen!B1`.
+- `Movimientos`: A ID, B Fecha, C Concepto, D Importe, E Categoría.
+- Total de una categoría = Fijos + MAX(Presupuesto, Puntuales). Disponible = MAX(0, Presupuesto − Puntuales).
+
+### Arquitectura: A+ («leer y restaurar»)
+Las fórmulas de la hoja son la única fuente de verdad: la app no recalcula nada.
+`mes_` (archivo nuevo `backend/Mes.gs`), dentro de `conBloqueo_` (v1, `Registros.gs`):
+1. Guarda el valor actual de `Resumen!B1`.
+2. Escribe la etiqueta pedida en B1 y llama a `SpreadsheetApp.flush()`.
+3. Lee: Resumen B2:B6 y E4:E6, las filas "cat" de A10:G129, las filas de `Cálculo` con ID y `Veces_en_mes` > 0,
+   y los `Movimientos` con fecha entre B2 y B3.
+4. En un `finally`: vuelve a poner el B1 original y llama a `flush()`. Aunque algo falle, B1 queda como estaba.
+
+Acoplamiento a tener en cuenta: `Mes.gs` depende de las posiciones de esas celdas. Si se cambia el Resumen, hay que revisar `Mes.gs`.
+
+### Mes por defecto (se calcula en el servidor)
+- `actual` = etiqueta de `Meses` cuyo `Mes_inicio` es el día 1 del mes de hoy (zona horaria de la hoja).
+- `siguiente` = la etiqueta de la fila siguiente.
+- Si en `Ingresos` hay alguna fila con `Mes` = `siguiente` y `Tipo` = "nómina" → por defecto `siguiente`; si no, `actual`.
+  Motivo: cobro la última semana del mes y sigo gastando el mes en curso hasta entonces. El cambio lo provoca
+  un dato real (haber apuntado la nómina), no una fecha fija. Las comisiones y los extras no lo cambian.
+
+### Contrato de la acción `mes`
+Petición: `{ "t": token, "accion": "mes", "etiqueta"?: "Noviembre 2026 (nómina de octubre)" }`.
+Sin `etiqueta` → mes por defecto. Etiqueta que no está en `Meses` → error `entrada`.
+
+Respuesta (además de `ok: true`):
+```json
+{
+  "etiqueta": "Noviembre 2026 (nómina de octubre)",
+  "mes_inicio": "2026-11-01",
+  "por_defecto": "Octubre 2026 (nómina de septiembre)",
+  "meses": ["Octubre 2026 (nómina de septiembre)", "Noviembre 2026 (nómina de octubre)", "…"],
+  "cabecera": { "ingreso": 1370, "previsto_ingreso": 1370, "cobrado": 0, "origen": "previsto",
+                "total_previsto": 1239, "restante": 131 },
+  "categorias": [
+    { "nombre": "Financiación", "fijos": 468, "presupuesto": 0, "puntuales": 0, "total": 468, "disponible": 0,
+      "reglas": [ { "id": "R009", "concepto": "Shein (x3)", "tipo": "fijo", "importe": 67,
+                    "fecha_cargo": "2026-11-01", "veces": 1 } ],
+      "movimientos": [] }
+  ],
+  "cuadra": true,
+  "ms": 1400
+}
+```
+- `categorias`: en el orden del Resumen; solo las que tienen `total` > 0 o algún movimiento.
+- `reglas[].importe` = `Importe_en_mes` (ya multiplicado por `veces`, por ejemplo semanal × 4).
+- `movimientos`: `{ id, fecha, concepto, importe }` del mes, por fecha.
+- Fechas siempre como texto "yyyy-MM-dd" con la zona horaria de la hoja (lección de la v1: un objeto `Date` mueve el día).
+- `cuadra` = suma de `categorias[].total` igual a `total_previsto` (redondeado a 2 decimales). Es el control de la evaluación.
+- Errores: los de siempre (`token`, `entrada`, `interno`). Nunca devuelve trazas.
+- En `Api.gs`, una línea: `mes: (p) => mes_(p)`. El token ya lo comprueba `doPost`.
+- `id` + `fecha_cargo` identifican una línea del mes: será la clave para marcar «pagado» en la fase 8.
+
+### Interfaz (pestaña «Mes»)
+- Barra inferior: Dictar · **Mes** · Mis registros (icono de calendario, mismo estilo SVG).
+- Cabecera (tarjeta): ‹ etiqueta › y botón «Hoy» (solo visible si no estás en `por_defecto`). Tres cifras:
+  Ingreso (con la etiqueta «previsto» o «cobrado»), Previsto y **Restante** (grande; con el color de acento si es negativo).
+- Una tarjeta por categoría: nombre y total. Dentro:
+  - reglas: concepto · fecha corta («1 nov») · importe; si `veces` > 1, «× 4»;
+  - si `presupuesto` > 0: barra gastado / presupuesto con «30 de 100 € · quedan 70 €»; si se pasa,
+    «te has pasado 12 €» con el color de acento;
+  - movimientos del mes debajo (concepto · fecha · importe).
+- Cada línea de regla lleva `data-id` y `data-fecha` (preparado para la fase 8, sin casilla todavía).
+- Mes vacío: «Este mes no tiene gastos previstos.» Estado de carga mientras llega la respuesta.
+- Al abrir la pestaña: petición sin `etiqueta` (mes por defecto). Flechas: etiqueta anterior o siguiente de `meses`
+  (desactivadas en los extremos).
+- Paleta y variables de `styles.css` (sin colores sueltos), claro y oscuro, textos con `textContent`.
+- Sube `?v=` a 7.x en `index.html` en cada cambio de `app.js`, `config.js` o `styles.css`.
+
+### Subfases
+- **7.1 Backend:** `backend/Mes.gs` + línea en `Api.gs` + `probarMes()` (desde el editor, sin la app).
+  Después: copiar a Apps Script y **Nueva versión sobre el mismo despliegue** (la URL no cambia).
+- **7.2 Interfaz:** pestaña «Mes» en `index.html`, `app.js` y `styles.css`.
+- **7.3 Evaluación:** `probarMes()` recorre 3 meses elegidos a propósito y registra `cuadra`, el total y las reglas.
+  Con `Movimientos` vacío, los totales esperados son:
+
+| Mes | Total esperado | Por qué este mes |
+|---|---|---|
+| Noviembre 2026 | 1.239 € | Todo activo: Klarna (último mes), T Jove y Creatina |
+| Enero 2027 | 1.115 € | Última cuota de Shein; sin Klarna ni T Jove; con Creatina |
+| Febrero 2027 | 1.049 € | Sin Shein ni Creatina; vuelve T Jove (cada 3 meses) |
+
+  Además: tras la prueba, `Resumen!B1` sigue en el mes que había (comprueba la restauración). En el iPhone,
+  noviembre muestra lo mismo que el Resumen.
 
 ## Forma de trabajar
 - Antes de escribir código, presentar un plan breve y esperar confirmación.
