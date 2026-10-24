@@ -30,7 +30,7 @@ iPhone (esta app, GitHub Pages, instalada en pantalla de inicio)
   `redirect: 'follow'` (Apps Script responde con una redirección).
 - Interfaz en español. Comentarios del código en español, breves.
 
-## Contrato de la API (fases 6.1–7)
+## Contrato de la API (fases 6.1–7b)
 Petición: un único `doPost` (en `backend/Api.gs`) que enruta por `accion`. Cuerpo JSON enviado como texto plano:
 ```json
 { "t": "<token>", "accion": "dictar", ...parámetros }
@@ -47,6 +47,7 @@ Petición: un único `doPost` (en `backend/Api.gs`) que enruta por `accion`. Cue
 | `baja` | `id`, `fecha_fin` | `darDeBaja` | `desc` |
 | `eliminar` | `hoja`, `id` | `eliminarRegistro` | `desc` |
 | `mes` | `etiqueta?` (sin ella, el mes por defecto) | `mes_` (nuevo, `backend/Mes.gs`) con `libro_` y `conBloqueo_` | `etiqueta`, `mes_inicio`, `por_defecto`, `meses`, `cabecera`, `categorias`, `cuadra`, `ms` (detalle en «Fase 7») |
+| `categoria` | `nombre`, `descripcion` | `crearCategoria_` (nuevo, `backend/Categorias.gs`) con `libro_`, `conBloqueo_`, `normalizar` y `apuntarDeshacer_` | `nombre`, `desc`, `huecos_libres` (detalle en «Fase 7b») |
 
 - En `dictar` con `corrige`, lo dictado es el cambio pedido y `frase` es la frase original (así lo espera `interpretar`).
 - `ms_interpretar` incluye leer el contexto de la hoja + Haiku + validación.
@@ -90,6 +91,7 @@ backend/Transcribir.gs  transcribir_() con Groq; se copia a mano a Apps Script
 backend/Vocabulario.gs  vocabulario de la hoja para Whisper (con caché); se copia a mano a Apps Script
 backend/Evaluacion.gs   evaluación 6.4 con audios de Drive (se ejecuta desde el editor); se copia a mano
 backend/Mes.gs          acción mes (fase 7): lee el mes de la hoja y restaura Resumen!B1; se copia a mano
+backend/Categorias.gs   acción categoria (fase 7b): crea una categoría antes de «Otros»; se copia a mano
 docs/                   capturas del README (generadas con datos inventados)
 CLAUDE.md               este archivo
 README.md               README de portfolio (fase 6.5)
@@ -185,7 +187,7 @@ Resultados (1 pasada por configuración; aciertos · marca bien escrita · aluci
 con modo de fallo, decisiones, latencia, seguridad, limitaciones, "Qué he aprendido" y puesta en
 marcha. El código de la v1 no está publicado: se explica en una línea. **Con esto, la v2 queda cerrada.**
 
-**Fase 7 — en curso.** Pestaña «Mes» (v2.1); detalle en la sección «Fase 7».
+**Fase 7 — hecha.** Pestaña «Mes» (v2.1); detalle en la sección «Fase 7».
 - **7.1 — hecha.** `probarMes()` en Apps Script: noviembre 1.239 € · restante 131 · `cuadra` ✅, coincide con el
   Resumen; mes por defecto octubre (mes en curso); etiqueta inventada → `entrada`; B1 restaurado; 893 ms.
   Las reglas semanales salen con `fecha_cargo: null` (la hoja no les calcula fecha): revisar la clave
@@ -201,16 +203,50 @@ marcha. El código de la v1 no está publicado: se explica en una línea. **Con 
   Probado en el iPhone: todo OK. Cambiar de mes: 2.516 ms en el servidor y ~3 s en total (con B1 ya en ese
   mes, 893 ms → escribir B1, recalcular y restaurar cuesta ~1,6 s). Propuesta sin implementar: caché en el
   móvil de los meses ya vistos, si con el uso se hace lento.
-- **7.3 — en curso.** `probarMes()` evalúa noviembre, enero y febrero (`MES_CASOS_`): `cuadra`, total esperado
+- **7.3 — hecha.** `probarMes()` evalúa noviembre, enero y febrero (`MES_CASOS_`): `cuadra`, total esperado
   y reglas que deben estar o no (por ID). Si un mes tiene movimientos, un total distinto es ⚠️, no ❌.
-  Al cerrar la fase: sección de la pestaña «Mes» en el README.
+  Resultado en Apps Script: **3/3 ✅** (1.239 · 1.115 · 1.049 €, con las reglas exactas de cada mes), etiqueta
+  inventada ✅, B1 restaurado tras cuatro cambios ✅. Tiempos: noviembre 1.041 ms (B1 ya estaba en él),
+  enero 1.528 ms, febrero 2.102 ms. README: sección «Pestaña "Mes"» y captura `docs/mes-claro.png`
+  (datos inventados).
 
-**Siguiente, ya decidida: «Crear categorías» (fase propia, después de la 7 y antes de la 8).**
-La pestaña «Dictar» pasa a llamarse **«Crear»**: el micrófono sigue arriba y debajo va una tarjeta plegada
-«+ Nueva categoría» con nombre y descripción (la descripción la lee Haiku para clasificar). Caso de uso: «Aina»
-(hoy un gasto de 86 € en Otros) pasa a ser una categoría con sus gastos recurrentes dentro. Límites de la hoja:
-el Resumen tiene 12 bloques de categoría (filas 10–129, 10 filas cada uno; hoy hay 9) y cada bloque muestra
-9 reglas de detalle → la app debe impedir la categoría 13. Plan detallado antes de empezar.
+**Fase 7b — Crear categorías (v2.2) — en curso.** Detalle en la sección «Fase 7b».
+- **7b.1 — en curso.** `backend/Categorias.gs` + línea en `Api.gs` + `probarCategorias()`.
+
+## Fase 7b — Crear categorías (v2.2)
+
+### Objetivo
+Crear desde la app una categoría (nombre + descripción) sin tocar la hoja. Caso de uso: «Aina» (hoy un gasto
+de 86 € en Otros) pasa a ser una categoría con sus gastos recurrentes dentro. La migración la hace Pau a mano:
+crear «Aina», dictar sus gastos y dar de baja el R004 en «Mis registros».
+
+### Decisiones
+- La pestaña «Dictar» pasa a llamarse **«Crear»**: el micrófono sigue arriba y debajo va una tarjeta plegada
+  «+ Nueva categoría». La fase 8 sigue siendo «marcar pagos».
+- La categoría nueva va **justo antes de «Otros»** (el cajón de sastre se queda al final del Resumen y de «Mes»).
+- **Descripción obligatoria** (10–150 caracteres): Haiku la lee para clasificar los dictados.
+
+### Backend (`backend/Categorias.gs`, acción `categoria`)
+- Petición: `{ "t", "accion": "categoria", "nombre", "descripcion" }`. Dentro de `conBloqueo_`.
+- Validaciones (si falla, `{ ok: false, error: "rechazado", mensaje }`, devuelto y no lanzado; no escribe nada):
+  nombre de 1–30 caracteres con alguna letra; que no empiece por `= + - @` (fórmula); sin `|` (separador de
+  `Cálculo!Q`); que no exista ya (sin distinguir mayúsculas ni tildes, con `normalizar` de la v1); descripción de
+  10–150 caracteres; y que quede hueco en el Resumen.
+- **Límite del Resumen:** se cuentan los bloques «cat» de `Resumen!G10:G129` (hoy 12; usa las constantes de
+  `Mes.gs`). Si se amplía el Resumen, la app lo detecta sola. Cada bloque muestra 9 reglas de detalle.
+- Escritura: `insertRowBefore` en la fila de «Otros» (o al final si no existe). Las fórmulas del Resumen usan
+  `INDEX('Categorías'!A:A, n)` y las validaciones `Categorías!A2:A100`, así que una fila insertada no las rompe.
+- Deshacer: `apuntarDeshacer_('Categoría «X» eliminada', [{ op: 'borrar', hoja: 'Categorías', id: X }])`; el
+  `deshacer` de la v1 ya borra la fila cuya columna A coincide. Se borra la caché del vocabulario de Whisper.
+- Respuesta: `{ nombre, desc, huecos_libres }`.
+- `probarCategorias()` (editor): las validaciones sin escribir y una creación real de «Prueba 7b» (posición antes
+  de «Otros», aparece en el Resumen, no se puede duplicar) con limpieza en un `finally` que deja Categorías y
+  `ULTIMO` como estaban.
+
+### Subfases
+- **7b.1 Backend:** `Categorias.gs` + línea en `Api.gs` + `probarCategorias()`. Después: copiar a Apps Script y
+  **Nueva versión sobre el mismo despliegue**.
+- **7b.2 Interfaz:** pestaña «Crear» con la tarjeta plegada; al crear, notificación con Deshacer. `?v=` 7.3.x.
 
 ## Fase 7 — Pestaña «Mes» (v2.1)
 

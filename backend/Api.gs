@@ -18,7 +18,8 @@ const ACCIONES_ = {
   editar: (p, t) => editarRegistro(t, p.hoja, p.id, p.cambios || {}),
   baja: (p, t) => darDeBaja(t, p.id, p.fecha_fin),
   eliminar: (p, t) => eliminarRegistro(t, p.hoja, p.id),
-  mes: (p) => mes_(p)   // Fase 7: Mes.gs
+  mes: (p) => mes_(p),   // Fase 7: Mes.gs
+  categoria: (p) => crearCategoria_(p)   // Fase 7b: Categorias.gs
 };
 
 function doPost(e) {

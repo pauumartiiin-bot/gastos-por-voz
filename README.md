@@ -4,9 +4,11 @@ Registra un gasto diciendo *«Spotify 10,99 al mes, ocio»*. Whisper lo transcri
 y el código lo valida antes de guardarlo en Google Sheets. Nada se guarda sin que lo confirmes.
 
 <p align="center">
-  <img src="docs/dictar-claro.png" alt="Vista previa de un gasto dictado, en tema claro" width="300">
-  &nbsp;&nbsp;
-  <img src="docs/registros-oscuro.png" alt="Mis registros, en tema oscuro" width="300">
+  <img src="docs/dictar-claro.png" alt="Vista previa de un gasto dictado, en tema claro" width="250">
+  &nbsp;
+  <img src="docs/mes-claro.png" alt="Pestaña Mes: ingreso, previsto, restante y gastos por categoría" width="250">
+  &nbsp;
+  <img src="docs/registros-oscuro.png" alt="Mis registros, en tema oscuro" width="250">
 </p>
 
 **Evaluación con 30 audios reales: 25/30 aciertos y 0 errores silenciosos** (ningún dato erróneo guardado sin
@@ -25,6 +27,8 @@ con Claude Haiku y la validaba con código. La **v2** (este repositorio) añade:
 - **Dictado por voz** con Whisper (vía Groq), pensado para usarlo en diez segundos desde el iPhone.
 - **App propia instalable** (HTML, CSS y JavaScript sin frameworks, servida en GitHub Pages).
 - **Mis registros**: ver, editar, dar de baja y eliminar gastos, siempre con *Deshacer*.
+- **Mes** (v2.1): el mes elegido con ingreso, previsto y restante, los gastos por categoría y una barra en
+  las categorías con presupuesto. [Cómo funciona](#pestaña-mes-la-hoja-como-única-fuente-de-verdad).
 - **Una evaluación reproducible** para elegir modelo y configuración con datos.
 
 > El código de la v1 (interpretación, validación y escritura en la hoja) no está publicado: vive en el
@@ -107,6 +111,41 @@ cada fallo se clasificó según su efecto:
 **Limitaciones:** una pasada por configuración, una sola voz y 30 casos. Las diferencias de 1 o 2 aciertos
 son ruido; las conclusiones se apoyan en patrones que se repiten en varios grupos.
 
+## Pestaña «Mes»: la hoja como única fuente de verdad
+
+La hoja de cálculo ya sabe calcular un mes: qué cargos caen en él (mensuales, cada tres meses, cuotas que
+terminan), cuánto queda de cada presupuesto y cuál es el restante. Reescribir esa lógica en JavaScript
+crearía **dos fuentes de verdad** que tarde o temprano dirían cosas distintas. Por eso la app no calcula
+nada: le pide a la hoja el mes y lee lo que sus fórmulas ya han calculado.
+
+**Patrón «leer y restaurar»** ([`backend/Mes.gs`](backend/Mes.gs)). El Resumen calcula un solo mes, el que
+está en la celda `B1`, así que la acción `mes`, con un bloqueo para que no haya dos a la vez:
+1. Guarda el valor de `B1` y escribe el mes pedido.
+2. Fuerza el recálculo y lee la cabecera, la tabla por categoría, los cargos del mes y los gastos puntuales.
+3. En un `finally`, vuelve a dejar `B1` como estaba. Aunque algo falle, la hoja no se queda en otro mes.
+
+**Cómo sé que lee bien.** Cada respuesta lleva un control, `cuadra`: la suma de las categorías tiene que dar
+el total previsto. Además, una evaluación con tres meses elegidos a propósito comprueba el total y qué
+cargos entran y cuáles no:
+
+| Mes | Total | Por qué este mes | Resultado |
+|---|---|---|---|
+| Noviembre 2026 | 1.239 € | Todo activo, incluida la última cuota de un pago a plazos | ✅ |
+| Enero 2027 | 1.115 € | Termina otra cuota; sin el cargo trimestral | ✅ |
+| Febrero 2027 | 1.049 € | Vuelve el cargo trimestral; sin las cuotas terminadas | ✅ |
+
+`B1` queda restaurado tras cuatro cambios de mes seguidos.
+
+**El coste.** Si `B1` ya está en ese mes, la respuesta tarda ~0,9 s en el servidor. Cambiar de mes obliga a
+escribir, recalcular y restaurar: ~1,5–2,5 s en el servidor y ~3 s en el móvil. Es un precio aceptable
+para una consulta de solo lectura a cambio de no duplicar la lógica. El otro precio es el **acoplamiento**:
+`Mes.gs` depende de la posición de las celdas del Resumen.
+
+**En la interfaz.** Las flechas ‹ › responden a cada toque: el título cambia al instante y la petición sale
+300 ms después del último toque (*debounce*), así que tres toques rápidos son una sola petición. Si llegaran
+respuestas desordenadas, solo cuenta la última. La app tampoco hace gestos de web: ni zoom por doble toque
+o pellizco, ni rebote.
+
 ## Decisiones técnicas
 
 | Decisión | Alternativa descartada | Por qué |
@@ -118,6 +157,8 @@ son ruido; las conclusiones se apoyan en patrones que se repiten en varios grupo
 | Vista previa antes de guardar | Guardar directamente | El modelo puede equivocarse; la persona tiene la última palabra |
 | Deshacer de un solo paso, en una notificación flotante | Historial completo | El servidor guarda solo la última acción: más simple y suficiente |
 | HTML, CSS y JS sin dependencias | Un framework | Se sirve tal cual en GitHub Pages, sin compilar, y cada línea se puede explicar |
+| «Mes» lee lo que calculan las fórmulas de la hoja | Recalcular el mes en JavaScript | Una sola fuente de verdad; cuesta ~1,6 s por cambio de mes |
+| Flechas con *debounce* y título que cambia al instante | Bloquear las flechas mientras carga | Con el bloqueo, tres toques rápidos solo avanzaban un mes (lo detecté probando en el iPhone) |
 
 ## Latencia
 
@@ -132,6 +173,8 @@ Un dictado tarda **~6–7 s** de principio a fin:
 
 El modelo de voz no es el cuello de botella; Apps Script sí. La mejora más directa sería cachear el
 contexto de la hoja (en una prueba bajó de ~720 ms a 47 ms).
+
+En la pestaña «Mes», cambiar de mes tarda ~3 s (detalle en [su sección](#pestaña-mes-la-hoja-como-única-fuente-de-verdad)).
 
 ## Seguridad
 
@@ -148,6 +191,8 @@ contexto de la hoja (en una prueba bajó de ~720 ms a 47 ms).
 - **Ajustar el umbral de silencio** con más datos. La app lo sigue midiendo en el modo pruebas.
 - **Bajar la latencia** cacheando el contexto de la hoja.
 - **Ampliar la evaluación** con otra voz y varias pasadas por configuración.
+- **Cambiar de mes en ~3 s.** Si con el uso se hace lento, guardar en el móvil los meses ya vistos.
+- **El Resumen tiene sitio para 12 categorías** (hoy hay 9). Crear categorías desde la app tendrá que respetar ese límite.
 
 ## Qué he aprendido
 
@@ -162,7 +207,7 @@ contexto de la hoja (en una prueba bajó de ~720 ms a 47 ms).
 ## Estructura y puesta en marcha
 
 ```
-index.html              página: token, dictar, mis registros y ajustes
+index.html              página: token, dictar, mes, mis registros y ajustes
 styles.css              estilos; colores como variables para tema claro y oscuro
 app.js                  lógica del cliente: grabación, detección de silencio, llamadas a la API
 config.js               URL del endpoint de Apps Script (no es secreta)
@@ -172,11 +217,12 @@ backend/Api.gs          doPost: enrutador de la API sobre las funciones de la v1
 backend/Transcribir.gs  audio → texto con Groq Whisper y filtro de silencio
 backend/Vocabulario.gs  vocabulario para Whisper (apagado por defecto tras la evaluación)
 backend/Evaluacion.gs   evaluación con audios de Google Drive (se ejecuta desde el editor)
+backend/Mes.gs          acción mes: lee el mes de la hoja y restaura Resumen!B1; probarMes() lo evalúa
 docs/                   capturas del README
 ```
 
-1. **Apps Script** (sobre el proyecto de la v1): crea `Api.gs`, `Transcribir.gs` y `Vocabulario.gs` con el
-   contenido de `backend/` y añade en las propiedades del script `GROQ_API_KEY`, junto a las de la v1
+1. **Apps Script** (sobre el proyecto de la v1): crea `Api.gs`, `Transcribir.gs`, `Vocabulario.gs` y `Mes.gs`
+   con el contenido de `backend/` y añade en las propiedades del script `GROQ_API_KEY`, junto a las de la v1
    (`TOKEN`, `ANTHROPIC_API_KEY`). Crea una implementación nueva como aplicación web.
 2. **Frontend:** pon la URL `/exec` de la implementación en `config.js` y publica el repositorio con GitHub Pages.
 3. **iPhone:** abre la página en Safari → Compartir → *Añadir a la pantalla de inicio*, y pega el token la
