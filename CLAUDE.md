@@ -80,7 +80,7 @@ Reglas:
 
 ## Estructura del repo
 ```
-index.html              página: token, dictar (vista previa → guardar / corregir / deshacer), mes, mis registros, ajustes
+index.html              página: token, crear (dictar → vista previa → guardar / corregir / deshacer, y nueva categoría), mes, mis registros, ajustes
 styles.css              estilos; colores como variables CSS para tema claro y oscuro
 app.js                  lógica del cliente (tema, vistas, detección de silencio, llamadas a la API)
 config.js               URL del endpoint de Apps Script (no secreta)
@@ -211,7 +211,14 @@ marcha. El código de la v1 no está publicado: se explica en una línea. **Con 
   (datos inventados).
 
 **Fase 7b — Crear categorías (v2.2) — en curso.** Detalle en la sección «Fase 7b».
-- **7b.1 — en curso.** `backend/Categorias.gs` + línea en `Api.gs` + `probarCategorias()`.
+- **7b.1 — hecha.** `backend/Categorias.gs` + línea en `Api.gs` + `probarCategorias()`. En Apps Script: 9 de 12
+  huecos, validaciones 12/12, «Prueba 7b» creada antes de «Otros» y visible en el Resumen, duplicado rechazado,
+  limpieza ✅ y `ULTIMO` intacto. Nueva versión del despliegue publicada.
+- **7b.2 — en curso.** Barra: Crear · Mes · Mis registros (la vista sigue siendo `vista-dictar`). Debajo de la vista
+  previa, `<details>` «+ Nueva categoría» con nombre (máx. 30), descripción (máx. 150) y «Crear categoría». El
+  móvil solo avisa de nombre vacío o descripción corta; el resto lo decide el servidor y su mensaje sale dentro de
+  la tarjeta sin borrar lo escrito. Al crear: notificación con Deshacer y «quedan N huecos»; la tarjeta se vacía y se
+  pliega. Sin chips de categorías existentes (decidido).
 
 ## Fase 7b — Crear categorías (v2.2)
 
