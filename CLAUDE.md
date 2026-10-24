@@ -185,7 +185,7 @@ Resultados (1 pasada por configuración; aciertos · marca bien escrita · aluci
 con modo de fallo, decisiones, latencia, seguridad, limitaciones, "Qué he aprendido" y puesta en
 marcha. El código de la v1 no está publicado: se explica en una línea. **Con esto, la v2 queda cerrada.**
 
-**Fase 7 — en curso.** Pestaña «Mes» (v2.1); detalle en la sección «Fase 7».
+**Fase 7 — hecha.** Pestaña «Mes» (v2.1); detalle en la sección «Fase 7».
 - **7.1 — hecha.** `probarMes()` en Apps Script: noviembre 1.239 € · restante 131 · `cuadra` ✅, coincide con el
   Resumen; mes por defecto octubre (mes en curso); etiqueta inventada → `entrada`; B1 restaurado; 893 ms.
   Las reglas semanales salen con `fecha_cargo: null` (la hoja no les calcula fecha): revisar la clave
@@ -201,9 +201,12 @@ marcha. El código de la v1 no está publicado: se explica en una línea. **Con 
   Probado en el iPhone: todo OK. Cambiar de mes: 2.516 ms en el servidor y ~3 s en total (con B1 ya en ese
   mes, 893 ms → escribir B1, recalcular y restaurar cuesta ~1,6 s). Propuesta sin implementar: caché en el
   móvil de los meses ya vistos, si con el uso se hace lento.
-- **7.3 — en curso.** `probarMes()` evalúa noviembre, enero y febrero (`MES_CASOS_`): `cuadra`, total esperado
+- **7.3 — hecha.** `probarMes()` evalúa noviembre, enero y febrero (`MES_CASOS_`): `cuadra`, total esperado
   y reglas que deben estar o no (por ID). Si un mes tiene movimientos, un total distinto es ⚠️, no ❌.
-  Al cerrar la fase: sección de la pestaña «Mes» en el README.
+  Resultado en Apps Script: **3/3 ✅** (1.239 · 1.115 · 1.049 €, con las reglas exactas de cada mes), etiqueta
+  inventada ✅, B1 restaurado tras cuatro cambios ✅. Tiempos: noviembre 1.041 ms (B1 ya estaba en él),
+  enero 1.528 ms, febrero 2.102 ms. README: sección «Pestaña "Mes"» y captura `docs/mes-claro.png`
+  (datos inventados).
 
 **Siguiente, ya decidida: «Crear categorías» (fase propia, después de la 7 y antes de la 8).**
 La pestaña «Dictar» pasa a llamarse **«Crear»**: el micrófono sigue arriba y debajo va una tarjeta plegada
