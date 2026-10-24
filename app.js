@@ -4,10 +4,6 @@ const CLAVE_TOKEN = 'gastos_token';
 const CLAVE_TEMA = 'gastos_tema';
 const CLAVE_PRUEBAS = 'gastos_pruebas';
 
-// Volumen (RMS, 0–1) por debajo del cual se considera que no se habló. Ajustable en la 6.4
-// con el dato «Volumen máx.» del modo pruebas.
-const UMBRAL_VOZ = 0.02;
-
 // Tiempo que la notificación con Deshacer sigue visible (ms).
 const MS_NOTIFICACION = 8000;
 
@@ -206,71 +202,14 @@ function pintarTiempos(r, inicio) {
   dato('prob-sin-voz', r.prob_sin_voz);
 }
 
-/* ---------- Nivel de volumen (Web Audio API) ---------- */
+/* ---------- Indicador de grabación ---------- */
 
-// Forma del indicador: más alto en el centro.
-const FORMA = [0.35, 0.55, 0.75, 0.9, 1, 0.9, 0.75, 0.55, 0.35];
-const barras = Array.from(document.querySelectorAll('#nivel span'));
-let audioCtx = null;
-let medidor = null; // { fuente, analizador, datos, pico, animacion }
-
-function pintarNivel(nivel) {
-  barras.forEach((b, i) => { b.style.height = (6 + Math.round(nivel * FORMA[i] * 22)) + 'px'; });
-}
+// Las barras se animan mientras graba (CSS); no miden el volumen. El medidor con Web Audio se quitó en la
+// 7b.4: en iOS degradaba la grabación y bloqueaba dictados. El silencio lo filtra el servidor (no_speech_prob).
+const FORMA = [0.35, 0.55, 0.75, 0.9, 1, 0.9, 0.75, 0.55, 0.35]; // más alto en el centro
 
 function pintarNivelReposo() {
-  barras.forEach((b, i) => { b.style.height = (6 + Math.round(FORMA[i] * 18)) + 'px'; });
-}
-
-// Uno nuevo en cada grabación: en iOS, el reutilizado se quedaba «colgado» tras la primera y el
-// medidor solo oía ruido de fondo. Debe crearse dentro del gesto del usuario (iOS solo deja así).
-function prepararAudio() {
-  const Ctx = window.AudioContext || window.webkitAudioContext;
-  if (!Ctx) return null;
-  cerrarAudio();
-  audioCtx = new Ctx();
-  if (audioCtx.state !== 'running') audioCtx.resume();
-  return audioCtx;
-}
-
-function cerrarAudio() {
-  if (audioCtx && audioCtx.close) audioCtx.close().catch(() => {});
-  audioCtx = null;
-}
-
-function empezarMedidor(stream) {
-  if (!audioCtx) return;
-  const fuente = audioCtx.createMediaStreamSource(stream);
-  const analizador = audioCtx.createAnalyser();
-  analizador.fftSize = 1024;
-  fuente.connect(analizador);
-  medidor = { fuente, analizador, datos: new Uint8Array(analizador.fftSize), pico: 0, animacion: 0 };
-
-  const medir = () => {
-    analizador.getByteTimeDomainData(medidor.datos);
-    let suma = 0;
-    for (const v of medidor.datos) {
-      const x = (v - 128) / 128;
-      suma += x * x;
-    }
-    const rms = Math.sqrt(suma / medidor.datos.length);
-    medidor.pico = Math.max(medidor.pico, rms);
-    pintarNivel(Math.min(1, rms * 6));
-    medidor.animacion = requestAnimationFrame(medir);
-  };
-  medir();
-}
-
-// Devuelve el volumen máximo detectado (null si no se pudo medir).
-function pararMedidor() {
-  if (!medidor) return null;
-  cancelAnimationFrame(medidor.animacion);
-  medidor.fuente.disconnect();
-  const pico = medidor.pico;
-  medidor = null;
-  cerrarAudio();
-  pintarNivelReposo();
-  return pico;
+  document.querySelectorAll('#nivel span').forEach((b, i) => { b.style.height = (6 + Math.round(FORMA[i] * 18)) + 'px'; });
 }
 
 /* ---------- Grabación ---------- */
@@ -299,6 +238,7 @@ function mensajeErrorMicro(err) {
 function botonGrabando(grabando) {
   boton.classList.toggle('grabando', grabando);
   boton.setAttribute('aria-label', grabando ? 'Parar' : 'Grabar');
+  $('nivel').classList.toggle('escuchando', grabando);
 }
 
 async function empezar() {
@@ -307,14 +247,11 @@ async function empezar() {
     estado('Este navegador no puede grabar audio.', true);
     return;
   }
-  prepararAudio();
-  descartarPendiente();
 
   let stream;
   try {
     stream = await navigator.mediaDevices.getUserMedia({ audio: true });
   } catch (err) {
-    cerrarAudio();
     estado(mensajeErrorMicro(err), true);
     return;
   }
@@ -323,12 +260,12 @@ async function empezar() {
   grabador = new MediaRecorder(stream, { mimeType: mime });
   grabador.ondataavailable = (e) => { if (e.data.size > 0) trozos.push(e.data); };
   grabador.onstop = () => {
-    const pico = pararMedidor();
     stream.getTracks().forEach((t) => t.stop()); // libera el micrófono
-    terminarGrabacion(new Blob(trozos, { type: mime }), pico);
+    const blob = new Blob(trozos, { type: mime });
+    if (!blob.size) estado('No se ha grabado nada. Inténtalo de nuevo.', true);
+    else dictar(blob); // si solo hay silencio, lo rechaza el filtro del servidor
   };
   grabador.start();
-  empezarMedidor(stream);
 
   botonGrabando(true);
   estado(corrigiendo ? 'Grabando la corrección…' : 'Te escucho…');
@@ -337,26 +274,6 @@ async function empezar() {
 function parar() {
   botonGrabando(false);
   grabador.stop();
-}
-
-// Si no se oyó nada, no se envía: evita el viaje al servidor y las alucinaciones de Whisper.
-// Pero el medidor no tiene la última palabra: «Enviar igualmente» deja que decida el filtro del servidor.
-let pendiente = null; // grabación retenida por el medidor
-
-function terminarGrabacion(blob, pico) {
-  dato('vol-max', pico == null ? null : pico.toFixed(3));
-  if (pico != null && pico < UMBRAL_VOZ) {
-    pendiente = blob;
-    estado('No te he oído. Prueba a hablar un poco más cerca.', true);
-    mostrar('enviar-igualmente', true);
-    return;
-  }
-  dictar(blob);
-}
-
-function descartarPendiente() {
-  pendiente = null;
-  mostrar('enviar-igualmente', false);
 }
 
 // Blob → base64 sin el prefijo "data:...;base64,".
@@ -905,12 +822,6 @@ if (prefiereOscuro && prefiereOscuro.addEventListener) {
 $('modo-pruebas').addEventListener('change', (e) => {
   escribir(CLAVE_PRUEBAS, e.target.checked ? '1' : null);
   aplicarModoPruebas();
-});
-
-$('enviar-igualmente').addEventListener('click', () => {
-  const blob = pendiente;
-  descartarPendiente();
-  if (blob) dictar(blob);
 });
 
 $('form-categoria').addEventListener('submit', crearCategoria);

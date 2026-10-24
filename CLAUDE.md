@@ -107,9 +107,9 @@ README.md               README de portfolio (fase 6.5)
   fondo al 40 %. Tipografía Manrope (Google Fonts) con la del sistema como respaldo.
 - Icono: "euro que suena" en vino con degradado y onda lavanda. iOS exige PNG cuadrado sin esquinas
   (aplica su propia máscara); el `€` va dibujado como trazos para no depender de una fuente.
-- Silencio en el cliente: la Web Audio API mide el volumen (RMS) mientras se graba; si el máximo no supera
-  `UMBRAL_VOZ` (0,02) no se envía nada. El filtro del servidor (`no_speech_prob`) sigue como segunda red.
-- Modo pruebas (interruptor en Ajustes, `gastos_pruebas`): muestra modelo, vocabulario, volumen máximo,
+- Silencio: solo lo filtra el servidor (`no_speech_prob`). El medidor de volumen del cliente (Web Audio, `UMBRAL_VOZ`)
+  se quitó en la 7b.4 porque en iOS degradaba la grabación; las barras de nivel solo ondean mientras graba (CSS).
+- Modo pruebas (interruptor en Ajustes, `gastos_pruebas`): muestra modelo, vocabulario,
   tiempos y prob. sin voz. Fuera de él el cliente no envía `modelo` ni `vocabulario` (valores del servidor).
   Se mantiene tras la 6.4 para seguir midiendo en uso real.
 - Deshacer: una sola notificación flotante sobre la barra, común a Crear, Mes y Mis registros (el servidor solo
@@ -222,12 +222,19 @@ marcha. El código de la v1 no está publicado: se explica en una línea. **Con 
   Probado en el iPhone (K1–K7 OK): «Aina» creada antes de «Otros», visible en el Resumen y con 2 huecos libres;
   sin zoom al escribir. **K7: «luz 30 euros al mes», dicho sin categoría, Haiku lo propuso en «Aina»** solo por
   la descripción → la descripción de la categoría funciona como instrucción para el modelo.
-- **7b.3 — en curso: micrófono que solo funcionaba una vez.** En el iPhone, tras el primer dictado todos decían
+- **7b.3 — sustituida por la 7b.4: micrófono que solo funcionaba una vez.** En el iPhone, tras el primer dictado todos decían
   «No te he oído» hasta cerrar la app. Volumen máx. medido en el fallo: 0,009 (≈ ruido de fondo, no 0) → el medidor
   recibía señal pero no la voz. Arreglo: un `AudioContext` nuevo en cada grabación (creado en el toque y cerrado al
   terminar) en vez de reutilizar uno. Red de seguridad: si el medidor retiene la grabación, «Enviar igualmente» la
   manda y decide el filtro del servidor; además sirve de diagnóstico (si el servidor transcribe tu voz, fallaba
   solo el medidor; si no, el micrófono entero).
+  Resultado en el iPhone: falló igual (solo funcionó 1 de 3), con volúmenes de 0,020 / 0,020 / 0,028 incluso hablando
+  (la voz normal medía 0,222 en la 6.3a) → con Web Audio abierto, iOS baja el nivel de entrada del micrófono.
+- **7b.4 — en curso: sin medidor en el cliente.** Se quita todo Web Audio (`AudioContext`, analizador, `UMBRAL_VOZ`,
+  «Enviar igualmente» y «Volumen máx.»): la grabación queda solo con `getUserMedia` + `MediaRecorder`, como en la
+  6.0, y todo dictado va al servidor, cuyo filtro `no_speech_prob` decide (6.4: silencio 0,99, 0 alucinaciones con
+  large-v3). Las barras ondean con CSS mientras graba. Precio: un toque sin hablar tarda ~3 s en responder «No se ha
+  entendido nada». Si aun así falla, el problema es del micrófono o la grabación, no del medidor. `?v=` 7.3.2.
 
 ## Fase 7b — Crear categorías (v2.2)
 
