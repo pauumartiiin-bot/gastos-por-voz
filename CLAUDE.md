@@ -230,11 +230,13 @@ marcha. El código de la v1 no está publicado: se explica en una línea. **Con 
   solo el medidor; si no, el micrófono entero).
   Resultado en el iPhone: falló igual (solo funcionó 1 de 3), con volúmenes de 0,020 / 0,020 / 0,028 incluso hablando
   (la voz normal medía 0,222 en la 6.3a) → con Web Audio abierto, iOS baja el nivel de entrada del micrófono.
-- **7b.4 — en curso: sin medidor en el cliente.** Se quita todo Web Audio (`AudioContext`, analizador, `UMBRAL_VOZ`,
+- **7b.4 — hecha: sin medidor en el cliente.** Se quita todo Web Audio (`AudioContext`, analizador, `UMBRAL_VOZ`,
   «Enviar igualmente» y «Volumen máx.»): la grabación queda solo con `getUserMedia` + `MediaRecorder`, como en la
   6.0, y todo dictado va al servidor, cuyo filtro `no_speech_prob` decide (6.4: silencio 0,99, 0 alucinaciones con
   large-v3). Las barras ondean con CSS mientras graba. Precio: un toque sin hablar tarda ~3 s en responder «No se ha
   entendido nada». Si aun así falla, el problema es del micrófono o la grabación, no del medidor. `?v=` 7.3.2.
+  Probado en el iPhone (7.3.2): 4 de 4 dictados seguidos sin cerrar la app; un toque sin hablar → «No se ha
+  entendido nada en el audio» con prob. sin voz 0,89. Culpable confirmado: Web Audio abierto durante la grabación.
 
 ## Fase 7b — Crear categorías (v2.2)
 
