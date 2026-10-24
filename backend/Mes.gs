@@ -165,7 +165,20 @@ function redondear2_(x) {
   return isFinite(n) ? Math.round(n * 100) / 100 : 0;
 }
 
-/** Prueba desde el editor (sin la app): mes por defecto, noviembre, una etiqueta inventada y B1 restaurado. */
+/**
+ * Evaluación 7.3: tres meses elegidos a propósito, con su total esperado (con Movimientos vacío) y las
+ * reglas que deben estar o no. Se identifican por ID, que no cambia aunque se renombre el concepto.
+ */
+const MES_CASOS_ = [
+  { prefijo: 'Noviembre 2026', total: 1239, estan: ['R008', 'R010', 'R012'], faltan: [],
+    motivo: 'todo activo: Klarna (último mes), T Jove y Creatina' },
+  { prefijo: 'Enero 2027', total: 1115, estan: ['R009', 'R012'], faltan: ['R008', 'R010'],
+    motivo: 'última cuota de Shein; sin Klarna ni T Jove; con Creatina' },
+  { prefijo: 'Febrero 2027', total: 1049, estan: ['R010'], faltan: ['R009', 'R012'],
+    motivo: 'sin Shein ni Creatina; vuelve T Jove (cada 3 meses)' }
+];
+
+/** Desde el editor (sin la app): mes por defecto, los 3 meses de la evaluación, una etiqueta inventada y B1. */
 function probarMes() {
   const libro = libro_();
   const celda = libro.getSheetByName('Resumen').getRange(MES_CELDA_);
@@ -173,21 +186,53 @@ function probarMes() {
   Logger.log('B1 antes: ' + antes);
 
   const zona = libro.getSpreadsheetTimeZone();
-  const def = mesPorDefecto_(libro, mesesDeLaHoja_(libro, zona), zona);
+  const meses = mesesDeLaHoja_(libro, zona);
+  const def = mesPorDefecto_(libro, meses, zona);
   Logger.log('Mes por defecto: ' + def.etiqueta + ' (' + def.motivo + ')');
 
-  const r = mes_({});
-  Logger.log('Sin etiqueta → ' + (r.ok === false ? 'ERROR ' + r.error : r.etiqueta + ' · ' + r.ms + ' ms'));
-
-  const noviembre = (r.meses || []).filter((m) => /^Noviembre 2026/.test(m))[0];
-  if (noviembre) logMes_(mes_({ etiqueta: noviembre }));
-  else Logger.log('No hay «Noviembre 2026» en Meses.');
+  let aciertos = 0;
+  MES_CASOS_.forEach((caso) => {
+    const etiqueta = meses.map((m) => m.etiqueta).filter((e) => e.indexOf(caso.prefijo) === 0)[0];
+    if (!etiqueta) { Logger.log('❌ ' + caso.prefijo + ': no está en Meses'); return; }
+    const r = mes_({ etiqueta: etiqueta });
+    logMes_(r);
+    if (r.ok === false) return;
+    if (comprobarCasoMes_(caso, r)) aciertos++;
+  });
 
   const malo = mes_({ etiqueta: 'Mes inventado' });
-  Logger.log('Etiqueta inventada → ' + (malo.ok === false && malo.error === 'entrada' ? '✅ error entrada' : '❌ ' + JSON.stringify(malo)));
+  const maloOk = malo.ok === false && malo.error === 'entrada';
+  Logger.log('Etiqueta inventada → ' + (maloOk ? '✅ error entrada' : '❌ ' + JSON.stringify(malo)));
 
   const despues = celda.getValue();
-  Logger.log('B1 después: ' + despues + (despues === antes ? '  ✅ restaurado' : '  ❌ NO coincide con el de antes'));
+  const restaurado = despues === antes;
+  Logger.log('B1 después: ' + despues + (restaurado ? '  ✅ restaurado' : '  ❌ NO coincide con el de antes'));
+  Logger.log('== Evaluación del mes: ' + aciertos + '/' + MES_CASOS_.length + (aciertos === MES_CASOS_.length ? ' ✅' : ' ❌') +
+             ' · etiqueta inventada ' + (maloOk ? '✅' : '❌') + ' · B1 restaurado ' + (restaurado ? '✅' : '❌'));
+}
+
+/** Comprueba un mes contra lo esperado y lo deja en el registro. Devuelve si acierta. */
+function comprobarCasoMes_(caso, r) {
+  const ids = [];
+  let movimientos = 0;
+  r.categorias.forEach((k) => {
+    k.reglas.forEach((g) => ids.push(g.id));
+    movimientos += k.movimientos.length;
+  });
+  const fallos = [];
+  if (!r.cuadra) fallos.push('no cuadra');
+  caso.estan.filter((id) => ids.indexOf(id) < 0).forEach((id) => fallos.push('falta ' + id));
+  caso.faltan.filter((id) => ids.indexOf(id) >= 0).forEach((id) => fallos.push('sobra ' + id));
+  // El total esperado supone Movimientos vacío: con gastos puntuales en el mes, puede cambiar sin ser un error.
+  const totalOk = r.cabecera.total_previsto === caso.total;
+  if (!totalOk && !movimientos) fallos.push('total ' + r.cabecera.total_previsto + ', esperaba ' + caso.total);
+
+  const aviso = !totalOk && movimientos
+    ? ' ⚠️ total ' + r.cabecera.total_previsto + ' (esperaba ' + caso.total + ' con Movimientos vacío; este mes tiene ' + movimientos + ')'
+    : '';
+  Logger.log((fallos.length ? '❌ ' : '✅ ') + caso.prefijo + ' (' + caso.motivo + ') · ' + r.ms + ' ms' +
+             (fallos.length ? ' → ' + fallos.join(' · ') : '') + aviso);
+  return !fallos.length;
 }
 
 function logMes_(r) {
