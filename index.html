@@ -30,7 +30,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800&display=swap">
   <!-- ?v= obliga al navegador a descargar los archivos nuevos en cada versión -->
-  <link rel="stylesheet" href="styles.css?v=7.2.1">
+  <link rel="stylesheet" href="styles.css?v=7.3.0">
 </head>
 <body>
   <div class="halo halo-a" aria-hidden="true"></div>
@@ -86,7 +86,23 @@
         </div>
       </article>
 
-      <!-- Modo pruebas (hasta la 6.4): parámetros y medidas -->
+      <!-- Nueva categoría (fase 7b): se crea con una plantilla, no por voz -->
+      <details id="nueva-categoria" class="tarjeta plegable">
+        <summary>+ Nueva categoría</summary>
+        <form id="form-categoria" class="form-categoria" novalidate>
+          <label class="campo" for="categoria-nombre">Nombre
+            <input id="categoria-nombre" type="text" maxlength="30" autocomplete="off" autocapitalize="sentences">
+          </label>
+          <label class="campo" for="categoria-descripcion">Descripción
+            <textarea id="categoria-descripcion" rows="3" maxlength="150"></textarea>
+            <small>Qué gastos entran. Sirve para clasificar tus dictados. Ej.: alquiler, luz e internet compartidos con Aina.</small>
+          </label>
+          <p id="estado-categoria" class="estado" role="status" aria-live="polite"></p>
+          <button id="crear-categoria" class="btn-primario" type="submit">Crear categoría</button>
+        </form>
+      </details>
+
+      <!-- Modo pruebas: parámetros y medidas -->
       <section id="pruebas" class="tarjeta pruebas oculto" aria-labelledby="titulo-pruebas">
         <h2 id="titulo-pruebas">Modo pruebas</h2>
         <label class="campo" for="modelo">Modelo
@@ -165,7 +181,7 @@
   <nav id="barra" class="barra oculto" aria-label="Secciones">
     <button type="button" data-vista="dictar" aria-current="page">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v4"/></svg>
-      Dictar
+      Crear
     </button>
     <button type="button" data-vista="mes">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
@@ -177,7 +193,7 @@
     </button>
   </nav>
 
-  <script src="config.js?v=7.2.1"></script>
-  <script src="app.js?v=7.2.1"></script>
+  <script src="config.js?v=7.3.0"></script>
+  <script src="app.js?v=7.3.0"></script>
 </body>
 </html>
