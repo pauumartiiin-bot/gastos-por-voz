@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <title>Gastos por voz</title>
 
   <!-- Tema antes de pintar nada, para evitar un parpadeo del tema equivocado -->
@@ -30,7 +30,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800&display=swap">
   <!-- ?v= obliga al navegador a descargar los archivos nuevos en cada versión -->
-  <link rel="stylesheet" href="styles.css?v=7.2.0">
+  <link rel="stylesheet" href="styles.css?v=7.2.1">
 </head>
 <body>
   <div class="halo halo-a" aria-hidden="true"></div>
@@ -123,7 +123,7 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
           </button>
         </div>
-        <dl class="mes-cifras">
+        <dl id="mes-cifras" class="mes-cifras">
           <div><dt>Ingreso <span id="mes-origen" class="mes-origen"></span></dt><dd id="mes-ingreso">—</dd></div>
           <div><dt>Previsto</dt><dd id="mes-previsto">—</dd></div>
           <div class="mes-restante"><dt>Restante</dt><dd id="mes-restante">—</dd></div>
@@ -177,7 +177,7 @@
     </button>
   </nav>
 
-  <script src="config.js?v=7.2.0"></script>
-  <script src="app.js?v=7.2.0"></script>
+  <script src="config.js?v=7.2.1"></script>
+  <script src="app.js?v=7.2.1"></script>
 </body>
 </html>
