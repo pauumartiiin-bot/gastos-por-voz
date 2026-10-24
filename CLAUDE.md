@@ -192,7 +192,12 @@ marcha. El código de la v1 no está publicado: se explica en una línea. **Con 
   `id` + `fecha_cargo` en la fase 8.
 - **7.2 — en curso.** Pestaña en la barra (Dictar · Mes · Mis registros). Las reglas de tipo «presupuesto» se
   pintan como barra, no como línea. Respuestas desordenadas: solo vale la última petición (`peticionMes`).
-  Sin caché: cada flecha es una petición. En modo pruebas, al pie: `ms` y `cuadra`.
+  Sin caché. En modo pruebas, al pie: `ms` y `cuadra`.
+  7.2b (tras probarla en el iPhone): las flechas ya no se bloquean al cargar (con tres toques rápidos solo
+  avanzaba uno); el título cambia en cada toque y la petición sale 300 ms después del último (`MS_ESPERA_MES`):
+  una sola petición para el mes final. Comportamiento de app: sin zoom por doble toque ni pellizco
+  (`touch-action: pan-x pan-y` y viewport `maximum-scale=1`), campos a 16 px (iOS amplía al escribir con menos),
+  sin rebote (`overscroll-behavior: none`) ni selección o menú al mantener pulsado un botón.
 
 ## Fase 7 — Pestaña «Mes» (v2.1)
 
