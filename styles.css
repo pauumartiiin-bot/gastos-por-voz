@@ -162,6 +162,7 @@ button:disabled { cursor: default; opacity: 0.5; }
 
 .estado { margin: 0; min-height: 20px; font-size: 14px; text-align: center; color: var(--secundario); }
 .estado.error { color: var(--error); font-weight: 600; }
+.btn-borde.enviar-igualmente { flex: 0 0 auto; height: 40px; padding: 0 18px; }
 
 /* ---------- Tarjetas ---------- */
 

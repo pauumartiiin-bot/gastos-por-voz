@@ -112,7 +112,7 @@ README.md               README de portfolio (fase 6.5)
 - Modo pruebas (interruptor en Ajustes, `gastos_pruebas`): muestra modelo, vocabulario, volumen máximo,
   tiempos y prob. sin voz. Fuera de él el cliente no envía `modelo` ni `vocabulario` (valores del servidor).
   Se mantiene tras la 6.4 para seguir midiendo en uso real.
-- Deshacer: una sola notificación flotante sobre la barra, común a Dictar y Mis registros (el servidor solo
+- Deshacer: una sola notificación flotante sobre la barra, común a Crear, Mes y Mis registros (el servidor solo
   deshace la última acción). Se oculta a los 8 s (`MS_NOTIFICACION`).
 
 ## Estado actual
@@ -210,15 +210,24 @@ marcha. El código de la v1 no está publicado: se explica en una línea. **Con 
   enero 1.528 ms, febrero 2.102 ms. README: sección «Pestaña "Mes"» y captura `docs/mes-claro.png`
   (datos inventados).
 
-**Fase 7b — Crear categorías (v2.2) — en curso.** Detalle en la sección «Fase 7b».
+**Fase 7b — Crear categorías (v2.2) — hecha.** Detalle en la sección «Fase 7b».
 - **7b.1 — hecha.** `backend/Categorias.gs` + línea en `Api.gs` + `probarCategorias()`. En Apps Script: 9 de 12
   huecos, validaciones 12/12, «Prueba 7b» creada antes de «Otros» y visible en el Resumen, duplicado rechazado,
   limpieza ✅ y `ULTIMO` intacto. Nueva versión del despliegue publicada.
-- **7b.2 — en curso.** Barra: Crear · Mes · Mis registros (la vista sigue siendo `vista-dictar`). Debajo de la vista
+- **7b.2 — hecha.** Barra: Crear · Mes · Mis registros (la vista sigue siendo `vista-dictar`). Debajo de la vista
   previa, `<details>` «+ Nueva categoría» con nombre (máx. 30), descripción (máx. 150) y «Crear categoría». El
   móvil solo avisa de nombre vacío o descripción corta; el resto lo decide el servidor y su mensaje sale dentro de
   la tarjeta sin borrar lo escrito. Al crear: notificación con Deshacer y «quedan N huecos»; la tarjeta se vacía y se
   pliega. Sin chips de categorías existentes (decidido).
+  Probado en el iPhone (K1–K7 OK): «Aina» creada antes de «Otros», visible en el Resumen y con 2 huecos libres;
+  sin zoom al escribir. **K7: «luz 30 euros al mes», dicho sin categoría, Haiku lo propuso en «Aina»** solo por
+  la descripción → la descripción de la categoría funciona como instrucción para el modelo.
+- **7b.3 — en curso: micrófono que solo funcionaba una vez.** En el iPhone, tras el primer dictado todos decían
+  «No te he oído» hasta cerrar la app. Volumen máx. medido en el fallo: 0,009 (≈ ruido de fondo, no 0) → el medidor
+  recibía señal pero no la voz. Arreglo: un `AudioContext` nuevo en cada grabación (creado en el toque y cerrado al
+  terminar) en vez de reutilizar uno. Red de seguridad: si el medidor retiene la grabación, «Enviar igualmente» la
+  manda y decide el filtro del servidor; además sirve de diagnóstico (si el servidor transcribe tu voz, fallaba
+  solo el medidor; si no, el micrófono entero).
 
 ## Fase 7b — Crear categorías (v2.2)
 
