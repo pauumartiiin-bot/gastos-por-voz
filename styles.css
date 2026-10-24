@@ -153,16 +153,20 @@ button:disabled { cursor: default; opacity: 0.5; }
   0%, 100% { box-shadow: 0 0 0 8px rgba(var(--acento-rgb), 0.18), 0 16px 40px rgba(var(--acento-rgb), 0.37); }
   50% { box-shadow: 0 0 0 16px rgba(var(--acento-rgb), 0.10), 0 16px 40px rgba(var(--acento-rgb), 0.37); }
 }
-@media (prefers-reduced-motion: reduce) { .btn-grabar.grabando, .notificacion { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .btn-grabar.grabando, .notificacion, .nivel.escuchando span { animation: none; } }
 
-/* Indicador de volumen: las 4 primeras barras en primario, el resto en acento */
+/* Indicador de grabación: las 4 primeras barras en primario, el resto en acento.
+   Mientras graba, ondean (no miden el volumen: el medidor se quitó en la 7b.4). */
 .nivel { display: flex; align-items: center; gap: 4px; height: 28px; }
-.nivel span { width: 4px; height: 6px; border-radius: 2px; background: var(--primario); transition: height 0.08s linear; }
+.nivel span { width: 4px; height: 6px; border-radius: 2px; background: var(--primario); }
 .nivel span:nth-child(n+5) { background: var(--acento); }
+.nivel.escuchando span { animation: onda 0.9s ease-in-out infinite; }
+.nivel.escuchando span:nth-child(2n) { animation-delay: -0.3s; }
+.nivel.escuchando span:nth-child(3n) { animation-delay: -0.6s; }
+@keyframes onda { 0%, 100% { transform: scaleY(0.6); } 50% { transform: scaleY(1.35); } }
 
 .estado { margin: 0; min-height: 20px; font-size: 14px; text-align: center; color: var(--secundario); }
 .estado.error { color: var(--error); font-weight: 600; }
-.btn-borde.enviar-igualmente { flex: 0 0 auto; height: 40px; padding: 0 18px; }
 
 /* ---------- Tarjetas ---------- */
 
