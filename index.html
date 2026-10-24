@@ -30,7 +30,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800&display=swap">
   <!-- ?v= obliga al navegador a descargar los archivos nuevos en cada versión -->
-  <link rel="stylesheet" href="styles.css?v=6.4.0">
+  <link rel="stylesheet" href="styles.css?v=7.2.0">
 </head>
 <body>
   <div class="halo halo-a" aria-hidden="true"></div>
@@ -107,6 +107,33 @@
       </section>
     </section>
 
+    <!-- Mes: solo lectura; las cifras las calculan las fórmulas de la hoja (fase 7) -->
+    <section id="vista-mes" class="oculto" style="display: flex; flex-direction: column; gap: 16px">
+      <div class="tarjeta tarjeta-degradado mes-cabecera" aria-label="Mes elegido">
+        <div class="mes-nav">
+          <button id="mes-anterior" class="icono-btn" type="button" aria-label="Mes anterior" disabled>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
+          <div class="mes-titulo">
+            <h2 id="mes-nombre">Mes</h2>
+            <p id="mes-nomina"></p>
+            <button id="mes-hoy" class="btn-suave mes-hoy oculto" type="button">Hoy</button>
+          </div>
+          <button id="mes-siguiente" class="icono-btn" type="button" aria-label="Mes siguiente" disabled>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+          </button>
+        </div>
+        <dl class="mes-cifras">
+          <div><dt>Ingreso <span id="mes-origen" class="mes-origen"></span></dt><dd id="mes-ingreso">—</dd></div>
+          <div><dt>Previsto</dt><dd id="mes-previsto">—</dd></div>
+          <div class="mes-restante"><dt>Restante</dt><dd id="mes-restante">—</dd></div>
+        </dl>
+      </div>
+      <p id="estado-mes" class="estado" role="status" aria-live="polite"></p>
+      <div id="mes-categorias" class="lista"></div>
+      <p id="mes-pruebas" class="estado oculto"></p>
+    </section>
+
     <!-- Mis registros + ajustes -->
     <section id="vista-registros" class="oculto" style="display: flex; flex-direction: column; gap: 20px">
       <p id="estado-registros" class="estado" role="status" aria-live="polite"></p>
@@ -140,13 +167,17 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v4"/></svg>
       Dictar
     </button>
+    <button type="button" data-vista="mes">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+      Mes
+    </button>
     <button type="button" data-vista="registros">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
       Mis registros
     </button>
   </nav>
 
-  <script src="config.js?v=6.4.0"></script>
-  <script src="app.js?v=6.4.0"></script>
+  <script src="config.js?v=7.2.0"></script>
+  <script src="app.js?v=7.2.0"></script>
 </body>
 </html>

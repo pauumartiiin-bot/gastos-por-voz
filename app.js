@@ -1,4 +1,4 @@
-// Fase 6.4: dictar → vista previa → guardar (o corregir por voz) → deshacer, y «Mis registros».
+// Fase 7: dictar → vista previa → guardar (o corregir por voz) → deshacer, «Mes» y «Mis registros».
 
 const CLAVE_TOKEN = 'gastos_token';
 const CLAVE_TEMA = 'gastos_tema';
@@ -40,8 +40,11 @@ function mostrar(id, visible) {
 
 function irA(vista) {
   mostrar('vista-dictar', vista === 'dictar');
+  mostrar('vista-mes', vista === 'mes');
   mostrar('vista-registros', vista === 'registros');
-  if (vista === 'registros') cargarRegistros(); // siempre datos frescos: la hoja puede haber cambiado
+  // Siempre datos frescos: la hoja puede haber cambiado. «Mes» se abre en el mes por defecto.
+  if (vista === 'mes') cargarMes();
+  if (vista === 'registros') cargarRegistros();
   document.querySelectorAll('.barra button').forEach((b) => {
     if (b.dataset.vista === vista) b.setAttribute('aria-current', 'page');
     else b.removeAttribute('aria-current');
@@ -56,6 +59,7 @@ function pantallaInicial() {
   if (hayToken) irA('dictar');
   else {
     mostrar('vista-dictar', false);
+    mostrar('vista-mes', false);
     mostrar('vista-registros', false);
   }
 }
@@ -85,6 +89,7 @@ function modoPruebas() {
 function aplicarModoPruebas() {
   $('modo-pruebas').checked = modoPruebas();
   mostrar('pruebas', modoPruebas());
+  mostrar('mes-pruebas', modoPruebas() && !!mesDatos);
 }
 
 function dato(id, valor) {
@@ -410,6 +415,142 @@ function notificar(texto, conDeshacer, esError = false) {
   temporizador = setTimeout(() => mostrar('notificacion', false), conDeshacer ? MS_NOTIFICACION : 3000);
 }
 
+/* ---------- Mes (fase 7): solo lectura ---------- */
+
+let mesDatos = null;  // última respuesta de "mes"
+let peticionMes = 0;  // si se pulsa rápido, las respuestas pueden llegar desordenadas: solo vale la última
+
+const MESES_CORTOS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+
+function estadoMes(mensaje, esError = false) {
+  $('estado-mes').textContent = mensaje;
+  $('estado-mes').classList.toggle('error', esError);
+}
+
+// Sin etiqueta, el servidor devuelve el mes por defecto.
+async function cargarMes(etiqueta) {
+  const n = ++peticionMes;
+  estadoMes('Cargando…');
+  activarNavMes(false);
+  $('mes-categorias').classList.add('cargando');
+  try {
+    const r = await api('mes', etiqueta ? { etiqueta } : {});
+    if (n !== peticionMes) return;
+    mesDatos = r;
+    estadoMes('');
+    pintarMes();
+  } catch (err) {
+    if (n !== peticionMes) return;
+    estadoMes(err.message, true);
+  } finally {
+    if (n === peticionMes) {
+      activarNavMes(true);
+      $('mes-categorias').classList.remove('cargando');
+    }
+  }
+}
+
+// Flechas desactivadas mientras carga y en los extremos de la lista de meses.
+function activarNavMes(activo) {
+  const i = mesDatos ? mesDatos.meses.indexOf(mesDatos.etiqueta) : -1;
+  $('mes-anterior').disabled = !activo || i <= 0;
+  $('mes-siguiente').disabled = !activo || i < 0 || i >= mesDatos.meses.length - 1;
+  $('mes-hoy').disabled = !activo;
+}
+
+function moverMes(paso) {
+  const i = mesDatos.meses.indexOf(mesDatos.etiqueta);
+  const destino = mesDatos.meses[i + paso];
+  if (destino) cargarMes(destino);
+}
+
+// "Noviembre 2026 (nómina de octubre)" → ["Noviembre 2026", "nómina de octubre"]
+function partirEtiqueta(etiqueta) {
+  const m = /^(.*?)\s*\((.*)\)\s*$/.exec(etiqueta);
+  return m ? [m[1], m[2]] : [etiqueta, ''];
+}
+
+// "2026-11-01" → "1 nov"
+function fechaCorta(iso) {
+  const [, mes, dia] = iso.split('-');
+  return Number(dia) + ' ' + MESES_CORTOS[Number(mes) - 1];
+}
+
+function pintarMes() {
+  const r = mesDatos;
+  const c = r.cabecera;
+  const [nombre, nomina] = partirEtiqueta(r.etiqueta);
+  $('mes-nombre').textContent = nombre;
+  $('mes-nomina').textContent = nomina;
+  mostrar('mes-hoy', r.etiqueta !== r.por_defecto);
+
+  $('mes-ingreso').textContent = euros(c.ingreso);
+  $('mes-origen').textContent = c.origen;
+  $('mes-previsto').textContent = euros(c.total_previsto);
+  $('mes-restante').textContent = euros(c.restante);
+  $('mes-restante').classList.toggle('negativo', c.restante < 0);
+
+  $('mes-categorias').replaceChildren(...(r.categorias.length
+    ? r.categorias.map(tarjetaCategoria)
+    : [crear('p', 'vacio', 'Este mes no tiene gastos previstos.')]));
+
+  $('mes-pruebas').textContent = r.ms + ' ms · cuadra ' + (r.cuadra ? '✅' : '❌');
+  mostrar('mes-pruebas', modoPruebas());
+}
+
+function tarjetaCategoria(k) {
+  const t = crear('article', 'tarjeta categoria-mes');
+  const cab = crear('div', 'categoria-cabecera');
+  cab.append(crear('h3', null, k.nombre), crear('span', 'categoria-total', euros(k.total)));
+  t.append(cab);
+
+  // Las reglas de presupuesto no son un cargo: se ven como barra, no como línea.
+  k.reglas.filter((g) => g.tipo !== 'presupuesto').forEach((g) => {
+    const linea = lineaMes(g.concepto, g.fecha_cargo ? fechaCorta(g.fecha_cargo) : 'semanal',
+      g.importe, g.veces > 1 ? '× ' + g.veces : '');
+    // Preparado para marcar «pagado» en la fase 8 (id + fecha identifican la línea del mes).
+    linea.dataset.id = g.id;
+    linea.dataset.fecha = g.fecha_cargo || '';
+    t.append(linea);
+  });
+  if (k.presupuesto > 0) t.append(barraPresupuesto(k));
+  if (k.movimientos.length) {
+    const movs = crear('div', 'movimientos-mes');
+    k.movimientos.forEach((m) => movs.append(lineaMes(m.concepto, fechaCorta(m.fecha), m.importe, '')));
+    t.append(movs);
+  }
+  return t;
+}
+
+function lineaMes(concepto, cuando, importe, veces) {
+  const linea = crear('div', 'linea-mes');
+  linea.append(crear('span', 'linea-concepto', concepto),
+    crear('span', 'linea-fecha', veces ? cuando + ' ' + veces : cuando),
+    crear('span', 'linea-importe', euros(importe)));
+  return linea;
+}
+
+function barraPresupuesto(k) {
+  const caja = crear('div', 'presupuesto');
+  const pasado = k.puntuales > k.presupuesto;
+  caja.classList.toggle('pasado', pasado);
+
+  const barra = crear('div', 'presupuesto-barra');
+  barra.setAttribute('role', 'progressbar');
+  barra.setAttribute('aria-valuemin', '0');
+  barra.setAttribute('aria-valuemax', String(k.presupuesto));
+  barra.setAttribute('aria-valuenow', String(k.puntuales));
+  const relleno = crear('span');
+  relleno.style.width = Math.min(100, (k.puntuales / k.presupuesto) * 100) + '%';
+  barra.append(relleno);
+
+  const gastado = k.puntuales.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const exceso = Math.round((k.puntuales - k.presupuesto) * 100) / 100;
+  caja.append(barra, crear('p', 'presupuesto-texto', gastado + ' de ' + euros(k.presupuesto) + ' · ' +
+    (pasado ? 'te has pasado ' + euros(exceso) : 'quedan ' + euros(k.disponible))));
+  return caja;
+}
+
 /* ---------- Mis registros ---------- */
 
 let registros = null; // última respuesta de "registros": { recurrentes, movimientos, categorias, hoy }
@@ -640,6 +781,7 @@ $('deshacer').addEventListener('click', async () => {
     const r = await api('deshacer');
     notificar('↩︎ Deshecho: ' + r.desc, false);
     if (!$('vista-registros').classList.contains('oculto')) await cargarRegistros();
+    if (!$('vista-mes').classList.contains('oculto')) await cargarMes(mesDatos && mesDatos.etiqueta);
   } catch (err) {
     notificar(err.message, true, true); // se puede reintentar
   }
@@ -675,6 +817,10 @@ $('modo-pruebas').addEventListener('change', (e) => {
   escribir(CLAVE_PRUEBAS, e.target.checked ? '1' : null);
   aplicarModoPruebas();
 });
+
+$('mes-anterior').addEventListener('click', () => moverMes(-1));
+$('mes-siguiente').addEventListener('click', () => moverMes(1));
+$('mes-hoy').addEventListener('click', () => cargarMes(mesDatos.por_defecto));
 
 document.querySelectorAll('.barra button').forEach((b) => {
   b.addEventListener('click', () => irA(b.dataset.vista));
