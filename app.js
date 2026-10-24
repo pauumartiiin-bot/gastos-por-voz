@@ -222,13 +222,20 @@ function pintarNivelReposo() {
   barras.forEach((b, i) => { b.style.height = (6 + Math.round(FORMA[i] * 18)) + 'px'; });
 }
 
-// Debe llamarse dentro del gesto del usuario (iOS solo deja arrancar el audio así).
+// Uno nuevo en cada grabación: en iOS, el reutilizado se quedaba «colgado» tras la primera y el
+// medidor solo oía ruido de fondo. Debe crearse dentro del gesto del usuario (iOS solo deja así).
 function prepararAudio() {
   const Ctx = window.AudioContext || window.webkitAudioContext;
   if (!Ctx) return null;
-  if (!audioCtx) audioCtx = new Ctx();
-  if (audioCtx.state === 'suspended') audioCtx.resume();
+  cerrarAudio();
+  audioCtx = new Ctx();
+  if (audioCtx.state !== 'running') audioCtx.resume();
   return audioCtx;
+}
+
+function cerrarAudio() {
+  if (audioCtx && audioCtx.close) audioCtx.close().catch(() => {});
+  audioCtx = null;
 }
 
 function empezarMedidor(stream) {
@@ -261,6 +268,7 @@ function pararMedidor() {
   medidor.fuente.disconnect();
   const pico = medidor.pico;
   medidor = null;
+  cerrarAudio();
   pintarNivelReposo();
   return pico;
 }
@@ -300,11 +308,13 @@ async function empezar() {
     return;
   }
   prepararAudio();
+  descartarPendiente();
 
   let stream;
   try {
     stream = await navigator.mediaDevices.getUserMedia({ audio: true });
   } catch (err) {
+    cerrarAudio();
     estado(mensajeErrorMicro(err), true);
     return;
   }
@@ -330,13 +340,23 @@ function parar() {
 }
 
 // Si no se oyó nada, no se envía: evita el viaje al servidor y las alucinaciones de Whisper.
+// Pero el medidor no tiene la última palabra: «Enviar igualmente» deja que decida el filtro del servidor.
+let pendiente = null; // grabación retenida por el medidor
+
 function terminarGrabacion(blob, pico) {
   dato('vol-max', pico == null ? null : pico.toFixed(3));
   if (pico != null && pico < UMBRAL_VOZ) {
+    pendiente = blob;
     estado('No te he oído. Prueba a hablar un poco más cerca.', true);
+    mostrar('enviar-igualmente', true);
     return;
   }
   dictar(blob);
+}
+
+function descartarPendiente() {
+  pendiente = null;
+  mostrar('enviar-igualmente', false);
 }
 
 // Blob → base64 sin el prefijo "data:...;base64,".
@@ -885,6 +905,12 @@ if (prefiereOscuro && prefiereOscuro.addEventListener) {
 $('modo-pruebas').addEventListener('change', (e) => {
   escribir(CLAVE_PRUEBAS, e.target.checked ? '1' : null);
   aplicarModoPruebas();
+});
+
+$('enviar-igualmente').addEventListener('click', () => {
+  const blob = pendiente;
+  descartarPendiente();
+  if (blob) dictar(blob);
 });
 
 $('form-categoria').addEventListener('submit', crearCategoria);
