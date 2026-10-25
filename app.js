@@ -196,11 +196,15 @@ function pintarPrevia(v) {
 }
 
 function pintarTiempos(r, inicio) {
+  const total = Math.round(performance.now() - inicio);
   dato('ms-vocabulario', r.ms_vocabulario != null
     ? r.ms_vocabulario + ' ms' + (r.vocabulario ? '' : ' (sin vocabulario)') : null);
   dato('ms-groq', r.ms_groq != null ? r.ms_groq + ' ms' : null);
   dato('ms-interpretar', r.ms_interpretar != null ? r.ms_interpretar + ' ms' : null);
-  dato('ms-total', Math.round(performance.now() - inicio) + ' ms');
+  dato('ms-servidor', r.ms_servidor != null ? r.ms_servidor + ' ms' : null);
+  // Fase B.1: lo que pasa fuera de doPost (subir el audio, arrancar Apps Script, seguir la redirección).
+  dato('ms-red', r.ms_servidor != null ? (total - r.ms_servidor) + ' ms' : null);
+  dato('ms-total', total + ' ms');
   dato('prob-sin-voz', r.prob_sin_voz);
 }
 
@@ -297,6 +301,7 @@ async function dictar(blob) {
   estado('Interpretando…');
   try {
     const params = { audio: await aBase64(blob), mime };
+    dato('kb-audio', Math.round(params.audio.length / 1024) + ' KB');   // lo que viaja: el audio en base64
     // Fuera del modo pruebas se usan los valores por defecto del servidor.
     if (modoPruebas()) {
       params.modelo = $('modelo').value;
@@ -318,8 +323,7 @@ async function dictar(blob) {
     corrigiendo = v.preguntas && v.preguntas.length > 0;
     estado(corrigiendo ? 'Responde grabando: ' + v.preguntas[0] : 'Revisa y guarda.');
   } catch (err) {
-    dato('ms-total', Math.round(performance.now() - inicio) + ' ms');
-    dato('prob-sin-voz', err.datos && err.datos.prob_sin_voz); // en el silencio llega con el error
+    pintarTiempos(err.datos || {}, inicio); // en el silencio llegan prob_sin_voz y ms_servidor con el error
     estado(err.message, true);
   } finally {
     boton.disabled = false;

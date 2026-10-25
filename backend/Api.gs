@@ -28,6 +28,7 @@ const ACCIONES_ = {
 };
 
 function doPost(e) {
+  const inicio = Date.now();
   try {
     let p;
     try {
@@ -45,6 +46,8 @@ function doPost(e) {
     const resultado = accion(p, p.t);
     // Fase 11.3: un gasto borrado no puede dejar marcas en Pagos que heredaría el siguiente con su ID (Pagos.gs).
     if (resultado.ok !== false && (p.accion === 'eliminar' || p.accion === 'deshacer')) limpiarPagosTrasBorrar_();
+    // Fase B.1: tiempo dentro de doPost. El móvil lo resta del total para ver la red y el arranque de Apps Script.
+    if (p.accion === 'dictar') resultado.ms_servidor = Date.now() - inicio;
     // Las funciones de la v1 no siempre devuelven "ok": se añade aquí.
     return respuesta_(resultado.ok === false ? resultado : Object.assign({ ok: true }, resultado));
   } catch (err) {
