@@ -134,7 +134,7 @@ function sumarDias_(iso, dias) {
  *  1. Las validaciones, sin escribir nada.
  *  2. Apunta una nómina de prueba en el último mes de Meses, comprueba la fila, que «Mes» la cuenta como cobrada y
  *     que no deja apuntar otra; añade unas comisiones y comprueba que «Mes» devuelve los dos ingresos y que suman el
- *     cobrado (fase A); borra la nómina y prueba el Deshacer. Deja Ingresos y ULTIMO como estaban.
+ *     cobrado (fase 12); borra la nómina y prueba el Deshacer. Deja Ingresos y ULTIMO como estaban.
  */
 function probarIngresos() {
   const libro = libro_();
@@ -206,7 +206,7 @@ function probarIngresos() {
     const otra = apuntarIngreso_({ tipo: 'nómina', importe: 1000, fecha: fecha, mes: mes });
     Logger.log((otra.ok === false && otra.mensaje ? '✅ ' : '❌ ') + 'Otra nómina en el mismo mes → ' + (otra.mensaje || 'se apuntó (no debería)'));
 
-    // Fase A: «Mes» devuelve los ingresos que forman el cobrado.
+    // Fase 12: «Mes» devuelve los ingresos que forman el cobrado.
     const com = apuntarIngreso_({ tipo: 'comisiones', importe: 250, fecha: fecha, mes: mes });
     idComisiones = com.id || null;
     const m2 = mes_({ etiqueta: mes });
