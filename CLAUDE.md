@@ -85,7 +85,7 @@ Reglas:
 
 ## Estructura del repo
 ```
-index.html              página: token, crear (dictar → vista previa → guardar / corregir / deshacer, y nueva categoría), mes, mis registros, ajustes
+index.html              página: token, crear (dictar → vista previa → guardar / corregir / deshacer, nueva categoría y nuevo ingreso), mes, mis registros, ajustes
 styles.css              estilos; colores como variables CSS para tema claro y oscuro
 app.js                  lógica del cliente (tema, vistas, detección de silencio, llamadas a la API)
 config.js               URL del endpoint de Apps Script (no secreta)
@@ -265,11 +265,17 @@ marcha. El código de la v1 no está publicado: se explica en una línea. **Con 
   toques rápidos; marcar con una actualización en camino no se pisa; un gasto dictado aparece solo a los ~3 s; caché
   vacía al reabrir; sin conexión, se queda lo guardado con «No se ha podido actualizar». README: fila en Decisiones.
 
-**Fase 9 — Ingresos desde la app (v2.4) — en curso.** Detalle en la sección «Fase 9».
+**Fase 9 — Ingresos desde la app (v2.4) — hecha.** Detalle en la sección «Fase 9».
 - **9.1 — hecha.** Backend: `backend/Ingresos.gs` + tres líneas en `Api.gs` + `probarIngresos()`. En Apps Script:
   validaciones 14/14; nómina de prueba en el último mes (I001), «Mes» la cuenta como cobrada, sale en la lista, otra
   nómina rechazada, borrar y Deshacer de la v1 con la fecha intacta (2026-10-25); limpieza ✅.
-- **9.2 — en curso.** Interfaz: tarjeta «+ Nuevo ingreso» en «Crear» y sección «Ingresos» en «Mis registros». `?v=` 7.7.0.
+- **9.2 — hecha.** Interfaz: tarjeta «+ Nuevo ingreso» en «Crear» y sección «Ingresos» en «Mis registros». `?v=` 7.7.0.
+  Probado en el iPhone (N1–N11 OK, tras publicar la Nueva versión: sin ella, `ingresos` respondía `entrada` →
+  «Petición no válida» y el desplegable vacío). Mes propuesto por el día 20, nómina apuntada → «cobrado» en «Mes» y el
+  mes por defecto pasa a noviembre, nómina repetida rechazada, comisiones suman al ingreso, borrar y Deshacer con la
+  fecha intacta. En la N3 el importe 1370 se quedó al pasar a «Comisiones» (`importeAuto` ya era `false`); el resto
+  (concepto y aviso) bien. Pau decide dejarlo así. README: sección «Ingresos: un formulario, no un LLM» y dos filas
+  en Decisiones.
 
 ## Fase 9 — Ingresos desde la app (v2.4)
 
