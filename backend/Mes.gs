@@ -31,7 +31,18 @@ function mes_(p) {
     { etiqueta: elegido.etiqueta, mes_inicio: elegido.inicio, por_defecto: porDefecto.etiqueta,
       meses: meses.map((m) => m.etiqueta) },
     construirMes_(hoja, zona, pagosDelMes_(libro, elegido.etiqueta, zona)),   // Pagos.gs (fases 8.2 y 11.1)
-    { ms: Date.now() - inicio });
+    { ingresos: ingresosDelMes_(libro, elegido.etiqueta, zona), ms: Date.now() - inicio });
+}
+
+/**
+ * Ingresos apuntados para ese mes, por fecha: los que forman el «cobrado» del Resumen (E5 suma Ingresos por Mes).
+ * Como los pagos, no depende de B1: se lee fuera del bloqueo.
+ */
+function ingresosDelMes_(libro, etiqueta, zona) {
+  return leerIngresos_(libro.getSheetByName(ING_HOJA_), zona)   // Ingresos.gs
+    .filter((i) => i.mes === etiqueta)
+    .sort((a, b) => a.fecha.localeCompare(b.fecha) || a.id.localeCompare(b.id))
+    .map((i) => ({ id: i.id, fecha: i.fecha, concepto: i.concepto, tipo: i.tipo, importe: i.importe }));
 }
 
 /** Filas de Meses en orden: { inicio: 'yyyy-MM-dd', etiqueta }. */
@@ -184,7 +195,8 @@ function redondear2_(x) {
 
 /**
  * Evaluación 7.3: tres meses elegidos a propósito, con las reglas que deben estar o no (por ID, que no cambia
- * aunque se renombre el concepto). Fallo = no cuadra o falta/sobra una regla. El total es solo una referencia:
+ * aunque se renombre el concepto). Fallo = no cuadra, falta/sobra una regla o los ingresos no suman el «cobrado».
+ * El total es solo una referencia:
  * cambia cada vez que se apunta un gasto real, así que si no coincide es ⚠️, no ❌.
  */
 // Totales de referencia (sin gastos puntuales) a 25 oct 2026, con R014, R016 y R017 (81 €) y sin el R004.
@@ -243,6 +255,9 @@ function comprobarCasoMes_(caso, r) {
   if (!r.cuadra) fallos.push('no cuadra');
   caso.estan.filter((id) => ids.indexOf(id) < 0).forEach((id) => fallos.push('falta ' + id));
   caso.faltan.filter((id) => ids.indexOf(id) >= 0).forEach((id) => fallos.push('sobra ' + id));
+  // Invariante: la lista de ingresos es justo lo que suma el Resumen como «cobrado» (con Ingresos vacío, 0 = 0).
+  const ingresos = redondear2_(r.ingresos.reduce((s, i) => s + i.importe, 0));
+  if (ingresos !== r.cabecera.cobrado) fallos.push('ingresos ' + ingresos + ' ≠ cobrado ' + r.cabecera.cobrado);
   // El total depende de los datos reales (reglas nuevas, gastos puntuales): avisa, pero no es un fallo.
   const aviso = r.cabecera.total_previsto === caso.total ? ''
     : ' ⚠️ total ' + r.cabecera.total_previsto + ' (referencia ' + caso.total + ' sin gastos puntuales; este mes tiene ' +
@@ -267,5 +282,6 @@ function logMes_(r) {
     k.movimientos.forEach((m) => Logger.log('      ' + m.id + ' ' + m.concepto + ' · ' + m.fecha + ' · ' + m.importe +
                                             (m.pagado ? '' : ' · pendiente')));
   });
+  r.ingresos.forEach((i) => Logger.log('  Ingreso ' + i.id + ' ' + i.concepto + ' · ' + i.tipo + ' · ' + i.fecha + ' · ' + i.importe));
   Logger.log('Cuadra: ' + (r.cuadra ? '✅' : '❌') + ' (suma de categorías = total previsto)');
 }
