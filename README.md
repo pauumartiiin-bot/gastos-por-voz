@@ -6,7 +6,7 @@ y el código lo valida antes de guardarlo en Google Sheets. Nada se guarda sin q
 <p align="center">
   <img src="docs/dictar-claro.png" alt="Vista previa de un gasto dictado, en tema claro" width="250">
   &nbsp;
-  <img src="docs/mes-claro.png" alt="Pestaña Mes: ingreso, previsto, restante y gastos por categoría" width="250">
+  <img src="docs/mes-claro.png" alt="Pestaña Mes: ingreso, previsto, pendiente de pagar, restante y gastos por categoría con casillas de pagado" width="250">
   &nbsp;
   <img src="docs/registros-oscuro.png" alt="Mis registros, en tema oscuro" width="250">
 </p>
@@ -29,6 +29,10 @@ con Claude Haiku y la validaba con código. La **v2** (este repositorio) añade:
 - **Mis registros**: ver, editar, dar de baja y eliminar gastos, siempre con *Deshacer*.
 - **Mes** (v2.1): el mes elegido con ingreso, previsto y restante, los gastos por categoría y una barra en
   las categorías con presupuesto. [Cómo funciona](#pestaña-mes-la-hoja-como-única-fuente-de-verdad).
+- **Categorías propias** (v2.2): crear una categoría con nombre y descripción desde el móvil; la descripción
+  le dice a Haiku qué gastos entran. [Cómo funciona](#categorías-la-descripción-también-es-un-prompt).
+- **Renombrar y marcar pagos** (v2.3): cambiar el nombre de un gasto y marcar como pagado cada cargo fijo del
+  mes, con el pendiente de pagar en la cabecera. [Cómo funciona](#marcar-pagos-interfaz-optimista).
 - **Una evaluación reproducible** para elegir modelo y configuración con datos.
 
 > El código de la v1 (interpretación, validación y escritura en la hoja) no está publicado: vive en el
@@ -134,7 +138,9 @@ cargos entran y cuáles no:
 | Enero 2027 | 1.115 € | Termina otra cuota; sin el cargo trimestral | ✅ |
 | Febrero 2027 | 1.049 € | Vuelve el cargo trimestral; sin las cuotas terminadas | ✅ |
 
-`B1` queda restaurado tras cuatro cambios de mes seguidos.
+`B1` queda restaurado tras cuatro cambios de mes seguidos. Más tarde, al pasar un cargo de 86 € a su propia
+categoría, los tres totales bajaron exactamente 86 € y `cuadra` siguió en ✅: cambiaron los datos de
+referencia de la prueba, no el cálculo.
 
 **El coste.** Si `B1` ya está en ese mes, la respuesta tarda ~0,9 s en el servidor. Cambiar de mes obliga a
 escribir, recalcular y restaurar: ~1,5–2,5 s en el servidor y ~3 s en el móvil. Es un precio aceptable
@@ -145,6 +151,44 @@ para una consulta de solo lectura a cambio de no duplicar la lógica. El otro pr
 300 ms después del último toque (*debounce*), así que tres toques rápidos son una sola petición. Si llegaran
 respuestas desordenadas, solo cuenta la última. La app tampoco hace gestos de web: ni zoom por doble toque
 o pellizco, ni rebote.
+
+## Categorías: la descripción también es un prompt
+
+Desde la pestaña «Crear» se puede añadir una categoría con **nombre y descripción**
+([`backend/Categorias.gs`](backend/Categorias.gs)). La descripción es obligatoria (10–150 caracteres) porque
+no es decorativa: Haiku lee la pestaña de categorías para clasificar cada dictado.
+
+La prueba que lo confirmó: creé la categoría «Aina» con la descripción de sus gastos y dicté *«luz 30 euros
+al mes»* **sin decir la categoría**. Haiku la propuso en «Aina» solo por la descripción. Un dato de la hoja,
+escrito por la persona, acaba funcionando como instrucción para el modelo, sin tocar el prompt.
+
+- **El código decide qué se puede crear:** nombre con alguna letra, sin duplicados (sin distinguir
+  mayúsculas ni tildes), que no empiece por `=` (se tomaría como fórmula) y que quepa en el Resumen. El
+  límite no está escrito en el código: la app cuenta los bloques de categoría del Resumen, así que si se
+  amplía la hoja lo detecta sola.
+- **La categoría nueva va antes de «Otros»**, para que el cajón de sastre siga al final.
+- **Se puede deshacer**, como cualquier otra acción.
+
+## Marcar pagos: interfaz optimista
+
+Cada cargo fijo del mes lleva una casilla para marcarlo como pagado, y la cabecera enseña cuánto queda
+**pendiente de pagar** ([`backend/Pagos.gs`](backend/Pagos.gs)). Los presupuestos no se marcan (no son un
+cargo) y los gastos puntuales ya están pagados al apuntarlos.
+
+- **Una pestaña aparte, «Pagos»** (mes · ID del cargo · fecha), que la app crea la primera vez. No toca
+  ninguna fórmula: marcar un pago es informativo y no puede descuadrar el Resumen.
+- **La clave es mes + ID**, no la fecha del cargo: los cargos semanales no tienen una fecha única en el mes,
+  y un «× 4» es una sola casilla.
+- **Interfaz optimista.** Apps Script tarda unos 3 s; esperar su respuesta para rellenar una casilla se
+  notaría. La casilla y el pendiente cambian al instante y, si el servidor falla (por ejemplo, sin
+  conexión), vuelven atrás con un aviso. Funciona porque la acción casi nunca falla y es idempotente:
+  marcar dos veces deja una sola fila.
+- **Una petición por casilla.** Mientras se guarda, la casilla no responde: con dos toques rápidos, el
+  «desmarcar» podría llegar al servidor antes que el «marcar».
+- **Sin Deshacer.** Desmarcar es volver a tocar, y así marcar un pago no pisa el Deshacer de la última acción real.
+
+En «Mis registros», además, se puede **cambiar el nombre** de un gasto
+([`backend/Renombrar.gs`](backend/Renombrar.gs)). En un cargo recurrente, el nombre nuevo sale en todos los meses.
 
 ## Decisiones técnicas
 
@@ -159,6 +203,10 @@ o pellizco, ni rebote.
 | HTML, CSS y JS sin dependencias | Un framework | Se sirve tal cual en GitHub Pages, sin compilar, y cada línea se puede explicar |
 | «Mes» lee lo que calculan las fórmulas de la hoja | Recalcular el mes en JavaScript | Una sola fuente de verdad; cuesta ~1,6 s por cambio de mes |
 | Flechas con *debounce* y título que cambia al instante | Bloquear las flechas mientras carga | Con el bloqueo, tres toques rápidos solo avanzaban un mes (lo detecté probando en el iPhone) |
+| Descripción obligatoria al crear una categoría | Solo el nombre | Haiku la usa para clasificar los dictados |
+| Pagos en una pestaña propia, con clave mes + ID | Una columna en los cargos, o la fecha como clave | No toca las fórmulas y resuelve los cargos semanales, que no tienen fecha |
+| Casilla de pagado optimista, con vuelta atrás si falla | Esperar a la respuesta del servidor | Respuesta inmediata con un servidor de ~3 s |
+| «Cambiar nombre» con su propio botón | Un único «Guardar cambios» para nombre, importe y categoría | Cada cambio tiene su Deshacer; con uno solo, Deshacer revertiría solo la última de dos operaciones |
 
 ## Latencia
 
@@ -192,7 +240,8 @@ En la pestaña «Mes», cambiar de mes tarda ~3 s (detalle en [su sección](#pes
 - **Bajar la latencia** cacheando el contexto de la hoja.
 - **Ampliar la evaluación** con otra voz y varias pasadas por configuración.
 - **Cambiar de mes en ~3 s.** Si con el uso se hace lento, guardar en el móvil los meses ya vistos.
-- **El Resumen tiene sitio para 12 categorías** (hoy hay 9). Crear categorías desde la app tendrá que respetar ese límite.
+- **El Resumen tiene sitio para 12 categorías.** La app respeta el límite y avisa, pero ampliarlo es trabajo en la hoja.
+- **Los pagos son informativos.** Marcar un cargo no cambia el restante; solo el pendiente de pagar.
 
 ## Qué he aprendido
 
@@ -203,11 +252,15 @@ En la pestaña «Mes», cambiar de mes tarda ~3 s (detalle en [su sección](#pes
 - **El prompt de Whisper no son instrucciones.** Es texto que el modelo imita, y puede colarse en la salida.
 - **Un LLM es una pieza más.** La fiabilidad sale de rodearlo de código que valida y de una persona que confirma.
 - **Saber dónde está el coste.** La latencia estaba en la infraestructura (Apps Script), no en los modelos.
+- **Los datos también son instrucciones.** La descripción de una categoría cambió cómo clasifica Haiku sin
+  tocar su prompt.
+- **Probar en el dispositivo real y medir.** El fallo del micrófono solo existía en el iPhone; medir el
+  volumen durante el fallo descartó mi primera hipótesis y señaló al culpable (Web Audio abierto mientras grababa).
 
 ## Estructura y puesta en marcha
 
 ```
-index.html              página: token, dictar, mes, mis registros y ajustes
+index.html              página: token, crear (dictar y nueva categoría), mes, mis registros y ajustes
 styles.css              estilos; colores como variables para tema claro y oscuro
 app.js                  lógica del cliente: grabación, vistas, llamadas a la API
 config.js               URL del endpoint de Apps Script (no es secreta)
@@ -218,11 +271,14 @@ backend/Transcribir.gs  audio → texto con Groq Whisper y filtro de silencio
 backend/Vocabulario.gs  vocabulario para Whisper (apagado por defecto tras la evaluación)
 backend/Evaluacion.gs   evaluación con audios de Google Drive (se ejecuta desde el editor)
 backend/Mes.gs          acción mes: lee el mes de la hoja y restaura Resumen!B1; probarMes() lo evalúa
+backend/Categorias.gs   acción categoria: crea una categoría antes de «Otros»
+backend/Renombrar.gs    acción renombrar: cambia el nombre de un gasto
+backend/Pagos.gs        acción pagar: marca o desmarca un cargo fijo en la pestaña Pagos
 docs/                   capturas del README
 ```
 
-1. **Apps Script** (sobre el proyecto de la v1): crea `Api.gs`, `Transcribir.gs`, `Vocabulario.gs` y `Mes.gs`
-   con el contenido de `backend/` y añade en las propiedades del script `GROQ_API_KEY`, junto a las de la v1
+1. **Apps Script** (sobre el proyecto de la v1): crea `Api.gs`, `Transcribir.gs`, `Vocabulario.gs`, `Mes.gs`,
+   `Categorias.gs`, `Renombrar.gs` y `Pagos.gs` con el contenido de `backend/` y añade en las propiedades del script `GROQ_API_KEY`, junto a las de la v1
    (`TOKEN`, `ANTHROPIC_API_KEY`). Crea una implementación nueva como aplicación web.
 2. **Frontend:** pon la URL `/exec` de la implementación en `config.js` y publica el repositorio con GitHub Pages.
 3. **iPhone:** abre la página en Safari → Compartir → *Añadir a la pantalla de inicio*, y pega el token la
