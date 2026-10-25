@@ -205,8 +205,7 @@ marcha. El código de la v1 no está publicado: se explica en una línea. **Con 
   (`touch-action: pan-x pan-y` y viewport `maximum-scale=1`), campos a 16 px (iOS amplía al escribir con menos),
   sin rebote (`overscroll-behavior: none`) ni selección o menú al mantener pulsado un botón.
   Probado en el iPhone: todo OK. Cambiar de mes: 2.516 ms en el servidor y ~3 s en total (con B1 ya en ese
-  mes, 893 ms → escribir B1, recalcular y restaurar cuesta ~1,6 s). Propuesta sin implementar: caché en el
-  móvil de los meses ya vistos, si con el uso se hace lento.
+  mes, 893 ms → escribir B1, recalcular y restaurar cuesta ~1,6 s). Caché de los meses ya vistos: fase 8.4.
 - **7.3 — hecha.** `probarMes()` evalúa noviembre, enero y febrero (`MES_CASOS_`): `cuadra`, total esperado
   y reglas que deben estar o no (por ID). Si un mes tiene movimientos, un total distinto es ⚠️, no ❌.
   Resultado en Apps Script: **3/3 ✅** (1.239 · 1.115 · 1.049 €, con las reglas exactas de cada mes), etiqueta
@@ -256,7 +255,8 @@ marcha. El código de la v1 no está publicado: se explica en una línea. **Con 
   `?v=` 7.5.0. Probado en el iPhone (Q1–Q11 OK): marcar tocando el texto, fila en «Pagos» y borrada al desmarcar,
   tres toques rápidos → 1 fila, cada mes con sus pagos, memoria del mes y vuelta al mes por defecto al reabrir.
   Sin conexión, la casilla vuelve atrás con el aviso «… Load failed» (texto en inglés de Safari).
-  Propuesta sin implementar: traducir los fallos de red a «Sin conexión. Inténtalo de nuevo.» en `api()`.
+  Fallos de red: se deja el «Load failed» de Safari (decidido: se entiende).
+- **8.4 — en curso.** Caché de meses ya vistos (*stale-while-revalidate*), solo en `app.js`. `?v=` 7.6.0.
 
 ## Fase 8 — Renombrar gastos y marcar pagos (v2.3)
 
@@ -302,6 +302,23 @@ casilla se desactiva (dos toques rápidos podrían llegar desordenados) y, mient
 ninguna. Cabecera: Ingreso · Previsto · Pendiente de pagar y el Restante grande debajo. **Memoria del mes** mientras la
 app está abierta: al volver a la pestaña se recarga el mes que mirabas (`mesDestino`); al abrir la app, el mes por
 defecto. `?v=` 7.5.0.
+
+### 8.4 Caché de meses ya vistos
+Opción B (confirmada por Pau): **mostrar y actualizar**. Descartadas: A, caché pura (habría que invalidarla en cada
+guardar, editar o deshacer, y es fácil olvidar un caso), y C, adelantar el mes anterior y el siguiente (cada petición
+bloquea la hoja al escribir B1; las adelantadas retrasarían la que quieres ver).
+- `cacheMes` (Map etiqueta → respuesta de `mes`) **solo en memoria**: se borra al cerrar la app (no se abre viendo datos
+  de hace días).
+- Mes ya visto (al volver a la pestaña, con las flechas o con «Hoy»): se pinta al instante con «Actualizando…» y se pide
+  igualmente al servidor; al llegar, se guarda y se repinta. Mes no visto: como antes (atenuado y «Cargando…»). Si la
+  actualización falla, se queda lo de la caché con «No se ha podido actualizar: …».
+- Flechas: el debounce de 300 ms se mantiene; `irAMes` invalida la respuesta en camino (`peticionMes++`), que se guarda
+  en la caché pero no se pinta.
+- Pagos: la casilla cambia los datos de la caché (son los mismos objetos) y la pantalla se repinta desde ellos
+  (`pintarCasilla` busca la línea por `data-id`; `g.guardando` la mantiene bloqueada aunque el mes se repinte).
+  `pagosMes` (etiqueta → `{ cambios, enVuelo }`): si se marcó una casilla de ese mes después de pedirlo, o hay una en
+  vuelo, la respuesta se descarta y manda la caché.
+- Modo pruebas: el pie dice «desde caché» o «del servidor».
 
 ## Fase 7b — Crear categorías (v2.2)
 
