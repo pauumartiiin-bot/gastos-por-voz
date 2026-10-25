@@ -392,12 +392,17 @@ async function crearCategoria(e) {
   }
 }
 
-/* ---------- Mes (fase 7) y casillas de pagado (fase 8.3) ---------- */
+/* ---------- Mes (fase 7), casillas de pagado (8.3) y caché de meses (8.4) ---------- */
 
-let mesDatos = null;    // última respuesta de "mes"
+let mesDatos = null;    // mes en pantalla (una respuesta de "mes", del servidor o de la caché)
 let mesDestino = null;  // mes al que apuntan las flechas: cambia en cada toque, antes de que llegue la respuesta
 let esperaMes = 0;      // temporizador de la petición
 let peticionMes = 0;    // red de seguridad: si llegan respuestas desordenadas, solo vale la última
+
+// Caché solo en memoria, mientras la app está abierta: un mes ya visto se pinta al instante y, a la vez,
+// se pide al servidor; cuando llega, se repinta (enseña lo que tienes mientras compruebas si ha cambiado).
+const cacheMes = new Map();   // etiqueta → respuesta de "mes"
+const pagosMes = new Map();   // etiqueta → { cambios, enVuelo }: una respuesta pedida antes de marcar no pisa la casilla
 
 // Los toques seguidos se agrupan: la petición sale cuando dejas de tocar. Cada petición reescribe
 // Resumen!B1 en el servidor y espera su turno, así que pedir los meses intermedios solo retrasaría el final.
@@ -410,21 +415,28 @@ function estadoMes(mensaje, esError = false) {
   $('estado-mes').classList.toggle('error', esError);
 }
 
-// Sin etiqueta, el servidor devuelve el mes por defecto.
+// Sin etiqueta, el servidor devuelve el mes por defecto. Si el mes ya está en la caché, se ve al instante.
 async function cargarMes(etiqueta) {
   clearTimeout(esperaMes);
   const n = ++peticionMes;
-  atenuarMes(true);
+  const guardado = etiqueta ? cacheMes.get(etiqueta) : null;
+  if (guardado) mostrarGuardado(guardado);
+  else atenuarMes(true);
+  const cambios = etiqueta ? pagosDe(etiqueta).cambios : 0;
   try {
     const r = await api('mes', etiqueta ? { etiqueta } : {});
+    // Si mientras tanto se marcó una casilla de ese mes, la respuesta puede no traerla: manda la caché.
+    const pagos = pagosDe(r.etiqueta);
+    const vieja = !!etiqueta && cacheMes.has(r.etiqueta) && (pagos.cambios !== cambios || pagos.enVuelo > 0);
+    if (!vieja) cacheMes.set(r.etiqueta, r);
     if (n !== peticionMes) return;
-    mesDatos = r;
+    mesDatos = cacheMes.get(r.etiqueta);
     mesDestino = r.etiqueta;
     estadoMes('');
-    pintarMes();
+    pintarMes(vieja ? 'caché' : 'servidor');
   } catch (err) {
     if (n !== peticionMes) return;
-    estadoMes(err.message, true);
+    estadoMes((guardado ? 'No se ha podido actualizar: ' : '') + err.message, true);
     // Vuelve al mes que se está viendo: el título no puede quedarse en uno que no ha cargado.
     mesDestino = mesDatos ? mesDatos.etiqueta : null;
     if (mesDatos) pintarTituloMes(mesDatos.etiqueta);
@@ -436,14 +448,32 @@ async function cargarMes(etiqueta) {
   }
 }
 
-// Flechas y «Hoy»: el título cambia al instante y la petición sale al dejar de tocar.
+// Flechas y «Hoy»: el título (o el mes entero, si está en la caché) cambia al instante y la petición
+// sale al dejar de tocar.
 function irAMes(etiqueta) {
+  peticionMes++; // la respuesta que esté en camino ya no es la del mes que quieres ver
   mesDestino = etiqueta;
-  pintarTituloMes(etiqueta);
-  actualizarNavMes();
-  atenuarMes(true);
+  const guardado = cacheMes.get(etiqueta);
+  if (guardado) mostrarGuardado(guardado);
+  else {
+    pintarTituloMes(etiqueta);
+    actualizarNavMes();
+    atenuarMes(true);
+  }
   clearTimeout(esperaMes);
   esperaMes = setTimeout(() => cargarMes(etiqueta), MS_ESPERA_MES);
+}
+
+function mostrarGuardado(datos) {
+  mesDatos = datos;
+  pintarMes('caché');
+  atenuarMes(false);
+  estadoMes('Actualizando…');
+}
+
+function pagosDe(etiqueta) {
+  if (!pagosMes.has(etiqueta)) pagosMes.set(etiqueta, { cambios: 0, enVuelo: 0 });
+  return pagosMes.get(etiqueta);
 }
 
 function moverMes(paso) {
@@ -485,7 +515,7 @@ function fechaCorta(iso) {
   return Number(dia) + ' ' + MESES_CORTOS[Number(mes) - 1];
 }
 
-function pintarMes() {
+function pintarMes(origen) {
   const r = mesDatos;
   const c = r.cabecera;
   pintarTituloMes(r.etiqueta);
@@ -502,7 +532,8 @@ function pintarMes() {
     ? r.categorias.map(tarjetaCategoria)
     : [crear('p', 'vacio', 'Este mes no tiene gastos previstos.')]));
 
-  $('mes-pruebas').textContent = r.ms + ' ms · cuadra ' + (r.cuadra ? '✅' : '❌');
+  $('mes-pruebas').textContent = (origen === 'caché' ? 'desde caché' : 'del servidor') + ' · ' + r.ms + ' ms · cuadra ' +
+    (r.cuadra ? '✅' : '❌');
   mostrar('mes-pruebas', modoPruebas());
 }
 
@@ -541,34 +572,51 @@ function lineaCargo(g) {
   const casilla = crear('input');
   casilla.type = 'checkbox';
   casilla.checked = g.pagado;
-  casilla.addEventListener('change', () => marcarPago(g, casilla));
+  casilla.disabled = !!g.guardando;
+  const datos = mesDatos;
+  casilla.addEventListener('change', () => marcarPago(datos, g, casilla.checked));
   linea.prepend(casilla);
   return linea;
 }
 
 // Marcado optimista: la casilla y el pendiente cambian al instante; si el servidor falla, vuelven atrás.
-async function marcarPago(g, casilla) {
-  const datos = mesDatos;
-  const pagado = casilla.checked;
-  aplicarPago(datos, g, casilla, pagado);
-  casilla.disabled = true; // una petición por casilla: dos toques rápidos podrían llegar desordenados
+// Se cambian los datos del mes (los de la caché) y desde ellos la pantalla, que puede haberse repintado.
+async function marcarPago(datos, g, pagado) {
+  const pagos = pagosDe(datos.etiqueta);
+  pagos.cambios++;
+  pagos.enVuelo++;
+  g.guardando = true; // una petición por casilla: dos toques rápidos podrían llegar desordenados
+  aplicarPago(datos, g, pagado);
   try {
     await api('pagar', { etiqueta: datos.etiqueta, id: g.id, pagado });
   } catch (err) {
-    aplicarPago(datos, g, casilla, !pagado);
+    aplicarPago(datos, g, !pagado);
     notificar('No se ha podido marcar «' + g.concepto + '»: ' + err.message, false, true);
   } finally {
-    casilla.disabled = false;
+    g.guardando = false;
+    pagos.cambios++;
+    pagos.enVuelo--;
+    pintarCasilla(datos, g);
   }
 }
 
-function aplicarPago(datos, g, casilla, pagado) {
+function aplicarPago(datos, g, pagado) {
   g.pagado = pagado;
-  casilla.checked = pagado;
-  casilla.parentElement.classList.toggle('pagada', pagado);
   const c = datos.cabecera;
   c.pendiente = Math.round((c.pendiente + (pagado ? -g.importe : g.importe)) * 100) / 100;
-  if (datos === mesDatos) $('mes-pendiente').textContent = euros(c.pendiente); // si ya cambiaste de mes, no se toca
+  pintarCasilla(datos, g);
+}
+
+// La línea se busca cada vez: si el mes se ha repintado, la de antes ya no está en pantalla.
+function pintarCasilla(datos, g) {
+  if (datos !== mesDatos) return; // ya estás en otro mes: sus datos cambian, la pantalla no
+  $('mes-pendiente').textContent = euros(datos.cabecera.pendiente);
+  const linea = document.querySelector('.linea-cargo[data-id="' + CSS.escape(g.id) + '"]');
+  if (!linea) return;
+  linea.classList.toggle('pagada', g.pagado);
+  const casilla = linea.querySelector('input');
+  casilla.checked = g.pagado;
+  casilla.disabled = !!g.guardando;
 }
 
 function barraPresupuesto(k) {
