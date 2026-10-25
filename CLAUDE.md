@@ -241,7 +241,10 @@ marcha. El código de la v1 no está publicado: se explica en una línea. **Con 
   entendido nada en el audio» con prob. sin voz 0,89. Culpable confirmado: Web Audio abierto durante la grabación.
 
 **Fase 8 — Renombrar gastos y marcar pagos (v2.3) — en curso.** Detalle en la sección «Fase 8».
-- **8.1 — en curso.** Renombrar gastos: `backend/Renombrar.gs` + línea en `Api.gs` + campo «Nombre» en Mis registros.
+- **8.1 — hecha.** Renombrar gastos: `backend/Renombrar.gs` + línea en `Api.gs` + campo «Nombre» en Mis registros.
+  `probarRenombrar()` en Apps Script: validaciones 9/9, renombrado real de R001 y limpieza ✅, `ULTIMO` intacto.
+  En el iPhone (R5–R8 OK): renombrar, Deshacer, y el nombre nuevo de un recurrente sale en «Mes» y en el Resumen.
+- **8.2 — pendiente de diseño.** Marcar pagos como hechos.
 
 ## Fase 8 — Renombrar gastos y marcar pagos (v2.3)
 
