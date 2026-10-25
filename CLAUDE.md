@@ -277,6 +277,46 @@ marcha. El código de la v1 no está publicado: se explica en una línea. **Con 
   (concepto y aviso) bien. Pau decide dejarlo así. README: sección «Ingresos: un formulario, no un LLM» y dos filas
   en Decisiones.
 
+## Pendientes con plan preparado (sin empezar)
+Pau los dejó para más adelante. Antes de empezar: repasar el plan con Pau y esperar confirmación.
+
+### A. Ingresos del mes en la cabecera de «Mes»
+- **Objetivo:** ver de un vistazo qué forma el «cobrado» (p. ej. «Nómina octubre · 28 oct · 1.370 €» y «Comisiones
+  octubre · 28 oct · 250 €»).
+- **Backend** (`Mes.gs`, sin cambios en la v1): `mes_` añade `ingresos: [{ id, fecha, concepto, tipo, importe }]` del
+  mes (Ingresos con `Mes` = etiqueta, por fecha), con `leerIngresos_` de `Ingresos.gs`. Como los pagos, se lee fuera
+  del patrón de B1 (no depende del Resumen). `probarMes()` añade una comprobación: la suma de `ingresos` = `cobrado`.
+- **Interfaz:** debajo de las tres cifras de la cabecera, una línea por ingreso (concepto · fecha corta · importe), solo
+  si el mes tiene alguno. Llega con la respuesta de `mes`, así que la caché de la 8.4 la cubre sin más.
+- **A decidir con Pau:** siempre visible (recomendado: son 1–3 líneas y solo aparecen con «cobrado») o plegada al
+  tocar «Ingreso»; si cada línea lleva a «Mis registros» para borrarla (propuesta: no; se borra desde allí).
+- **Pruebas:** `probarMes()` en Apps Script y plantilla de iPhone (mes con nómina + comisiones, mes sin ingresos,
+  apuntar un ingreso y volver a «Mes»: aparece tras «Actualizando…»).
+
+### B. Bajar la latencia del dictado (~6–7 s)
+Lo medido: Groq ~0,4 s; `ms_interpretar` 2,6–3,9 s, del que ~1 s es leer la hoja (`leerContexto_` de la v1: abre el
+libro y lee Categorías y Recurrentes en **cada** dictado; en la 6.2, 720 ms frente a 47 ms con caché); y ~2,5 s de
+Apps Script (subida, arranque y redirección) que hoy no sabemos repartir.
+- **B.1 Medir antes de tocar nada** (sin cambios en la v1):
+  - `dictar` devuelve también `ms_servidor` (de la entrada a la salida de `doPost`); en modo pruebas, el móvil enseña
+    `red y arranque = total − ms_servidor`.
+  - `medirLatencia()` en el editor: cronometra por separado `libro_()`, `leerContexto_()` y una llamada a `interpretar`
+    con una frase fija (5 repeticiones, mediana).
+  - 10 dictados reales en el iPhone con el modo pruebas → tabla de tramos.
+- **B.2 Decidir con los datos.** Opciones previstas, de más a menos impacto esperado:
+  1. **Caché del contexto** (CacheService, 10 min). Requiere **permiso de Pau para un cambio mínimo en la v1**
+     (`leerContexto_` lee y guarda en la caché; 3–4 líneas). La caché se borra en `doPost` (Api.gs, nuestro) tras
+     cualquier acción que escribe (`guardar`, `editar`, `baja`, `eliminar`, `deshacer`, `categoria`, `renombrar`); un
+     cambio hecho a mano en la hoja tarda como mucho 10 min en verse. Sin tocar la v1 no se puede: `interpretar` llama
+     a `leerContexto_` por su nombre y declarar otra función igual en un archivo nuevo es frágil (gana la última que
+     carga).
+  2. **Calentar Apps Script:** al tocar el micrófono, el móvil lanza una petición barata (`ping`) mientras grabas,
+     para que el arranque no caiga en el dictado. Solo vale si B.1 demuestra que el arranque pesa.
+  3. Descartado de entrada: separar transcribir e interpretar (dos viajes a Apps Script cuestan más de lo que ahorran)
+     y cambiar de modelo (Groq y Haiku no son el cuello de botella).
+- **Éxito:** bajar al menos ~1 s de la mediana sin errores nuevos (la evaluación de la 6.4 no cambia: el modelo y el
+  prompt son los mismos).
+
 ## Fase 9 — Ingresos desde la app (v2.4)
 
 ### Objetivo y decisiones (confirmadas por Pau)
