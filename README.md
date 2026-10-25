@@ -35,6 +35,8 @@ con Claude Haiku y la validaba con código. La **v2** (este repositorio) añade:
   mes, con el pendiente de pagar en la cabecera. [Cómo funciona](#marcar-pagos-interfaz-optimista).
 - **Ingresos** (v2.4): apuntar la nómina, las comisiones y los extras desde el móvil, con el mes propuesto
   por una regla. [Cómo funciona](#ingresos-un-formulario-no-un-llm).
+- **Gasto con formulario** (v2.5): apuntar un gasto escribiéndolo, sin dictar, con la misma validación que un
+  dictado. [Cómo funciona](#gasto-con-formulario-otro-proponente-el-mismo-validador).
 - **Una evaluación reproducible** para elegir modelo y configuración con datos.
 
 > El código de la v1 (interpretación, validación y escritura en la hoja) no está publicado: vive en el
@@ -217,6 +219,20 @@ se equivoca, así que aquí no hay modelo ([`backend/Ingresos.gs`](backend/Ingre
 - **Efecto en «Mes»:** al apuntar la nómina, el mes pasa de «previsto» a «cobrado» y, si es la del mes
   siguiente, ese pasa a ser el mes por defecto. Lo provoca un dato real, no una fecha fija.
 
+## Gasto con formulario: otro proponente, el mismo validador
+
+A veces no se puede hablar. En «Crear» hay también un formulario para apuntar un gasto (concepto, importe,
+categoría, frecuencia y fechas) y **no tiene backend propio**: monta el mismo JSON que devuelve Haiku al dictar
+y lo envía a la misma acción de guardado. La validación, el ID, la pestaña de destino y el *Deshacer* son los de
+siempre.
+
+Funciona porque el diseño separa **quién propone** de **quién decide**: al validador le da igual que la propuesta
+venga del modelo o de una persona. Añadir otra forma de crear gastos no ha costado ni una línea en el servidor.
+
+Un detalle que salió al revisar la validación: si la frase nombra exactamente una categoría, manda esa (para que
+el modelo no «corrija» lo que dijiste). Si el formulario enviara el concepto como frase, «Regalo Aina» en «Otros»
+acabaría en «Aina»; por eso la frase solo nombra la categoría elegida.
+
 ## Decisiones técnicas
 
 | Decisión | Alternativa descartada | Por qué |
@@ -237,6 +253,7 @@ se equivoca, así que aquí no hay modelo ([`backend/Ingresos.gs`](backend/Ingre
 | «Cambiar nombre» con su propio botón | Un único «Guardar cambios» para nombre, importe y categoría | Cada cambio tiene su Deshacer; con uno solo, Deshacer revertiría solo la última de dos operaciones |
 | Ingresos con formulario y mes propuesto por la regla del día 20 | Dictarlos, o elegir siempre el mes a mano | Son pocos datos y siempre iguales; el prompt de Haiku es de la v1 y la regla acierta en el caso habitual |
 | Corregir un ingreso borrándolo y volviéndolo a apuntar | Un editor de ingresos | Pasa pocas veces; menos código que mantener |
+| Gasto con formulario que reutiliza el guardado de los dictados | Una acción nueva en el servidor, o pasar el texto por Haiku | Una sola validación para todo; sin LLM, lo escrito no se reinterpreta |
 
 ## Latencia
 

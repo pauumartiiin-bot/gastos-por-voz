@@ -30,7 +30,7 @@ iPhone (esta app, GitHub Pages, instalada en pantalla de inicio)
   `redirect: 'follow'` (Apps Script responde con una redirección).
 - Interfaz en español. Comentarios del código en español, breves.
 
-## Contrato de la API (fases 6.1–9)
+## Contrato de la API (fases 6.1–10)
 Petición: un único `doPost` (en `backend/Api.gs`) que enruta por `accion`. Cuerpo JSON enviado como texto plano:
 ```json
 { "t": "<token>", "accion": "dictar", ...parámetros }
@@ -277,8 +277,11 @@ marcha. El código de la v1 no está publicado: se explica en una línea. **Con 
   (concepto y aviso) bien. Pau decide dejarlo así. README: sección «Ingresos: un formulario, no un LLM» y dos filas
   en Decisiones.
 
-**Fase 10 — Gasto con formulario (v2.5) — en curso.** Detalle en la sección «Fase 10». Solo interfaz: sin cambios en
-Apps Script. `?v=` 7.8.0.
+**Fase 10 — Gasto con formulario (v2.5) — hecha.** Detalle en la sección «Fase 10». Solo interfaz: sin cambios en
+Apps Script. `?v=` 7.8.0. Probado en el iPhone (G1–G12 OK): orden de las tarjetas, «Regalo Aina» en «Otros» (no en
+«Aina») en Movimientos, Deshacer, campos de recurrente según la frecuencia, mensual cada 3 con fin en Recurrentes
+(«Mensual · cada 3 meses» en Mis registros) y solo en su mes en «Mes», fecha de 2030 rechazada dentro de la tarjeta.
+README: sección «Gasto con formulario: otro proponente, el mismo validador» y fila en Decisiones.
 
 ## Fase 10 — Gasto con formulario (v2.5)
 Apuntar un gasto escribiéndolo, sin dictar. Decisiones (confirmadas por Pau):
