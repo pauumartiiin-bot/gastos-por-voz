@@ -21,7 +21,10 @@ const ACCIONES_ = {
   mes: (p) => mes_(p),   // Fase 7: Mes.gs
   categoria: (p) => crearCategoria_(p),   // Fase 7b: Categorias.gs
   renombrar: (p) => renombrar_(p),   // Fase 8.1: Renombrar.gs
-  pagar: (p) => pagar_(p)   // Fase 8.2: Pagos.gs
+  pagar: (p) => pagar_(p),   // Fase 8.2: Pagos.gs
+  ingresos: () => ingresos_(),   // Fase 9.1: Ingresos.gs
+  ingreso: (p) => apuntarIngreso_(p),
+  borrar_ingreso: (p) => borrarIngreso_(p)
 };
 
 function doPost(e) {
