@@ -747,6 +747,7 @@ function pintarMes(origen) {
   $('mes-pendiente').textContent = euros(c.pendiente);
   $('mes-restante').textContent = euros(c.restante);
   $('mes-restante').classList.toggle('negativo', c.restante < 0);
+  pintarIngresosMes(r.ingresos || []);   // sin «ingresos», un backend anterior a la fase A
 
   $('mes-categorias').replaceChildren(...(r.categorias.length
     ? r.categorias.map(tarjetaCategoria)
@@ -755,6 +756,14 @@ function pintarMes(origen) {
   $('mes-pruebas').textContent = (origen === 'caché' ? 'desde caché' : 'del servidor') + ' · ' + r.ms + ' ms · cuadra ' +
     (r.cuadra ? '✅' : '❌');
   mostrar('mes-pruebas', modoPruebas());
+}
+
+// Lo que forma el «cobrado»: una línea por ingreso del mes; sin ingresos, no se ve.
+function pintarIngresosMes(ingresos) {
+  const caja = $('mes-ingresos');
+  caja.replaceChildren(caja.querySelector('dt'), ...ingresos.map((i) =>
+    lineaMes(i.concepto || i.tipo, i.fecha ? fechaCorta(i.fecha) : '', i.importe, '', 'dd')));
+  mostrar('mes-ingresos', ingresos.length > 0);
 }
 
 function tarjetaCategoria(k) {

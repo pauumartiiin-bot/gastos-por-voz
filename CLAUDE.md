@@ -46,7 +46,7 @@ Petición: un único `doPost` (en `backend/Api.gs`) que enruta por `accion`. Cue
 | `editar` | `hoja`, `id`, `cambios` | `editarRegistro` | `desc` |
 | `baja` | `id`, `fecha_fin` | `darDeBaja` | `desc` |
 | `eliminar` | `hoja`, `id` | `eliminarRegistro` | `desc` |
-| `mes` | `etiqueta?` (sin ella, el mes por defecto) | `mes_` (nuevo, `backend/Mes.gs`) con `libro_` y `conBloqueo_` | `etiqueta`, `mes_inicio`, `por_defecto`, `meses`, `cabecera`, `categorias`, `cuadra`, `ms` (detalle en «Fase 7») |
+| `mes` | `etiqueta?` (sin ella, el mes por defecto) | `mes_` (nuevo, `backend/Mes.gs`) con `libro_` y `conBloqueo_` | `etiqueta`, `mes_inicio`, `por_defecto`, `meses`, `cabecera`, `categorias`, `cuadra`, `ingresos`, `ms` (detalle en «Fase 7» y «Fase 12») |
 | `categoria` | `nombre`, `descripcion` | `crearCategoria_` (nuevo, `backend/Categorias.gs`) con `libro_`, `conBloqueo_`, `normalizar` y `apuntarDeshacer_` | `nombre`, `desc`, `huecos_libres` (detalle en «Fase 7b») |
 | `renombrar` | `hoja` (`Recurrentes` \| `Movimientos`), `id`, `concepto` | `renombrar_` (nuevo, `backend/Renombrar.gs`) con `libro_`, `conBloqueo_`, `buscarFilaPorId_`, `COL`/`COLM` y `apuntarDeshacer_` | `id`, `concepto`, `desc` (detalle en «Fase 8») |
 | `pagar` | `etiqueta`, `id` (regla R… o gasto puntual M…), `pagado` (`true` \| `false`) | `pagar_` (nuevo, `backend/Pagos.gs`) con `libro_`, `conBloqueo_`, `buscarFilaPorId_`, `COL` y `COLM` | `etiqueta`, `id`, `pagado`, `pagado_el` (detalle en «Fase 8» y «Fase 11») |
@@ -307,6 +307,25 @@ no cuadrar o que falte o sobre una regla. Referencias actualizadas a 1.234 · 1.
 con el mismo 1.262 €. Cosmético: las marcas
 `Marcado_el` anteriores al cambio (p. ej. M001, 11:48) quedan con 8 h de menos.
 
+**Fase 12 — Ingresos en la cabecera de «Mes» (v2.7) — en pruebas.** Detalle en la sección «Fase 12». Probado en
+local (`probarIngresos()` con hoja simulada y la cabecera en el iPhone 13 simulado, claro y oscuro). Falta: copiar
+`Mes.gs` e `Ingresos.gs`, Nueva versión, `probarIngresos()`/`probarMes()` en Apps Script y pruebas en el iPhone.
+
+## Fase 12 — Ingresos del mes en la cabecera de «Mes» (v2.7)
+Antes, pendiente A. Objetivo: ver de un vistazo qué forma el «cobrado» (p. ej. «Nómina octubre · 28 oct · 1.370 €» y
+«Comisiones octubre · 28 oct · 250 €»). Decisiones (confirmadas por Pau): **siempre visibles** (1–3 líneas, solo en
+meses con ingresos) y **sin enlace** a «Mis registros» (se borran desde allí).
+- **Backend** (`Mes.gs`, sin cambios en la v1): `mes_` añade `ingresos: [{ id, fecha, concepto, tipo, importe }]`, los
+  de Ingresos con `Mes` = etiqueta, por fecha (`ingresosDelMes_` con `leerIngresos_` de `Ingresos.gs`). Como los
+  pagos, se lee fuera del patrón de B1.
+- **Pruebas:** el invariante «suma de `ingresos` = `cobrado`» está en `comprobarCasoMes_` (❌ si falla), pero con
+  Ingresos vacío solo comprueba 0 = 0. La prueba con datos está en `probarIngresos()`: tras la nómina de prueba apunta
+  unas comisiones (250 €) y exige que «Mes» devuelva las dos y que sumen el cobrado (1.484,56); la limpieza borra ambas.
+- **Interfaz:** `#mes-ingresos` dentro de `#mes-cifras`, entre las tres cifras y el Restante: «Ingresos cobrados» y
+  una línea por ingreso con `lineaMes` (concepto, o el tipo si está vacío · fecha corta · importe). Oculta si no hay.
+  Llega con la respuesta de `mes`, así que la caché de la 8.4 la cubre. Sin `ingresos` (backend sin publicar) no se
+  pinta nada. `?v=` 7.10.0.
+
 ## Fase 11 — Gastos puntuales pagados o pendientes (v2.6)
 Motivo: Pau apuntó un gasto puntual que pagará cuando cobre; con la 8.2 los puntuales contaban siempre como pagados.
 Decisiones (confirmadas por Pau):
@@ -360,19 +379,6 @@ Apuntar un gasto escribiéndolo, sin dictar. Decisiones (confirmadas por Pau):
 
 ## Pendientes con plan preparado (sin empezar)
 Pau los dejó para más adelante. Antes de empezar: repasar el plan con Pau y esperar confirmación.
-
-### A. Ingresos del mes en la cabecera de «Mes»
-- **Objetivo:** ver de un vistazo qué forma el «cobrado» (p. ej. «Nómina octubre · 28 oct · 1.370 €» y «Comisiones
-  octubre · 28 oct · 250 €»).
-- **Backend** (`Mes.gs`, sin cambios en la v1): `mes_` añade `ingresos: [{ id, fecha, concepto, tipo, importe }]` del
-  mes (Ingresos con `Mes` = etiqueta, por fecha), con `leerIngresos_` de `Ingresos.gs`. Como los pagos, se lee fuera
-  del patrón de B1 (no depende del Resumen). `probarMes()` añade una comprobación: la suma de `ingresos` = `cobrado`.
-- **Interfaz:** debajo de las tres cifras de la cabecera, una línea por ingreso (concepto · fecha corta · importe), solo
-  si el mes tiene alguno. Llega con la respuesta de `mes`, así que la caché de la 8.4 la cubre sin más.
-- **A decidir con Pau:** siempre visible (recomendado: son 1–3 líneas y solo aparecen con «cobrado») o plegada al
-  tocar «Ingreso»; si cada línea lleva a «Mis registros» para borrarla (propuesta: no; se borra desde allí).
-- **Pruebas:** `probarMes()` en Apps Script y plantilla de iPhone (mes con nómina + comisiones, mes sin ingresos,
-  apuntar un ingreso y volver a «Mes»: aparece tras «Actualizando…»).
 
 ### B. Bajar la latencia del dictado (~6–7 s)
 Lo medido: Groq ~0,4 s; `ms_interpretar` 2,6–3,9 s, del que ~1 s es leer la hoja (`leerContexto_` de la v1: abre el

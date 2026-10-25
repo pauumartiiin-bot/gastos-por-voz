@@ -133,7 +133,8 @@ function sumarDias_(iso, dias) {
  * Prueba desde el editor (sin la app):
  *  1. Las validaciones, sin escribir nada.
  *  2. Apunta una nómina de prueba en el último mes de Meses, comprueba la fila, que «Mes» la cuenta como cobrada y
- *     que no deja apuntar otra; la borra y prueba el Deshacer. Deja Ingresos y ULTIMO como estaban.
+ *     que no deja apuntar otra; añade unas comisiones y comprueba que «Mes» devuelve los dos ingresos y que suman el
+ *     cobrado (fase A); borra la nómina y prueba el Deshacer. Deja Ingresos y ULTIMO como estaban.
  */
 function probarIngresos() {
   const libro = libro_();
@@ -183,6 +184,7 @@ function probarIngresos() {
   const filasAntes = hoja.getLastRow();
   const fecha = hoy;
   let id = null;
+  let idComisiones = null;
   try {
     const r = apuntarIngreso_({ tipo: 'nómina', importe: 1234.56, fecha: fecha, mes: mes });
     if (r.ok === false) { Logger.log('❌ Apuntar → ' + (r.mensaje || r.error)); return; }
@@ -204,6 +206,17 @@ function probarIngresos() {
     const otra = apuntarIngreso_({ tipo: 'nómina', importe: 1000, fecha: fecha, mes: mes });
     Logger.log((otra.ok === false && otra.mensaje ? '✅ ' : '❌ ') + 'Otra nómina en el mismo mes → ' + (otra.mensaje || 'se apuntó (no debería)'));
 
+    // Fase A: «Mes» devuelve los ingresos que forman el cobrado.
+    const com = apuntarIngreso_({ tipo: 'comisiones', importe: 250, fecha: fecha, mes: mes });
+    idComisiones = com.id || null;
+    const m2 = mes_({ etiqueta: mes });
+    const ids = m2.ingresos.map((i) => i.id);
+    const suma = redondear2_(m2.ingresos.reduce((s, i) => s + i.importe, 0));
+    const listaMes = com.ok !== false && ids.length === 2 && ids.indexOf(id) >= 0 && ids.indexOf(idComisiones) >= 0 &&
+                     suma === 1484.56 && suma === m2.cabecera.cobrado;
+    Logger.log((listaMes ? '✅ ' : '❌ ') + '«Mes» lista los ingresos del mes: ' +
+               m2.ingresos.map((i) => i.concepto + ' ' + i.importe).join(' + ') + ' = ' + suma + ' · cobrado ' + m2.cabecera.cobrado);
+
     const b = borrarIngreso_({ id: id });
     const borrada = b.ok !== false && buscarFilaPorId_(hoja, id) < 0;
     const u = JSON.parse(props.getProperty('ULTIMO') || 'null');
@@ -216,10 +229,10 @@ function probarIngresos() {
     const recuperada = vuelta > 0 && textoFecha_(g[1], zona) === fecha && Number(g[5]) === 1234.56;
     Logger.log((recuperada ? '✅ ' : '❌ ') + 'Deshacer → ' + d.desc + ' · fecha ' + textoFecha_(g[1], zona) + ' · ' + g[5] + ' €');
   } finally {
-    if (id) {
+    [id, idComisiones].filter((x) => x).forEach((x) => {
       let f;
-      while ((f = buscarFilaPorId_(hoja, id)) > 0) hoja.deleteRow(f);
-    }
+      while ((f = buscarFilaPorId_(hoja, x)) > 0) hoja.deleteRow(f);
+    });
     if (ultimo === null) props.deleteProperty('ULTIMO');
     else props.setProperty('ULTIMO', ultimo);
     const igual = hoja.getLastRow() === filasAntes && props.getProperty('ULTIMO') === ultimo;
