@@ -37,7 +37,7 @@ Petición: un único `doPost` (en `backend/Api.gs`) que enruta por `accion`. Cue
 ```
 | `accion` | Parámetros | Llama a (v1, sin modificar) | Devuelve (además de `ok: true`) |
 |---|---|---|---|
-| `dictar` | `audio`, `mime`, `modelo?`, `vocabulario?`, `corrige?: {frase, anterior}` | `transcribir_` + `interpretar` | la propuesta de `interpretar` (`bloqueado`, `destino`, `datos`, `errores`, `avisos`, `preguntas`, `supuestos`, `interpretacion`, `frase`) + `texto`, `modelo`, `vocabulario`, `ms_vocabulario`, `ms_groq`, `prob_sin_voz`, `ms_interpretar` |
+| `dictar` | `audio`, `mime`, `modelo?`, `vocabulario?`, `corrige?: {frase, anterior}` | `transcribir_` + `interpretar` | la propuesta de `interpretar` (`bloqueado`, `destino`, `datos`, `errores`, `avisos`, `preguntas`, `supuestos`, `interpretacion`, `frase`) + `texto`, `modelo`, `vocabulario`, `ms_vocabulario`, `ms_groq`, `prob_sin_voz`, `ms_interpretar`, `ms_servidor` |
 | `interpretar` | `frase`, `correccion?: {anterior, texto}` | `interpretar` | la propuesta (con `ms`) |
 | `guardar` | `interpretacion`, `frase` | `guardar` | `hoja`, `id`, `datos` |
 | `deshacer` | — | `deshacer` | `desc` |
@@ -56,6 +56,8 @@ Petición: un único `doPost` (en `backend/Api.gs`) que enruta por `accion`. Cue
 
 - En `dictar` con `corrige`, lo dictado es el cambio pedido y `frase` es la frase original (así lo espera `interpretar`).
 - `ms_interpretar` incluye leer el contexto de la hoja + Haiku + validación.
+- `ms_servidor` (fase B.1): de la entrada a la salida de `doPost`. Lo lleva toda respuesta de `dictar`, también el
+  `rechazado` por silencio; el resto de acciones no.
 - `vocabulario` (por defecto `false`; solo se usa si llega `true`): se envía a Whisper como `prompt` un texto con conceptos y categorías de la hoja
   (`backend/Vocabulario.gs`, caché de 1 h, máx. 600 caracteres ≈ 224 tokens). Prioridad: reglas activas →
   últimos 50 movimientos → categorías. Si falla la lectura, se transcribe sin vocabulario (`vocabulario: false`).
@@ -100,6 +102,7 @@ backend/Categorias.gs   acción categoria (fase 7b): crea una categoría antes d
 backend/Renombrar.gs    acción renombrar (fase 8.1): cambia el concepto de un gasto; se copia a mano
 backend/Pagos.gs        acción pagar (fases 8.2 y 11.1): marca cargos fijos y gastos puntuales en la pestaña Pagos; se copia a mano
 backend/Ingresos.gs     acciones ingresos, ingreso y borrar_ingreso (fase 9.1); se copia a mano
+backend/Latencia.gs     medirLatencia() (fase B.1): cronometra libro_, leerContexto_ e interpretar; se copia a mano
 docs/                   capturas del README (generadas con datos inventados)
 CLAUDE.md               este archivo
 README.md               README de portfolio (fase 6.5)
@@ -313,6 +316,12 @@ En Apps Script (Nueva versión publicada): `probarIngresos()` 14/14 y todo ✅, 
 nómina (100 €) y comisiones (50 €) de prueba en diciembre → 2 líneas y «cobrado 150 €», al instante desde la caché,
 bien en oscuro, y al borrarlas en «Mis registros» el bloque desaparece. README: viñeta en «Ingresos».
 
+**Fase B.1 — Medir la latencia del dictado — en pruebas.** Detalle en «Pendientes → B». `dictar` devuelve
+`ms_servidor` (Api.gs); el modo pruebas enseña «Audio enviado» (KB del base64, lo que viaja), «Servidor» y «Red y
+arranque» (total − `ms_servidor`). `medirLatencia()` (`backend/Latencia.gs`, editor). `?v=` 7.11.0. Probado en local
+(doPost con mocks y el modo pruebas en el iPhone 13 simulado, con voz y con silencio). Falta: copiar Api.gs y
+Latencia.gs, Nueva versión, `medirLatencia()` y 10 dictados reales.
+
 ## Fase 12 — Ingresos del mes en la cabecera de «Mes» (v2.7)
 Antes, pendiente A. Objetivo: ver de un vistazo qué forma el «cobrado» (p. ej. «Nómina octubre · 28 oct · 1.370 €» y
 «Comisiones octubre · 28 oct · 250 €»). Decisiones (confirmadas por Pau): **siempre visibles** (1–3 líneas, solo en
@@ -379,18 +388,20 @@ Apuntar un gasto escribiéndolo, sin dictar. Decisiones (confirmadas por Pau):
   mensual cada 3 con fin, semanal y anual se aceptan; fecha a más de 730 días → «No se puede guardar: Fecha fuera de
   rango…» dentro de la tarjeta.
 
-## Pendientes con plan preparado (sin empezar)
+## Pendientes con plan preparado
 Pau los dejó para más adelante. Antes de empezar: repasar el plan con Pau y esperar confirmación.
 
 ### B. Bajar la latencia del dictado (~6–7 s)
 Lo medido: Groq ~0,4 s; `ms_interpretar` 2,6–3,9 s, del que ~1 s es leer la hoja (`leerContexto_` de la v1: abre el
 libro y lee Categorías y Recurrentes en **cada** dictado; en la 6.2, 720 ms frente a 47 ms con caché); y ~2,5 s de
 Apps Script (subida, arranque y redirección) que hoy no sabemos repartir.
-- **B.1 Medir antes de tocar nada** (sin cambios en la v1):
+- **B.1 Medir antes de tocar nada** (sin cambios en la v1; confirmado por Pau, con el tamaño del audio):
   - `dictar` devuelve también `ms_servidor` (de la entrada a la salida de `doPost`); en modo pruebas, el móvil enseña
-    `red y arranque = total − ms_servidor`.
-  - `medirLatencia()` en el editor: cronometra por separado `libro_()`, `leerContexto_()` y una llamada a `interpretar`
-    con una frase fija (5 repeticiones, mediana).
+    `red y arranque = total − ms_servidor` y «Audio enviado» en KB (si la red pesa y el audio es pequeño, es el
+    arranque, no la subida).
+  - `medirLatencia()` en el editor: 5 vueltas de `libro_()`, `leerContexto_()` e `interpretar` con una frase fija
+    (sin guardar). Da la 1.ª y la mediana: la 1.ª es la realista (cada dictado es una ejecución nueva), las demás van
+    en caliente. Haiku + validación ≈ mediana de `interpretar` − mediana de `leerContexto_`.
   - 10 dictados reales en el iPhone con el modo pruebas → tabla de tramos.
 - **B.2 Decidir con los datos.** Opciones previstas, de más a menos impacto esperado:
   1. **Caché del contexto** (CacheService, 10 min). Requiere **permiso de Pau para un cambio mínimo en la v1**
@@ -665,3 +676,5 @@ Respuesta (además de `ok: true`):
 - Commits pequeños con mensajes en español que digan qué y por qué.
 - Cada cambio en `app.js`, `config.js` o `styles.css` sube su `?v=` en `index.html` (evita la caché de iOS).
 - Al terminar una tarea, explicar qué se ha hecho y cómo probarlo.
+- Si el cambio toca la interfaz (GitHub Pages sirve `main`), abrir y fusionar el PR **antes** de pasar las pruebas
+  del iPhone, y decirlo al principio del mensaje: «Ya está en `main`, puedes probar en el iPhone».
