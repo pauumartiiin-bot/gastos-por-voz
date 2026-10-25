@@ -287,7 +287,12 @@ README: sección «Gasto con formulario: otro proponente, el mismo validador» y
 - **11.1 — hecha.** Backend: `Pagos.gs` (estado normal por tipo, columna Estado) y `Mes.gs` (`pagado` en los
   movimientos y el pendiente los incluye). `probarPagos()` en Apps Script: todo ✅ (cargo fijo, puntual de prueba que
   nace pagado, desmarcar sube el pendiente justo su importe, otro mes rechazado, limpieza). Nueva versión publicada.
-- **11.2 — en curso.** Interfaz: casillas en los puntuales de «Mes» y «Ya está pagado» en «+ Nuevo gasto». `?v=` 7.9.0.
+- **11.2 — hecha salvo U8/U9.** Interfaz: casillas en los puntuales de «Mes» y «Ya está pagado» en «+ Nuevo gasto».
+  `?v=` 7.9.0. En el iPhone U1–U7, U10 y U11 OK. **U8/U9 ❌:** tras borrar un gasto pendiente de prueba (M002, octubre),
+  su fila siguió en Pagos y el siguiente gasto de octubre, que la v1 volvió a numerar M002, salió pendiente. El parche
+  del cliente (quitar la marca antes del Deshacer) estaba en el sitio equivocado: solo cubría un camino.
+- **11.3 — en curso.** Limpieza de filas huérfanas en el servidor tras `eliminar` y `deshacer`; `limpiarPagos()` en el
+  editor; fuera el parche del cliente. `?v=` 7.9.1.
 
 ## Fase 11 — Gastos puntuales pagados o pendientes (v2.6)
 Motivo: Pau apuntó un gasto puntual que pagará cuando cobre; con la 8.2 los puntuales contaban siempre como pagados.
@@ -311,10 +316,14 @@ Decisiones (confirmadas por Pau):
   con Puntual, casilla «Ya está pagado» marcada por defecto; si se desmarca, tras `guardar` se llama a `pagar` con
   `pagado: false` en el mes de la fecha (los meses, de `ingresos`, que se pide junto a `registros` al abrir; un mes que
   no está en la hoja → aviso sin enviar). Si `pagar` falla, el gasto queda guardado y el aviso dice que se desmarque
-  en «Mes». **Deshacer** justo después de un gasto apuntado como pendiente (`pendienteReciente`) llama antes a
-  `pagar` con `pagado: true`: si no, su fila de Pagos quedaría huérfana y el siguiente gasto con el mismo ID (la v1
-  numera desde el máximo) heredaría el «pendiente». Queda el mismo riesgo si se elimina en «Mis registros» un puntual
-  marcado como pendiente (raro; no se cubre). Los dictados no cambian (guardado de la v1): se desmarcan en «Mes».
+  en «Mes». Los dictados no cambian (guardado de la v1): se desmarcan en «Mes».
+- **Filas huérfanas (11.3).** La v1 numera desde el ID más alto: si se borra un gasto con marca en Pagos (fijo pagado o
+  puntual pendiente), el siguiente gasto recibe el mismo ID y heredaría la marca. `limpiarPagosHuerfanos_` (Pagos.gs)
+  borra las filas cuyo ID no está en Recurrentes ni en Movimientos; `doPost` la llama tras `eliminar` y `deshacer` con
+  éxito (`limpiarPagosTrasBorrar_`, dentro de `conBloqueo_`; si falla, solo `console.error`: la acción ya está hecha).
+  `limpiarPagos()` la ejecuta desde el editor (para borrados hechos a mano en la hoja). Precio aceptado: eliminar un
+  gasto marcado y deshacerlo lo devuelve a su estado normal (hay que volver a marcarlo). `probarPagos()` empieza
+  creando dos filas huérfanas (R999999, M999999) y comprueba que la limpieza las borra y deja las demás.
 
 ## Fase 10 — Gasto con formulario (v2.5)
 Apuntar un gasto escribiéndolo, sin dictar. Decisiones (confirmadas por Pau):

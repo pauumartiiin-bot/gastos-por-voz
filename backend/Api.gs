@@ -43,6 +43,8 @@ function doPost(e) {
     if (!accion) return respuesta_({ ok: false, error: 'entrada' });
 
     const resultado = accion(p, p.t);
+    // Fase 11.3: un gasto borrado no puede dejar marcas en Pagos que heredaría el siguiente con su ID (Pagos.gs).
+    if (resultado.ok !== false && (p.accion === 'eliminar' || p.accion === 'deshacer')) limpiarPagosTrasBorrar_();
     // Las funciones de la v1 no siempre devuelven "ok": se añade aquí.
     return respuesta_(resultado.ok === false ? resultado : Object.assign({ ok: true }, resultado));
   } catch (err) {
