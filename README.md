@@ -33,6 +33,8 @@ con Claude Haiku y la validaba con código. La **v2** (este repositorio) añade:
   le dice a Haiku qué gastos entran. [Cómo funciona](#categorías-la-descripción-también-es-un-prompt).
 - **Renombrar y marcar pagos** (v2.3): cambiar el nombre de un gasto y marcar como pagado cada cargo fijo del
   mes, con el pendiente de pagar en la cabecera. [Cómo funciona](#marcar-pagos-interfaz-optimista).
+- **Ingresos** (v2.4): apuntar la nómina, las comisiones y los extras desde el móvil, con el mes propuesto
+  por una regla. [Cómo funciona](#ingresos-un-formulario-no-un-llm).
 - **Una evaluación reproducible** para elegir modelo y configuración con datos.
 
 > El código de la v1 (interpretación, validación y escritura en la hoja) no está publicado: vive en el
@@ -197,6 +199,24 @@ cargo) y los gastos puntuales ya están pagados al apuntarlos.
 En «Mis registros», además, se puede **cambiar el nombre** de un gasto
 ([`backend/Renombrar.gs`](backend/Renombrar.gs)). En un cargo recurrente, el nombre nuevo sale en todos los meses.
 
+## Ingresos: un formulario, no un LLM
+
+Los gastos se dictan porque son frases libres y variadas. Los ingresos no: son tres o cuatro al mes, siempre
+con la misma forma (nómina, comisiones o extra, importe y fecha). Para eso un **formulario** es más rápido y no
+se equivoca, así que aquí no hay modelo ([`backend/Ingresos.gs`](backend/Ingresos.gs)).
+
+- **El mes lo propone una regla y lo decides tú.** La nómina de finales de octubre paga noviembre: si el
+  dinero entra a partir del día 20, la app propone el mes siguiente. Se puede cambiar.
+- **Menos toques:** en una nómina, el importe es el ingreso previsto de ese mes; el concepto, si se deja vacío,
+  se escribe solo («Nómina octubre»).
+- **Validar en dos capas.** El móvil avisa antes de enviar (una nómina repetida, o comisiones en un mes sin
+  nómina) y el servidor decide: una segunda nómina en el mismo mes se rechaza aunque alguien se salte la interfaz.
+- **Una trampa de la hoja, documentada.** El Resumen usa lo cobrado en cuanto un mes tiene algún ingreso; si
+  solo estuvieran las comisiones, el previsto dejaría de contar. Como llegan el mismo día que la nómina, no hizo
+  falta cambiar la fórmula: basta con el aviso.
+- **Efecto en «Mes»:** al apuntar la nómina, el mes pasa de «previsto» a «cobrado» y, si es la del mes
+  siguiente, ese pasa a ser el mes por defecto. Lo provoca un dato real, no una fecha fija.
+
 ## Decisiones técnicas
 
 | Decisión | Alternativa descartada | Por qué |
@@ -215,6 +235,8 @@ En «Mis registros», además, se puede **cambiar el nombre** de un gasto
 | Casilla de pagado optimista, con vuelta atrás si falla | Esperar a la respuesta del servidor | Respuesta inmediata con un servidor de ~3 s |
 | Caché de meses que enseña lo guardado y a la vez lo actualiza (*stale-while-revalidate*), solo en memoria | Caché pura, o pedir también los meses de al lado por adelantado | La caché pura habría que borrarla en cada guardar, editar o deshacer, y un olvido enseñaría datos viejos; adelantar meses ocuparía la hoja (cada petición escribe `B1`) y retrasaría el mes que quieres ver |
 | «Cambiar nombre» con su propio botón | Un único «Guardar cambios» para nombre, importe y categoría | Cada cambio tiene su Deshacer; con uno solo, Deshacer revertiría solo la última de dos operaciones |
+| Ingresos con formulario y mes propuesto por la regla del día 20 | Dictarlos, o elegir siempre el mes a mano | Son pocos datos y siempre iguales; el prompt de Haiku es de la v1 y la regla acierta en el caso habitual |
+| Corregir un ingreso borrándolo y volviéndolo a apuntar | Un editor de ingresos | Pasa pocas veces; menos código que mantener |
 
 ## Latencia
 
@@ -269,7 +291,7 @@ visto es instantáneo gracias a la caché, que se actualiza por detrás.
 ## Estructura y puesta en marcha
 
 ```
-index.html              página: token, crear (dictar y nueva categoría), mes, mis registros y ajustes
+index.html              página: token, crear (dictar, nueva categoría y nuevo ingreso), mes, mis registros y ajustes
 styles.css              estilos; colores como variables para tema claro y oscuro
 app.js                  lógica del cliente: grabación, vistas, llamadas a la API
 config.js               URL del endpoint de Apps Script (no es secreta)
@@ -283,11 +305,12 @@ backend/Mes.gs          acción mes: lee el mes de la hoja y restaura Resumen!B1
 backend/Categorias.gs   acción categoria: crea una categoría antes de «Otros»
 backend/Renombrar.gs    acción renombrar: cambia el nombre de un gasto
 backend/Pagos.gs        acción pagar: marca o desmarca un cargo fijo en la pestaña Pagos
+backend/Ingresos.gs     acciones ingresos, ingreso y borrar_ingreso: apuntar y borrar ingresos
 docs/                   capturas del README
 ```
 
 1. **Apps Script** (sobre el proyecto de la v1): crea `Api.gs`, `Transcribir.gs`, `Vocabulario.gs`, `Mes.gs`,
-   `Categorias.gs`, `Renombrar.gs` y `Pagos.gs` con el contenido de `backend/` y añade en las propiedades del script `GROQ_API_KEY`, junto a las de la v1
+   `Categorias.gs`, `Renombrar.gs`, `Pagos.gs` e `Ingresos.gs` con el contenido de `backend/` y añade en las propiedades del script `GROQ_API_KEY`, junto a las de la v1
    (`TOKEN`, `ANTHROPIC_API_KEY`). Crea una implementación nueva como aplicación web.
 2. **Frontend:** pon la URL `/exec` de la implementación en `config.js` y publica el repositorio con GitHub Pages.
 3. **iPhone:** abre la página en Safari → Compartir → *Añadir a la pantalla de inicio*, y pega el token la
