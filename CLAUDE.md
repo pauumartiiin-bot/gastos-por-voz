@@ -242,7 +242,7 @@ marcha. El código de la v1 no está publicado: se explica en una línea. **Con 
   Probado en el iPhone (7.3.2): 4 de 4 dictados seguidos sin cerrar la app; un toque sin hablar → «No se ha
   entendido nada en el audio» con prob. sin voz 0,89. Culpable confirmado: Web Audio abierto durante la grabación.
 
-**Fase 8 — Renombrar gastos y marcar pagos (v2.3) — en curso.** Detalle en la sección «Fase 8».
+**Fase 8 — Renombrar gastos y marcar pagos (v2.3) — hecha.** Detalle en la sección «Fase 8».
 - **8.1 — hecha.** Renombrar gastos: `backend/Renombrar.gs` + línea en `Api.gs` + campo «Nombre» en Mis registros.
   `probarRenombrar()` en Apps Script: validaciones 9/9, renombrado real de R001 y limpieza ✅, `ULTIMO` intacto.
   En el iPhone (R5–R8 OK): renombrar, Deshacer, y el nombre nuevo de un recurrente sale en «Mes» y en el Resumen.
@@ -250,8 +250,13 @@ marcha. El código de la v1 no está publicado: se explica en una línea. **Con 
   línea en `Api.gs` y `probarPagos()`. En Apps Script: validaciones 4/4, marcar dos veces → 1 fila, el pendiente baja
   justo el importe (Máster, 180 €) y vuelve al desmarcar; limpieza ✅. Pendiente de noviembre 853 €, no 939: el R004
   (Aina, 86 €) ya no está en Recurrentes tras la migración de la 7b → los totales de `MES_CASOS_` (7.3) suponían el R004.
-- **8.3 — en curso.** Interfaz de pagos: casilla en cada cargo fijo, cabecera con «Pendiente de pagar» y memoria del mes.
-  `?v=` 7.5.0.
+  `MES_CASOS_` actualizado: `probarMes()` dio 1.153 · 1.029 · 963 € (86 € menos cada mes) con `cuadra` ✅ y las reglas
+  exactas de cada mes; pendiente de pagar 853 · 729 · 663.
+- **8.3 — hecha.** Interfaz de pagos: casilla en cada cargo fijo, cabecera con «Pendiente de pagar» y memoria del mes.
+  `?v=` 7.5.0. Probado en el iPhone (Q1–Q11 OK): marcar tocando el texto, fila en «Pagos» y borrada al desmarcar,
+  tres toques rápidos → 1 fila, cada mes con sus pagos, memoria del mes y vuelta al mes por defecto al reabrir.
+  Sin conexión, la casilla vuelve atrás con el aviso «… Load failed» (texto en inglés de Safari).
+  Propuesta sin implementar: traducir los fallos de red a «Sin conexión. Inténtalo de nuevo.» en `api()`.
 
 ## Fase 8 — Renombrar gastos y marcar pagos (v2.3)
 
@@ -440,6 +445,8 @@ Respuesta (además de `ok: true`):
 | Noviembre 2026 | 1.239 € | Todo activo: Klarna (último mes), T Jove y Creatina |
 | Enero 2027 | 1.115 € | Última cuota de Shein; sin Klarna ni T Jove; con Creatina |
 | Febrero 2027 | 1.049 € | Sin Shein ni Creatina; vuelve T Jove (cada 3 meses) |
+
+  Desde la 8.2 (sin el R004 de 86 €, migrado a la categoría «Aina»): 1.153 · 1.029 · 963 €.
 
   Además: tras la prueba, `Resumen!B1` sigue en el mes que había (comprueba la restauración). En el iPhone,
   noviembre muestra lo mismo que el Resumen.
