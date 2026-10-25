@@ -303,7 +303,8 @@ de Madrid; la v1 usa `CONFIG.ZONA` para «Registrado»), así que «hoy» y el m
 (Archivo → Configuración). Z1–Z6 OK salvo Z3 (`probarMes` 1/3), que no era de la zona: las fechas se guardan sin hora y
 no se movieron. Eran datos reales nuevos (R014, R016, R017: 81 €/mes; M001: 28 € en noviembre).
 Arreglo de raíz en `probarMes`: el total pasa a ser una referencia (⚠️ si no coincide, nunca ❌); fallar solo es
-no cuadrar o que falte o sobre una regla. Referencias actualizadas a 1.234 · 1.110 · 1.044 €. Cosmético: las marcas
+no cuadrar o que falte o sobre una regla. Referencias actualizadas a 1.234 · 1.110 · 1.044 €. En Apps Script (Z3a–Z3f OK): 3/3 ✅, noviembre con ⚠️ 1.262 (por M001, 28 €), enero y febrero sin aviso, y «Mes» en la app
+con el mismo 1.262 €. Cosmético: las marcas
 `Marcado_el` anteriores al cambio (p. ej. M001, 11:48) quedan con 8 h de menos.
 
 ## Fase 11 — Gastos puntuales pagados o pendientes (v2.6)
