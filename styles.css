@@ -373,6 +373,8 @@ input[type="checkbox"]:checked, input[type="radio"]:checked {
 
 .editor { display: flex; flex-direction: column; gap: 14px; padding: 4px 16px 16px; border-top: 1px solid var(--borde); padding-top: 16px; }
 .editor fieldset { margin: 0; padding: 0; border: none; display: flex; flex-direction: column; gap: 10px; }
+.editor > .btn-suave { flex: none; }
+.editor .separador { width: 100%; margin: 2px 0; border: none; border-top: 1px solid var(--borde); }
 .editor legend { padding: 0; margin-bottom: 8px; font-size: 14px; font-weight: 600; color: var(--secundario); }
 .opcion { display: flex; align-items: center; gap: 10px; font-size: 15px; }
 .opcion small { color: var(--secundario); }
