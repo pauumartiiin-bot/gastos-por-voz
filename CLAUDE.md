@@ -246,8 +246,12 @@ marcha. El código de la v1 no está publicado: se explica en una línea. **Con 
 - **8.1 — hecha.** Renombrar gastos: `backend/Renombrar.gs` + línea en `Api.gs` + campo «Nombre» en Mis registros.
   `probarRenombrar()` en Apps Script: validaciones 9/9, renombrado real de R001 y limpieza ✅, `ULTIMO` intacto.
   En el iPhone (R5–R8 OK): renombrar, Deshacer, y el nombre nuevo de un recurrente sale en «Mes» y en el Resumen.
-- **8.2 — en curso.** Marcar pagos (backend): `backend/Pagos.gs`, `Mes.gs` devuelve `pagado`/`pagado_el` y `pendiente`,
-  línea en `Api.gs` y `probarPagos()`.
+- **8.2 — hecha.** Marcar pagos (backend): `backend/Pagos.gs`, `Mes.gs` devuelve `pagado`/`pagado_el` y `pendiente`,
+  línea en `Api.gs` y `probarPagos()`. En Apps Script: validaciones 4/4, marcar dos veces → 1 fila, el pendiente baja
+  justo el importe (Máster, 180 €) y vuelve al desmarcar; limpieza ✅. Pendiente de noviembre 853 €, no 939: el R004
+  (Aina, 86 €) ya no está en Recurrentes tras la migración de la 7b → los totales de `MES_CASOS_` (7.3) suponían el R004.
+- **8.3 — en curso.** Interfaz de pagos: casilla en cada cargo fijo, cabecera con «Pendiente de pagar» y memoria del mes.
+  `?v=` 7.5.0.
 
 ## Fase 8 — Renombrar gastos y marcar pagos (v2.3)
 
@@ -286,10 +290,13 @@ Backend (8.2):
   en noviembre, marcar dos veces (1 fila), comprobar que el pendiente baja justo el importe, desmarcar dos veces y
   volver al pendiente inicial. Limpieza en `finally`; si la pestaña Pagos la creó la prueba, la borra.
 
-Interfaz (8.3, pendiente): casilla en cada cargo fijo de «Mes» (marcado optimista: la línea se atenúa con ✓ y el
-pendiente se actualiza al instante; si falla, vuelve atrás y avisa); cabecera Ingreso · Previsto · Pendiente de
-pagar y el Restante grande debajo; **memoria del mes** mientras la app está abierta (al volver a la pestaña sigue en
-el mes que mirabas, con datos recargados; al abrir la app, el mes por defecto). `?v=` 7.5.0.
+Interfaz (8.3): casilla en cada cargo fijo de «Mes»; toda la línea es un `<label>`, así que se marca tocando cualquier
+parte. Marcado optimista: la línea se atenúa y el pendiente cambia al instante; si el servidor falla, vuelve atrás y
+avisa con una notificación de error (sin Deshacer: desmarcar es volver a tocar). Mientras su petición está en vuelo la
+casilla se desactiva (dos toques rápidos podrían llegar desordenados) y, mientras se carga otro mes, no se puede tocar
+ninguna. Cabecera: Ingreso · Previsto · Pendiente de pagar y el Restante grande debajo. **Memoria del mes** mientras la
+app está abierta: al volver a la pestaña se recarga el mes que mirabas (`mesDestino`); al abrir la app, el mes por
+defecto. `?v=` 7.5.0.
 
 ## Fase 7b — Crear categorías (v2.2)
 
