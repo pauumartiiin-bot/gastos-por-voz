@@ -152,6 +152,13 @@ para una consulta de solo lectura a cambio de no duplicar la lógica. El otro pr
 respuestas desordenadas, solo cuenta la última. La app tampoco hace gestos de web: ni zoom por doble toque
 o pellizco, ni rebote.
 
+**Meses ya vistos, al instante.** Mientras la app está abierta, cada mes que llega se guarda en memoria. Al
+volver a él se pinta enseguida, con «Actualizando…», y se pide igualmente al servidor: si algo ha cambiado (un
+gasto dictado, por ejemplo), aparece a los pocos segundos. Así la caché nunca se queda vieja más de una petición
+y no hay que acordarse de borrarla en cada acción. El caso delicado era una carrera: si marcas un pago mientras
+la actualización viene de camino, esa respuesta es una foto anterior a tu marca y la desharía. Un contador de
+cambios por mes la detecta y, en ese caso, manda lo guardado.
+
 ## Categorías: la descripción también es un prompt
 
 Desde la pestaña «Crear» se puede añadir una categoría con **nombre y descripción**
@@ -206,6 +213,7 @@ En «Mis registros», además, se puede **cambiar el nombre** de un gasto
 | Descripción obligatoria al crear una categoría | Solo el nombre | Haiku la usa para clasificar los dictados |
 | Pagos en una pestaña propia, con clave mes + ID | Una columna en los cargos, o la fecha como clave | No toca las fórmulas y resuelve los cargos semanales, que no tienen fecha |
 | Casilla de pagado optimista, con vuelta atrás si falla | Esperar a la respuesta del servidor | Respuesta inmediata con un servidor de ~3 s |
+| Caché de meses que enseña lo guardado y a la vez lo actualiza (*stale-while-revalidate*), solo en memoria | Caché pura, o pedir también los meses de al lado por adelantado | La caché pura habría que borrarla en cada guardar, editar o deshacer, y un olvido enseñaría datos viejos; adelantar meses ocuparía la hoja (cada petición escribe `B1`) y retrasaría el mes que quieres ver |
 | «Cambiar nombre» con su propio botón | Un único «Guardar cambios» para nombre, importe y categoría | Cada cambio tiene su Deshacer; con uno solo, Deshacer revertiría solo la última de dos operaciones |
 
 ## Latencia
@@ -222,7 +230,8 @@ Un dictado tarda **~6–7 s** de principio a fin:
 El modelo de voz no es el cuello de botella; Apps Script sí. La mejora más directa sería cachear el
 contexto de la hoja (en una prueba bajó de ~720 ms a 47 ms).
 
-En la pestaña «Mes», cambiar de mes tarda ~3 s (detalle en [su sección](#pestaña-mes-la-hoja-como-única-fuente-de-verdad)).
+En la pestaña «Mes», un mes nuevo tarda ~3 s (detalle en [su sección](#pestaña-mes-la-hoja-como-única-fuente-de-verdad)); volver a uno ya
+visto es instantáneo gracias a la caché, que se actualiza por detrás.
 
 ## Seguridad
 
@@ -239,7 +248,7 @@ En la pestaña «Mes», cambiar de mes tarda ~3 s (detalle en [su sección](#pes
 - **Ajustar el umbral de silencio** con más datos. La app lo sigue midiendo en el modo pruebas.
 - **Bajar la latencia** cacheando el contexto de la hoja.
 - **Ampliar la evaluación** con otra voz y varias pasadas por configuración.
-- **Cambiar de mes en ~3 s.** Si con el uso se hace lento, guardar en el móvil los meses ya vistos.
+- **La primera visita a cada mes tarda ~3 s.** Los ya vistos salen al instante, pero la caché se borra al cerrar la app.
 - **El Resumen tiene sitio para 12 categorías.** La app respeta el límite y avisa, pero ampliarlo es trabajo en la hoja.
 - **Los pagos son informativos.** Marcar un cargo no cambia el restante; solo el pendiente de pagar.
 

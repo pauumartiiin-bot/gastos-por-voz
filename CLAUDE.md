@@ -256,7 +256,10 @@ marcha. El código de la v1 no está publicado: se explica en una línea. **Con 
   tres toques rápidos → 1 fila, cada mes con sus pagos, memoria del mes y vuelta al mes por defecto al reabrir.
   Sin conexión, la casilla vuelve atrás con el aviso «… Load failed» (texto en inglés de Safari).
   Fallos de red: se deja el «Load failed» de Safari (decidido: se entiende).
-- **8.4 — en curso.** Caché de meses ya vistos (*stale-while-revalidate*), solo en `app.js`. `?v=` 7.6.0.
+- **8.4 — hecha.** Caché de meses ya vistos (*stale-while-revalidate*), solo en `app.js`. `?v=` 7.6.0.
+  Probado en el iPhone (C1–C11 OK): mes nuevo ~3 s; ya visto, al instante con «Actualizando…» y luego «del servidor»;
+  toques rápidos; marcar con una actualización en camino no se pisa; un gasto dictado aparece solo a los ~3 s; caché
+  vacía al reabrir; sin conexión, se queda lo guardado con «No se ha podido actualizar». README: fila en Decisiones.
 
 ## Fase 8 — Renombrar gastos y marcar pagos (v2.3)
 
