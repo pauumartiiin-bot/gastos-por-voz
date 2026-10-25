@@ -1,5 +1,5 @@
-// Fases 7–9: «Crear» (dictar → vista previa → guardar o corregir, nueva categoría y nuevo ingreso), «Mes» (con pagos)
-// y «Mis registros» (también los ingresos).
+// Fases 7–10: «Crear» (dictar → vista previa → guardar o corregir, y nuevo gasto, ingreso o categoría con formulario),
+// «Mes» (con pagos) y «Mis registros» (también los ingresos).
 
 const CLAVE_TOKEN = 'gastos_token';
 const CLAVE_TEMA = 'gastos_tema';
@@ -390,6 +390,100 @@ async function crearCategoria(e) {
   } finally {
     btn.disabled = false;
     btn.textContent = 'Crear categoría';
+  }
+}
+
+/* ---------- Nuevo gasto con formulario (fase 10) ---------- */
+
+// Monta el mismo JSON que devuelve Haiku al dictar y lo guarda con «guardar» de la v1: la validación, el ID
+// y el Deshacer son los de siempre. Al validador le da igual quién propone: el modelo o un formulario.
+
+function estadoGasto(mensaje, esError = false) {
+  $('estado-gasto').textContent = mensaje;
+  $('estado-gasto').classList.toggle('error', esError);
+}
+
+// Cada vez que se abre, las categorías de la hoja (puede haber una nueva) y la fecha de hoy.
+async function abrirGasto() {
+  if (!$('nuevo-gasto').open) return;
+  const btn = $('guardar-gasto');
+  btn.disabled = true;
+  estadoGasto('Cargando…');
+  try {
+    const r = await api('registros');
+    const select = $('gasto-categoria');
+    const elegida = select.value;
+    const vacia = crear('option', null, 'Elige una categoría');
+    vacia.value = '';
+    select.replaceChildren(vacia, ...r.categorias.map((c) => {
+      const o = crear('option', null, c);
+      o.value = c;
+      return o;
+    }));
+    if (r.categorias.includes(elegida)) select.value = elegida;
+    if (!$('gasto-fecha').value) $('gasto-fecha').value = r.hoy;
+    actualizarGasto();
+    estadoGasto('');
+    btn.disabled = false;
+  } catch (err) {
+    estadoGasto(err.message, true);
+  }
+}
+
+function frecuenciaGasto() {
+  return document.querySelector('input[name="gasto-frecuencia"]:checked').value;
+}
+
+// Los campos de recurrente solo se ven cuando tocan.
+function actualizarGasto() {
+  const f = frecuenciaGasto();
+  $('gasto-fecha-texto').textContent = f === 'puntual' ? 'Día del gasto' : 'Primer cargo';
+  mostrar('campo-gasto-cada', f === 'mensual');
+  mostrar('campo-gasto-fin', f !== 'puntual');
+}
+
+async function guardarGasto(e) {
+  e.preventDefault();
+  const concepto = $('gasto-concepto').value.replace(/\s+/g, ' ').trim();
+  const importe = Math.round(Number($('gasto-importe').value.replace(',', '.')) * 100) / 100;
+  const categoria = $('gasto-categoria').value;
+  const fecha = $('gasto-fecha').value;
+  // Aviso rápido antes de enviar; quien decide de verdad es la validación de la v1.
+  if (!concepto) return estadoGasto('Escribe el concepto.', true);
+  if (!(importe > 0)) return estadoGasto('Escribe un importe válido.', true);
+  if (!categoria) return estadoGasto('Elige una categoría.', true);
+  if (!fecha) return estadoGasto('Pon la fecha.', true);
+
+  const frecuencia = frecuenciaGasto();
+  const recurrente = frecuencia !== 'puntual';
+  const interpretacion = {
+    concepto, importe, categoria, frecuencia,
+    cada_meses: frecuencia === 'mensual' ? Number($('gasto-cada').value) : null,
+    tipo: recurrente ? 'fijo' : null,
+    fecha_referencia: fecha,
+    dia_de_cobro: null, // la v1 usa el día de la fecha
+    fecha_fin: recurrente && $('gasto-fin').value ? $('gasto-fin').value : null,
+    reemplaza_id: null, supuestos: [], preguntas: []
+  };
+  // La v1 da prioridad a una categoría nombrada en la frase: aquí solo se nombra la elegida,
+  // para que un concepto como «Regalo Aina» no la cambie.
+  const frase = '(formulario) categoría ' + categoria;
+
+  const btn = $('guardar-gasto');
+  btn.disabled = true;
+  btn.textContent = 'Guardando…';
+  estadoGasto('');
+  try {
+    const r = await api('guardar', { interpretacion, frase });
+    $('form-gasto').reset();
+    actualizarGasto();
+    $('nuevo-gasto').open = false;
+    notificar('✓ ' + r.datos.concepto + ' · ' + euros(r.datos.importe) + ' guardado en ' + r.hoja, true);
+  } catch (err) {
+    estadoGasto(err.message, true); // lo escrito se conserva para corregirlo
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Guardar gasto';
   }
 }
 
@@ -1053,6 +1147,10 @@ $('modo-pruebas').addEventListener('change', (e) => {
 });
 
 $('form-categoria').addEventListener('submit', crearCategoria);
+
+$('nuevo-gasto').addEventListener('toggle', abrirGasto);
+$('form-gasto').addEventListener('submit', guardarGasto);
+$('form-gasto').addEventListener('change', actualizarGasto);
 
 $('nuevo-ingreso').addEventListener('toggle', abrirIngreso);
 $('form-ingreso').addEventListener('submit', apuntarIngreso);
