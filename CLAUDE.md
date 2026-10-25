@@ -266,7 +266,10 @@ marcha. El código de la v1 no está publicado: se explica en una línea. **Con 
   vacía al reabrir; sin conexión, se queda lo guardado con «No se ha podido actualizar». README: fila en Decisiones.
 
 **Fase 9 — Ingresos desde la app (v2.4) — en curso.** Detalle en la sección «Fase 9».
-- **9.1 — en curso.** Backend: `backend/Ingresos.gs` + tres líneas en `Api.gs` + `probarIngresos()`.
+- **9.1 — hecha.** Backend: `backend/Ingresos.gs` + tres líneas en `Api.gs` + `probarIngresos()`. En Apps Script:
+  validaciones 14/14; nómina de prueba en el último mes (I001), «Mes» la cuenta como cobrada, sale en la lista, otra
+  nómina rechazada, borrar y Deshacer de la v1 con la fecha intacta (2026-10-25); limpieza ✅.
+- **9.2 — en curso.** Interfaz: tarjeta «+ Nuevo ingreso» en «Crear» y sección «Ingresos» en «Mis registros». `?v=` 7.7.0.
 
 ## Fase 9 — Ingresos desde la app (v2.4)
 
@@ -300,8 +303,16 @@ nómina del mes siguiente, cambia el mes por defecto.
   «Mes» la cuenta como cobrada, sale en la lista, no deja apuntar otra), borrarla y el Deshacer de verdad
   (`deshacer` de la v1 con el TOKEN de las propiedades). Limpieza en `finally` (Ingresos y `ULTIMO` como estaban).
 
-### 9.2 Interfaz (pendiente)
-Tarjeta «+ Nuevo ingreso» en «Crear» y sección «Ingresos» en «Mis registros». `?v=` 7.7.0.
+### 9.2 Interfaz
+- **«+ Nuevo ingreso»** (`<details>` en «Crear», debajo de «+ Nueva categoría»): al abrirse pide `ingresos` (siempre
+  fresco). Tipo con tres botones (radio invisible encima del texto), importe, «Día en que entra» (hoy) y «Mes al que
+  va» (`proponerMes`: día ≥ 20 → mes siguiente; si eliges el mes a mano, no se vuelve a proponer hasta cambiar la
+  fecha). En nómina, el importe es el previsto del mes mientras no lo escribas (`importeAuto`). El concepto vacío
+  enseña de ejemplo el que pondrá el servidor. Avisos: comisiones o extra en un mes sin nómina, y nómina en un mes
+  que ya la tiene. Al apuntar: notificación con Deshacer y la tarjeta se vacía y se pliega; si el servidor rechaza, su
+  mensaje sale dentro sin borrar lo escrito.
+- **«Mis registros»**: sección «Ingresos» (últimos 20; `registros` e `ingresos` se piden a la vez). Chips: fecha,
+  tipo y mes. Al desplegar: «Eliminar» (dos toques + Deshacer). Las tres listas comparten `tarjetaLista`.
 
 ## Fase 8 — Renombrar gastos y marcar pagos (v2.3)
 

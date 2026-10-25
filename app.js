@@ -1,4 +1,5 @@
-// Fases 7–8: «Crear» (dictar → vista previa → guardar o corregir, y nueva categoría), «Mes» (con pagos) y «Mis registros».
+// Fases 7–9: «Crear» (dictar → vista previa → guardar o corregir, nueva categoría y nuevo ingreso), «Mes» (con pagos)
+// y «Mis registros» (también los ingresos).
 
 const CLAVE_TOKEN = 'gastos_token';
 const CLAVE_TEMA = 'gastos_tema';
@@ -392,6 +393,112 @@ async function crearCategoria(e) {
   }
 }
 
+/* ---------- Nuevo ingreso (fase 9) ---------- */
+
+let datosIngresos = null;    // respuesta de "ingresos": { hoy, meses: [{ etiqueta, inicio, previsto, nomina }], ingresos }
+let importeAuto = true;      // el importe lo puso la app (el previsto de la nómina): puede cambiarlo sola
+let mesAMano = false;        // el mes lo eligió la persona: al abrir la tarjeta no se vuelve a proponer
+
+const NOMBRES_MES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre',
+  'octubre', 'noviembre', 'diciembre'];
+
+function estadoIngreso(mensaje, esError = false) {
+  $('estado-ingreso').textContent = mensaje;
+  $('estado-ingreso').classList.toggle('error', esError);
+}
+
+// Cada vez que se abre, datos frescos: la nómina de un mes puede haberse apuntado o borrado mientras tanto.
+async function abrirIngreso() {
+  if (!$('nuevo-ingreso').open) return;
+  const btn = $('apuntar-ingreso');
+  btn.disabled = true;
+  estadoIngreso('Cargando…');
+  try {
+    datosIngresos = await api('ingresos');
+    const select = $('ingreso-mes');
+    const elegido = select.value;
+    select.replaceChildren(...datosIngresos.meses.map((m) => {
+      const o = crear('option', null, m.etiqueta);
+      o.value = m.etiqueta;
+      return o;
+    }));
+    if (!$('ingreso-fecha').value) $('ingreso-fecha').value = datosIngresos.hoy;
+    if (mesAMano && datosIngresos.meses.some((m) => m.etiqueta === elegido)) select.value = elegido;
+    else proponerMes();
+    actualizarIngreso();
+    estadoIngreso('');
+    btn.disabled = false;
+  } catch (err) {
+    estadoIngreso(err.message, true);
+  }
+}
+
+// Regla de la Guía de la hoja: si el dinero entra a partir del día 20, va al mes siguiente. Propone; tú decides.
+function proponerMes() {
+  const f = $('ingreso-fecha').value;
+  if (!datosIngresos || !f) return;
+  let [a, m, d] = f.split('-').map(Number);
+  if (d >= 20) [a, m] = m === 12 ? [a + 1, 1] : [a, m + 1];
+  const inicio = a + '-' + String(m).padStart(2, '0') + '-01';
+  const mes = datosIngresos.meses.find((x) => x.inicio === inicio);
+  if (mes) $('ingreso-mes').value = mes.etiqueta;
+  mesAMano = false;
+}
+
+function tipoIngreso() {
+  return document.querySelector('input[name="ingreso-tipo"]:checked').value;
+}
+
+// Importe propuesto, concepto por defecto y aviso, según el tipo, la fecha y el mes elegidos.
+function actualizarIngreso() {
+  if (!datosIngresos) return;
+  const tipo = tipoIngreso();
+  const mes = datosIngresos.meses.find((m) => m.etiqueta === $('ingreso-mes').value);
+  const importe = $('ingreso-importe');
+  if (importeAuto) importe.value = tipo === 'nómina' && mes ? String(mes.previsto).replace('.', ',') : '';
+
+  const f = $('ingreso-fecha').value;
+  const nombre = tipo.charAt(0).toUpperCase() + tipo.slice(1);
+  $('ingreso-concepto').placeholder = f ? nombre + ' ' + NOMBRES_MES[Number(f.slice(5, 7)) - 1] : nombre;
+
+  // El Resumen usa lo cobrado en cuanto un mes tiene algún ingreso: sin la nómina, el previsto deja de contar.
+  let aviso = '';
+  if (mes && tipo === 'nómina' && mes.nomina) aviso = 'Este mes ya tiene una nómina apuntada.';
+  if (mes && tipo !== 'nómina' && !mes.nomina) {
+    aviso = 'Este mes aún no tiene la nómina: hasta que la apuntes, el ingreso del mes será solo este importe.';
+  }
+  $('aviso-ingreso').textContent = aviso;
+  mostrar('aviso-ingreso', !!aviso);
+}
+
+async function apuntarIngreso(e) {
+  e.preventDefault();
+  const importe = Math.round(Number($('ingreso-importe').value.replace(',', '.')) * 100) / 100;
+  const fecha = $('ingreso-fecha').value;
+  // Aviso rápido antes de enviar; quien decide de verdad es el servidor.
+  if (!(importe > 0)) return estadoIngreso('Escribe un importe válido.', true);
+  if (!fecha) return estadoIngreso('Pon el día en que entra.', true);
+
+  const btn = $('apuntar-ingreso');
+  btn.disabled = true;
+  btn.textContent = 'Apuntando…';
+  estadoIngreso('');
+  try {
+    const r = await api('ingreso', { tipo: tipoIngreso(), importe, fecha, mes: $('ingreso-mes').value,
+      concepto: $('ingreso-concepto').value.trim() });
+    $('form-ingreso').reset();
+    importeAuto = true;
+    mesAMano = false;
+    $('nuevo-ingreso').open = false;
+    notificar('✓ ' + r.desc, true);
+  } catch (err) {
+    estadoIngreso(err.message, true); // lo escrito se conserva para corregirlo
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Apuntar ingreso';
+  }
+}
+
 /* ---------- Mes (fase 7), casillas de pagado (8.3) y caché de meses (8.4) ---------- */
 
 let mesDatos = null;    // mes en pantalla (una respuesta de "mes", del servidor o de la caché)
@@ -642,7 +749,7 @@ function barraPresupuesto(k) {
 
 /* ---------- Mis registros ---------- */
 
-let registros = null; // última respuesta de "registros": { recurrentes, movimientos, categorias, hoy }
+let registros = null; // "registros" ({ recurrentes, movimientos, categorias, hoy }) + los ingresos de "ingresos"
 let abierto = null;   // id del registro desplegado (solo uno a la vez)
 
 function estadoRegistros(mensaje, esError = false) {
@@ -653,7 +760,8 @@ function estadoRegistros(mensaje, esError = false) {
 async function cargarRegistros() {
   estadoRegistros('Cargando…');
   try {
-    registros = await api('registros');
+    const [r, i] = await Promise.all([api('registros'), api('ingresos')]);
+    registros = Object.assign(r, { ingresos: i.ingresos });
     estadoRegistros('');
     pintarRegistros();
   } catch (err) {
@@ -664,6 +772,9 @@ async function cargarRegistros() {
 function pintarRegistros() {
   pintarLista('lista-recurrentes', registros.recurrentes, 'Recurrentes', 'No tienes gastos recurrentes activos.');
   pintarLista('lista-movimientos', registros.movimientos, 'Movimientos', 'Todavía no hay gastos puntuales.');
+  $('lista-ingresos').replaceChildren(...(registros.ingresos.length
+    ? registros.ingresos.map(tarjetaIngreso)
+    : [crear('p', 'vacio', 'Todavía no hay ingresos apuntados.')]));
 }
 
 function pintarLista(id, items, hoja, textoVacio) {
@@ -674,30 +785,50 @@ function pintarLista(id, items, hoja, textoVacio) {
 
 function tarjetaRegistro(r, hoja) {
   const esRec = hoja === 'Recurrentes';
-  const estaAbierto = abierto === r.id;
+  const chips = [];
+  if (esRec) chips.push(crear('span', 'chip chip-prim', textoFrecuencia({ frecuencia: r.frecuencia, cada_meses: r.cada_meses })));
+  else chips.push(crear('span', 'chip', fecha(r.fecha)));
+  if (r.categoria) chips.push(crear('span', 'chip chip-acento', r.categoria));
+  if (esRec && r.tipo === 'presupuesto') chips.push(crear('span', 'chip', 'Presupuesto'));
+  if (esRec) chips.push(crear('span', 'chip', 'Desde ' + fecha(r.inicio)));
+  if (esRec && r.fin) chips.push(crear('span', 'chip', 'Hasta ' + fecha(r.fin)));
+  return tarjetaLista(r.id, r.concepto, r.importe, chips, () => editorRegistro(r, hoja));
+}
+
+// Ingreso (fase 9): se ve con su tipo y el mes al que va; para corregirlo, se borra y se vuelve a apuntar.
+function tarjetaIngreso(i) {
+  const chips = [crear('span', 'chip', fecha(i.fecha)), crear('span', 'chip chip-prim', i.tipo),
+    crear('span', 'chip chip-acento', partirEtiqueta(i.mes)[0])];
+  return tarjetaLista(i.id, i.concepto, i.importe, chips, () => {
+    const editor = crear('div', 'editor');
+    const eliminar = crear('button', 'btn-peligro', 'Eliminar');
+    eliminar.type = 'button';
+    dosToques(eliminar, () => ejecutarRegistro(eliminar, 'Eliminando…', () => api('borrar_ingreso', { id: i.id })));
+    editor.append(crear('p', 'aviso', 'Para corregirlo, elimínalo y vuelve a apuntarlo en «Crear».'), eliminar);
+    return editor;
+  });
+}
+
+// Tarjeta de una lista: la cabecera (concepto, importe y chips) despliega su editor. Solo una abierta a la vez.
+function tarjetaLista(id, concepto, importe, chips, crearEditor) {
+  const estaAbierto = abierto === id;
   const tarjeta = crear('article', 'registro' + (estaAbierto ? ' abierto' : ''));
 
   const cabecera = crear('button', 'registro-cabecera');
   cabecera.type = 'button';
   cabecera.setAttribute('aria-expanded', String(estaAbierto));
   const fila = crear('span', 'registro-fila');
-  fila.append(crear('span', 'registro-concepto', r.concepto), crear('span', 'registro-importe', euros(r.importe)));
-
+  fila.append(crear('span', 'registro-concepto', concepto), crear('span', 'registro-importe', euros(importe)));
   const meta = crear('span', 'registro-meta');
-  if (esRec) meta.append(crear('span', 'chip chip-prim', textoFrecuencia({ frecuencia: r.frecuencia, cada_meses: r.cada_meses })));
-  else meta.append(crear('span', 'chip', fecha(r.fecha)));
-  if (r.categoria) meta.append(crear('span', 'chip chip-acento', r.categoria));
-  if (esRec && r.tipo === 'presupuesto') meta.append(crear('span', 'chip', 'Presupuesto'));
-  if (esRec) meta.append(crear('span', 'chip', 'Desde ' + fecha(r.inicio)));
-  if (esRec && r.fin) meta.append(crear('span', 'chip', 'Hasta ' + fecha(r.fin)));
+  meta.append(...chips);
 
   cabecera.append(fila, meta);
   cabecera.addEventListener('click', () => {
-    abierto = estaAbierto ? null : r.id;
+    abierto = estaAbierto ? null : id;
     pintarRegistros();
   });
   tarjeta.append(cabecera);
-  if (estaAbierto) tarjeta.append(editorRegistro(r, hoja));
+  if (estaAbierto) tarjeta.append(crearEditor());
   return tarjeta;
 }
 
@@ -922,6 +1053,15 @@ $('modo-pruebas').addEventListener('change', (e) => {
 });
 
 $('form-categoria').addEventListener('submit', crearCategoria);
+
+$('nuevo-ingreso').addEventListener('toggle', abrirIngreso);
+$('form-ingreso').addEventListener('submit', apuntarIngreso);
+$('form-ingreso').addEventListener('change', (e) => {
+  if (e.target.id === 'ingreso-fecha') proponerMes();
+  if (e.target.id === 'ingreso-mes') mesAMano = true;
+  actualizarIngreso();
+});
+$('ingreso-importe').addEventListener('input', () => { importeAuto = $('ingreso-importe').value === ''; });
 
 $('mes-anterior').addEventListener('click', () => moverMes(-1));
 $('mes-siguiente').addEventListener('click', () => moverMes(1));

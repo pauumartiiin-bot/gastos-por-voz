@@ -30,7 +30,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800&display=swap">
   <!-- ?v= obliga al navegador a descargar los archivos nuevos en cada versión -->
-  <link rel="stylesheet" href="styles.css?v=7.6.0">
+  <link rel="stylesheet" href="styles.css?v=7.7.0">
 </head>
 <body>
   <div class="halo halo-a" aria-hidden="true"></div>
@@ -102,6 +102,34 @@
         </form>
       </details>
 
+      <!-- Nuevo ingreso (fase 9): plantilla, no voz. El mes lo propone la regla del día 20 -->
+      <details id="nuevo-ingreso" class="tarjeta plegable">
+        <summary>+ Nuevo ingreso</summary>
+        <form id="form-ingreso" class="form-categoria" novalidate>
+          <fieldset class="segmentado" aria-label="Tipo de ingreso">
+            <label><input type="radio" name="ingreso-tipo" value="nómina" checked><span>Nómina</span></label>
+            <label><input type="radio" name="ingreso-tipo" value="comisiones"><span>Comisiones</span></label>
+            <label><input type="radio" name="ingreso-tipo" value="extra"><span>Extra</span></label>
+          </fieldset>
+          <label class="campo" for="ingreso-importe">Importe (€)
+            <input id="ingreso-importe" type="text" inputmode="decimal" autocomplete="off">
+          </label>
+          <label class="campo" for="ingreso-fecha">Día en que entra
+            <input id="ingreso-fecha" type="date">
+          </label>
+          <label class="campo" for="ingreso-mes">Mes al que va
+            <select id="ingreso-mes"></select>
+            <small>Si entra a partir del día 20, va al mes siguiente. Puedes cambiarlo.</small>
+          </label>
+          <label class="campo" for="ingreso-concepto">Concepto (opcional)
+            <input id="ingreso-concepto" type="text" maxlength="60" autocomplete="off" autocapitalize="sentences">
+          </label>
+          <p id="aviso-ingreso" class="aviso aviso-pregunta oculto"></p>
+          <p id="estado-ingreso" class="estado" role="status" aria-live="polite"></p>
+          <button id="apuntar-ingreso" class="btn-primario" type="submit">Apuntar ingreso</button>
+        </form>
+      </details>
+
       <!-- Modo pruebas: parámetros y medidas -->
       <section id="pruebas" class="tarjeta pruebas oculto" aria-labelledby="titulo-pruebas">
         <h2 id="titulo-pruebas">Modo pruebas</h2>
@@ -164,6 +192,11 @@
         <div id="lista-movimientos" class="lista"></div>
       </section>
 
+      <section class="seccion" aria-labelledby="titulo-ingresos">
+        <h2 id="titulo-ingresos" class="titulo-seccion">Ingresos</h2>
+        <div id="lista-ingresos" class="lista"></div>
+      </section>
+
       <div class="tarjeta" aria-label="Ajustes">
         <h2>Ajustes</h2>
         <label class="ajuste" for="modo-pruebas">Modo pruebas <input type="checkbox" id="modo-pruebas"></label>
@@ -193,7 +226,7 @@
     </button>
   </nav>
 
-  <script src="config.js?v=7.6.0"></script>
-  <script src="app.js?v=7.6.0"></script>
+  <script src="config.js?v=7.7.0"></script>
+  <script src="app.js?v=7.7.0"></script>
 </body>
 </html>

@@ -411,6 +411,35 @@ input[type="checkbox"]:checked, input[type="radio"]:checked {
 #estado-categoria { text-align: left; }
 #estado-categoria:empty { display: none; }
 
+/* ---------- Nuevo ingreso (fase 9) ---------- */
+
+/* Tipo: tres botones en una fila; el radio queda invisible encima de su texto. */
+.segmentado {
+  margin: 0;
+  padding: 4px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  border: 1px solid var(--borde);
+  border-radius: 14px;
+  background: var(--fondo);
+}
+.segmentado label { position: relative; }
+.segmentado input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.segmentado span {
+  display: block;
+  padding: 10px 4px;
+  border-radius: 10px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--secundario);
+}
+.segmentado input:checked + span { background: var(--primario); color: var(--sobre-primario); }
+.segmentado input:focus-visible + span { outline: 2px solid var(--primario); outline-offset: 2px; }
+#estado-ingreso { text-align: left; }
+#estado-ingreso:empty { display: none; }
+
 /* ---------- Mes (fase 7) ---------- */
 
 .mes-cabecera { gap: 18px; }
