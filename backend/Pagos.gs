@@ -114,8 +114,9 @@ function textoFechaHora_(d, zona) {
 }
 
 /**
- * Prueba desde el editor (sin la app): validaciones y, en noviembre, marcar y desmarcar un cargo fijo
- * comprobando el pendiente. Al terminar deja la pestaña Pagos como estaba (y la borra si la creó la prueba).
+ * Prueba desde el editor (sin la app): validaciones y, en noviembre, marcar y desmarcar un cargo fijo y un gasto
+ * puntual de prueba comprobando el pendiente. Al terminar deja Movimientos y la pestaña Pagos como estaban (y la
+ * borra si la creó la prueba).
  */
 function probarPagos() {
   const libro = libro_();
