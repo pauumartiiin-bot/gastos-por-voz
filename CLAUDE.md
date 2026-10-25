@@ -676,3 +676,5 @@ Respuesta (además de `ok: true`):
 - Commits pequeños con mensajes en español que digan qué y por qué.
 - Cada cambio en `app.js`, `config.js` o `styles.css` sube su `?v=` en `index.html` (evita la caché de iOS).
 - Al terminar una tarea, explicar qué se ha hecho y cómo probarlo.
+- Si el cambio toca la interfaz (GitHub Pages sirve `main`), abrir y fusionar el PR **antes** de pasar las pruebas
+  del iPhone, y decirlo al principio del mensaje: «Ya está en `main`, puedes probar en el iPhone».
