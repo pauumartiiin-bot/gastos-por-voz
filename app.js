@@ -647,6 +647,20 @@ function editorRegistro(r, hoja) {
   const esRec = hoja === 'Recurrentes';
   const editor = crear('div', 'editor');
 
+  // Nombre, con su propio botón: así cada cambio tiene su Deshacer (el servidor solo guarda el último).
+  const nombre = entrada('text', r.concepto);
+  nombre.maxLength = 60;
+  nombre.autocapitalize = 'sentences';
+  const renombrar = crear('button', 'btn-suave', 'Cambiar nombre');
+  renombrar.type = 'button';
+  renombrar.addEventListener('click', () => ejecutarRegistro(renombrar, 'Cambiando el nombre…', () => {
+    const concepto = nombre.value.trim();
+    if (!concepto) throw new Error('Escribe el nombre nuevo.');
+    if (concepto === r.concepto) throw new Error('Es el mismo nombre que ya tiene.');
+    return api('renombrar', { hoja, id: r.id, concepto });
+  }));
+  editor.append(campo('Nombre', nombre), renombrar, crear('hr', 'separador'));
+
   const importe = entrada('text', String(r.importe).replace('.', ','));
   importe.inputMode = 'decimal';
   const categoria = document.createElement('select');

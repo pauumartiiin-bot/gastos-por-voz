@@ -30,7 +30,7 @@ iPhone (esta app, GitHub Pages, instalada en pantalla de inicio)
   `redirect: 'follow'` (Apps Script responde con una redirección).
 - Interfaz en español. Comentarios del código en español, breves.
 
-## Contrato de la API (fases 6.1–7b)
+## Contrato de la API (fases 6.1–8)
 Petición: un único `doPost` (en `backend/Api.gs`) que enruta por `accion`. Cuerpo JSON enviado como texto plano:
 ```json
 { "t": "<token>", "accion": "dictar", ...parámetros }
@@ -48,6 +48,7 @@ Petición: un único `doPost` (en `backend/Api.gs`) que enruta por `accion`. Cue
 | `eliminar` | `hoja`, `id` | `eliminarRegistro` | `desc` |
 | `mes` | `etiqueta?` (sin ella, el mes por defecto) | `mes_` (nuevo, `backend/Mes.gs`) con `libro_` y `conBloqueo_` | `etiqueta`, `mes_inicio`, `por_defecto`, `meses`, `cabecera`, `categorias`, `cuadra`, `ms` (detalle en «Fase 7») |
 | `categoria` | `nombre`, `descripcion` | `crearCategoria_` (nuevo, `backend/Categorias.gs`) con `libro_`, `conBloqueo_`, `normalizar` y `apuntarDeshacer_` | `nombre`, `desc`, `huecos_libres` (detalle en «Fase 7b») |
+| `renombrar` | `hoja` (`Recurrentes` \| `Movimientos`), `id`, `concepto` | `renombrar_` (nuevo, `backend/Renombrar.gs`) con `libro_`, `conBloqueo_`, `buscarFilaPorId_`, `COL`/`COLM` y `apuntarDeshacer_` | `id`, `concepto`, `desc` (detalle en «Fase 8») |
 
 - En `dictar` con `corrige`, lo dictado es el cambio pedido y `frase` es la frase original (así lo espera `interpretar`).
 - `ms_interpretar` incluye leer el contexto de la hoja + Haiku + validación.
@@ -92,6 +93,7 @@ backend/Vocabulario.gs  vocabulario de la hoja para Whisper (con caché); se cop
 backend/Evaluacion.gs   evaluación 6.4 con audios de Drive (se ejecuta desde el editor); se copia a mano
 backend/Mes.gs          acción mes (fase 7): lee el mes de la hoja y restaura Resumen!B1; se copia a mano
 backend/Categorias.gs   acción categoria (fase 7b): crea una categoría antes de «Otros»; se copia a mano
+backend/Renombrar.gs    acción renombrar (fase 8.1): cambia el concepto de un gasto; se copia a mano
 docs/                   capturas del README (generadas con datos inventados)
 CLAUDE.md               este archivo
 README.md               README de portfolio (fase 6.5)
@@ -230,11 +232,35 @@ marcha. El código de la v1 no está publicado: se explica en una línea. **Con 
   solo el medidor; si no, el micrófono entero).
   Resultado en el iPhone: falló igual (solo funcionó 1 de 3), con volúmenes de 0,020 / 0,020 / 0,028 incluso hablando
   (la voz normal medía 0,222 en la 6.3a) → con Web Audio abierto, iOS baja el nivel de entrada del micrófono.
-- **7b.4 — en curso: sin medidor en el cliente.** Se quita todo Web Audio (`AudioContext`, analizador, `UMBRAL_VOZ`,
+- **7b.4 — hecha: sin medidor en el cliente.** Se quita todo Web Audio (`AudioContext`, analizador, `UMBRAL_VOZ`,
   «Enviar igualmente» y «Volumen máx.»): la grabación queda solo con `getUserMedia` + `MediaRecorder`, como en la
   6.0, y todo dictado va al servidor, cuyo filtro `no_speech_prob` decide (6.4: silencio 0,99, 0 alucinaciones con
   large-v3). Las barras ondean con CSS mientras graba. Precio: un toque sin hablar tarda ~3 s en responder «No se ha
   entendido nada». Si aun así falla, el problema es del micrófono o la grabación, no del medidor. `?v=` 7.3.2.
+  Probado en el iPhone (7.3.2): 4 de 4 dictados seguidos sin cerrar la app; un toque sin hablar → «No se ha
+  entendido nada en el audio» con prob. sin voz 0,89. Culpable confirmado: Web Audio abierto durante la grabación.
+
+**Fase 8 — Renombrar gastos y marcar pagos (v2.3) — en curso.** Detalle en la sección «Fase 8».
+- **8.1 — en curso.** Renombrar gastos: `backend/Renombrar.gs` + línea en `Api.gs` + campo «Nombre» en Mis registros.
+
+## Fase 8 — Renombrar gastos y marcar pagos (v2.3)
+
+### 8.1 Renombrar gastos
+La v1 (`editarRegistro`) solo edita importe y categoría: para cambiar el nombre había que borrar y volver a crear.
+- **Backend** (`backend/Renombrar.gs`, acción `renombrar`): `{ hoja, id, concepto }` para Recurrentes y Movimientos,
+  dentro de `conBloqueo_`. Hoja distinta → `entrada`. Validaciones (devuelven `rechazado` con `mensaje`, no
+  escriben): concepto de 1–60 caracteres (el límite de la v1), que no empiece por `= + - @`, distinto del actual
+  (cambiar solo mayúsculas vale) y que el ID exista. Deshacer: `apuntarDeshacer_` con `{ op: 'celda', … valor:
+  anterior }`, que el `deshacer` de la v1 ya sabe aplicar. Borra la caché del vocabulario. En Recurrentes, el nombre
+  nuevo sale en todos los meses (Cálculo y el Resumen lo leen de la regla).
+- `probarRenombrar()` (editor): validaciones sin escribir, hoja inventada, ID inexistente, y un renombrado real de la
+  primera regla con limpieza en `finally` (concepto y `ULTIMO` como estaban).
+- **Interfaz** (Mis registros): campo «Nombre» arriba del editor con su propio botón «Cambiar nombre» (opción A:
+  cada cambio tiene su Deshacer; con un único «Guardar cambios», Deshacer solo revertiría la última de dos
+  operaciones). Notificación «"Aina" → "Piso Aina"» con Deshacer y la lista se recarga. `?v=` 7.4.0.
+
+### 8.2 y siguientes: marcar pagos
+Pendiente de diseño. Punto abierto: la clave `id` + `fecha_cargo` no sirve para las reglas semanales (sin fecha).
 
 ## Fase 7b — Crear categorías (v2.2)
 
