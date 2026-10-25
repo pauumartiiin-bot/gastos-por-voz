@@ -346,7 +346,6 @@ let temporizador = 0;
 
 function notificar(texto, conDeshacer, esError = false) {
   clearTimeout(temporizador);
-  pendienteReciente = null; // cualquier otra acción pasa a ser «la última»
   $('notificacion-texto').textContent = texto;
   $('notificacion-texto').classList.toggle('error', esError);
   mostrar('deshacer', conDeshacer);
@@ -400,7 +399,6 @@ async function crearCategoria(e) {
 // y el Deshacer son los de siempre. Al validador le da igual quién propone: el modelo o un formulario.
 
 let mesesGasto = [];        // meses de la hoja ({ etiqueta, inicio }): para dejar un puntual pendiente en su mes
-let pendienteReciente = null; // { etiqueta, id } si lo último fue un gasto apuntado como pendiente (fase 11.2)
 
 function estadoGasto(mensaje, esError = false) {
   $('estado-gasto').textContent = mensaje;
@@ -488,12 +486,10 @@ async function guardarGasto(e) {
   try {
     const r = await api('guardar', { interpretacion, frase });
     let texto = '✓ ' + r.datos.concepto + ' · ' + euros(r.datos.importe) + ' guardado en ' + r.hoja;
-    let marcado = false;
     if (pendiente) {
       try {
         await api('pagar', { etiqueta: mes.etiqueta, id: r.id, pagado: false });
         texto += ' · pendiente de pagar';
-        marcado = true;
       } catch (err) {
         texto += ' · no se ha podido dejar pendiente: desmárcalo en «Mes»';
       }
@@ -502,7 +498,6 @@ async function guardarGasto(e) {
     actualizarGasto();
     $('nuevo-gasto').open = false;
     notificar(texto, true);
-    if (marcado) pendienteReciente = { etiqueta: mes.etiqueta, id: r.id };
   } catch (err) {
     estadoGasto(err.message, true); // lo escrito se conserva para corregirlo
   } finally {
@@ -1130,9 +1125,6 @@ $('deshacer').addEventListener('click', async () => {
   $('deshacer').disabled = true;
   $('notificacion-texto').textContent = 'Deshaciendo…';
   try {
-    // Si lo último fue un gasto apuntado como pendiente, primero se quita su marca: si no, su fila en Pagos se
-    // quedaría huérfana y un gasto nuevo con el mismo ID (la v1 numera desde el máximo) heredaría el «pendiente».
-    if (pendienteReciente) await api('pagar', { ...pendienteReciente, pagado: true }).catch(() => {});
     const r = await api('deshacer');
     notificar('↩︎ Deshecho: ' + r.desc, false);
     if (!$('vista-registros').classList.contains('oculto')) await cargarRegistros();

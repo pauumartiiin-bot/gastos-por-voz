@@ -6,6 +6,7 @@
  * Las filas de la 8.2 no tienen Estado y valen como «pagado». No cambia ninguna fórmula: es informativo.
  * La clave es mes + ID (no fecha_cargo, que las semanales no tienen). No usa ULTIMO: desmarcar es volver a tocar
  * la casilla, y así no se pisa el Deshacer de la última acción real.
+ * Fase 11.3: tras borrar un gasto, sus filas se limpian (la v1 reutiliza los IDs: el siguiente gasto las heredaría).
  */
 
 const PAG_HOJA_ = 'Pagos';
@@ -99,6 +100,45 @@ function hojaPagos_(libro) {
   return hoja;
 }
 
+/**
+ * Borra de Pagos las filas de gastos que ya no existen en Recurrentes ni en Movimientos. Hace falta porque la v1
+ * numera desde el ID más alto: tras borrar el M031, el siguiente gasto vuelve a ser M031 y heredaría su marca.
+ * Devuelve los IDs borrados. Llamar dentro de conBloqueo_.
+ */
+function limpiarPagosHuerfanos_(libro) {
+  const hoja = libro.getSheetByName(PAG_HOJA_);
+  if (!hoja || hoja.getLastRow() < 2) return [];
+  const existen = {};
+  ['Recurrentes', 'Movimientos'].forEach((n) => {
+    const h = libro.getSheetByName(n);
+    if (h.getLastRow() > 1) h.getRange(2, 1, h.getLastRow() - 1, 1).getValues().forEach((f) => { existen[String(f[0])] = true; });
+  });
+  const ids = hoja.getRange(2, 2, hoja.getLastRow() - 1, 1).getValues().map((f) => String(f[0]));
+  const borrados = [];
+  for (let i = ids.length - 1; i >= 0; i--) {   // de abajo arriba, para no mover las filas pendientes
+    if (!existen[ids[i]]) {
+      hoja.deleteRow(i + 2);
+      borrados.unshift(ids[i]);
+    }
+  }
+  return borrados;
+}
+
+/** Lo llama doPost (Api.gs) tras «eliminar» y «deshacer». La acción ya está hecha: si la limpieza falla, solo se apunta. */
+function limpiarPagosTrasBorrar_() {
+  try {
+    conBloqueo_(() => limpiarPagosHuerfanos_(libro_()));   // v1
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+/** Desde el editor: limpia Pagos a mano (por ejemplo, después de borrar gastos directamente en la hoja). */
+function limpiarPagos() {
+  const borrados = conBloqueo_(() => limpiarPagosHuerfanos_(libro_()));
+  Logger.log(borrados.length ? 'Filas huérfanas borradas: ' + borrados.join(', ') : 'No había filas huérfanas.');
+}
+
 /** Números de fila (de arriba abajo) con ese mes e ID. */
 function filasPago_(hoja, etiqueta, id) {
   if (hoja.getLastRow() < 2) return [];
@@ -114,9 +154,9 @@ function textoFechaHora_(d, zona) {
 }
 
 /**
- * Prueba desde el editor (sin la app): validaciones y, en noviembre, marcar y desmarcar un cargo fijo y un gasto
- * puntual de prueba comprobando el pendiente. Al terminar deja Movimientos y la pestaña Pagos como estaban (y la
- * borra si la creó la prueba).
+ * Prueba desde el editor (sin la app): la limpieza de filas huérfanas, las validaciones y, en noviembre, marcar y
+ * desmarcar un cargo fijo y un gasto puntual de prueba comprobando el pendiente. Al terminar deja Movimientos y la
+ * pestaña Pagos como estaban (y la borra si la creó la prueba); si ya había filas huérfanas reales, quedan borradas.
  */
 function probarPagos() {
   const libro = libro_();
@@ -125,9 +165,25 @@ function probarPagos() {
   const etiqueta = meses.filter((e) => e.indexOf('Noviembre 2026') === 0)[0] || meses[0];
   const existiaHoja = !!libro.getSheetByName(PAG_HOJA_);
 
+  // Fase 11.3: dos filas de gastos que no existen → la limpieza las borra y no toca las demás.
+  const hojaH = hojaPagos_(libro);
+  const filasH = hojaH.getLastRow();
+  try {
+    hojaH.appendRow([etiqueta, 'R999999', new Date(), 'pagado']);
+    hojaH.appendRow([etiqueta, 'M999999', new Date(), 'pendiente']);
+    const borrados = limpiarPagosHuerfanos_(libro);
+    const reales = borrados.filter((id) => id !== 'R999999' && id !== 'M999999');
+    const bien = borrados.indexOf('R999999') >= 0 && borrados.indexOf('M999999') >= 0 &&
+                 hojaH.getLastRow() === filasH - reales.length;
+    Logger.log((bien ? '✅ ' : '❌ ') + 'Limpieza de huérfanas → borra R999999 y M999999' +
+               (reales.length ? ' y también las huérfanas reales que había: ' + reales.join(', ') : ' y nada más'));
+  } finally {
+    ['R999999', 'M999999'].forEach((id) => filasPago_(hojaH, etiqueta, id).reverse().forEach((f) => hojaH.deleteRow(f)));
+  }
+
   // Validaciones (no escriben nada)
   const rec = libro.getSheetByName('Recurrentes');
-  const antesFilas = libro.getSheetByName(PAG_HOJA_) ? libro.getSheetByName(PAG_HOJA_).getLastRow() : 0;
+  const antesFilas = existiaHoja ? libro.getSheetByName(PAG_HOJA_).getLastRow() : 0;
   const tipos = rec.getRange(2, 1, rec.getLastRow() - 1, COL.TIPO).getValues();
   const presupuesto = tipos.filter((f) => String(f[COL.TIPO - 1]).trim() === 'presupuesto')[0];
   const casos = [
