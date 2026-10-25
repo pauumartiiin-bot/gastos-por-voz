@@ -346,6 +346,7 @@ let temporizador = 0;
 
 function notificar(texto, conDeshacer, esError = false) {
   clearTimeout(temporizador);
+  pendienteReciente = null; // cualquier otra acción pasa a ser «la última»
   $('notificacion-texto').textContent = texto;
   $('notificacion-texto').classList.toggle('error', esError);
   mostrar('deshacer', conDeshacer);
@@ -398,6 +399,9 @@ async function crearCategoria(e) {
 // Monta el mismo JSON que devuelve Haiku al dictar y lo guarda con «guardar» de la v1: la validación, el ID
 // y el Deshacer son los de siempre. Al validador le da igual quién propone: el modelo o un formulario.
 
+let mesesGasto = [];        // meses de la hoja ({ etiqueta, inicio }): para dejar un puntual pendiente en su mes
+let pendienteReciente = null; // { etiqueta, id } si lo último fue un gasto apuntado como pendiente (fase 11.2)
+
 function estadoGasto(mensaje, esError = false) {
   $('estado-gasto').textContent = mensaje;
   $('estado-gasto').classList.toggle('error', esError);
@@ -410,7 +414,9 @@ async function abrirGasto() {
   btn.disabled = true;
   estadoGasto('Cargando…');
   try {
-    const r = await api('registros');
+    // Las categorías y la fecha de hoy, de «registros»; los meses, de «ingresos».
+    const [r, i] = await Promise.all([api('registros'), api('ingresos')]);
+    mesesGasto = i.meses;
     const select = $('gasto-categoria');
     const elegida = select.value;
     const vacia = crear('option', null, 'Elige una categoría');
@@ -438,6 +444,7 @@ function frecuenciaGasto() {
 function actualizarGasto() {
   const f = frecuenciaGasto();
   $('gasto-fecha-texto').textContent = f === 'puntual' ? 'Día del gasto' : 'Primer cargo';
+  mostrar('campo-gasto-pagado', f === 'puntual');
   mostrar('campo-gasto-cada', f === 'mensual');
   mostrar('campo-gasto-fin', f !== 'puntual');
 }
@@ -465,6 +472,11 @@ async function guardarGasto(e) {
     fecha_fin: recurrente && $('gasto-fin').value ? $('gasto-fin').value : null,
     reemplaza_id: null, supuestos: [], preguntas: []
   };
+  // Un puntual sin pagar se guarda y luego se marca pendiente en su mes (fase 11.2).
+  const pendiente = frecuencia === 'puntual' && !$('gasto-pagado').checked;
+  const mes = pendiente ? mesesGasto.find((m) => m.inicio.slice(0, 7) === fecha.slice(0, 7)) : null;
+  if (pendiente && !mes) return estadoGasto('Ese mes no está en la hoja: no se puede dejar como pendiente.', true);
+
   // La v1 da prioridad a una categoría nombrada en la frase: aquí solo se nombra la elegida,
   // para que un concepto como «Regalo Aina» no la cambie.
   const frase = '(formulario) categoría ' + categoria;
@@ -475,10 +487,22 @@ async function guardarGasto(e) {
   estadoGasto('');
   try {
     const r = await api('guardar', { interpretacion, frase });
+    let texto = '✓ ' + r.datos.concepto + ' · ' + euros(r.datos.importe) + ' guardado en ' + r.hoja;
+    let marcado = false;
+    if (pendiente) {
+      try {
+        await api('pagar', { etiqueta: mes.etiqueta, id: r.id, pagado: false });
+        texto += ' · pendiente de pagar';
+        marcado = true;
+      } catch (err) {
+        texto += ' · no se ha podido dejar pendiente: desmárcalo en «Mes»';
+      }
+    }
     $('form-gasto').reset();
     actualizarGasto();
     $('nuevo-gasto').open = false;
-    notificar('✓ ' + r.datos.concepto + ' · ' + euros(r.datos.importe) + ' guardado en ' + r.hoja, true);
+    notificar(texto, true);
+    if (marcado) pendienteReciente = { etiqueta: mes.etiqueta, id: r.id };
   } catch (err) {
     estadoGasto(err.message, true); // lo escrito se conserva para corregirlo
   } finally {
@@ -745,11 +769,12 @@ function tarjetaCategoria(k) {
   t.append(cab);
 
   // Las reglas de presupuesto no son un cargo: se ven como barra, no como línea, y no se marcan.
-  k.reglas.filter((g) => g.tipo !== 'presupuesto').forEach((g) => t.append(lineaCargo(g)));
+  k.reglas.filter((g) => g.tipo !== 'presupuesto').forEach((g) => t.append(
+    lineaPagable(g, g.fecha_cargo ? fechaCorta(g.fecha_cargo) : 'semanal', g.veces > 1 ? '× ' + g.veces : '')));
   if (k.presupuesto > 0) t.append(barraPresupuesto(k));
   if (k.movimientos.length) {
     const movs = crear('div', 'movimientos-mes');
-    k.movimientos.forEach((m) => movs.append(lineaMes(m.concepto, fechaCorta(m.fecha), m.importe, '')));
+    k.movimientos.forEach((m) => movs.append(lineaPagable(m, fechaCorta(m.fecha), '')));
     t.append(movs);
   }
   return t;
@@ -763,10 +788,9 @@ function lineaMes(concepto, cuando, importe, veces, etiqueta = 'div') {
   return linea;
 }
 
-// Cargo fijo con su casilla de «pagado»: toda la línea es la zona de toque (es un <label>).
-function lineaCargo(g) {
-  const linea = lineaMes(g.concepto, g.fecha_cargo ? fechaCorta(g.fecha_cargo) : 'semanal',
-    g.importe, g.veces > 1 ? '× ' + g.veces : '', 'label');
+// Cargo fijo o gasto puntual (fase 11.2) con su casilla de «pagado»: toda la línea es la zona de toque (un <label>).
+function lineaPagable(g, cuando, veces) {
+  const linea = lineaMes(g.concepto, cuando, g.importe, veces, 'label');
   linea.classList.add('linea-cargo');
   linea.classList.toggle('pagada', g.pagado);
   linea.dataset.id = g.id;
@@ -1106,6 +1130,9 @@ $('deshacer').addEventListener('click', async () => {
   $('deshacer').disabled = true;
   $('notificacion-texto').textContent = 'Deshaciendo…';
   try {
+    // Si lo último fue un gasto apuntado como pendiente, primero se quita su marca: si no, su fila en Pagos se
+    // quedaría huérfana y un gasto nuevo con el mismo ID (la v1 numera desde el máximo) heredaría el «pendiente».
+    if (pendienteReciente) await api('pagar', { ...pendienteReciente, pagado: true }).catch(() => {});
     const r = await api('deshacer');
     notificar('↩︎ Deshecho: ' + r.desc, false);
     if (!$('vista-registros').classList.contains('oculto')) await cargarRegistros();

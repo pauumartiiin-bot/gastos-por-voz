@@ -284,9 +284,10 @@ Apps Script. `?v=` 7.8.0. Probado en el iPhone (G1–G12 OK): orden de las tarje
 README: sección «Gasto con formulario: otro proponente, el mismo validador» y fila en Decisiones.
 
 **Fase 11 — Gastos puntuales pagados o pendientes (v2.6) — en curso.** Detalle en la sección «Fase 11».
-- **11.1 — en curso.** Backend: `Pagos.gs` (estado normal por tipo, columna Estado) y `Mes.gs` (`pagado` en los
-  movimientos y el pendiente los incluye). Probado en local: `probarPagos()` todo ✅ y una fila de la 8.2 sin Estado
-  sigue valiendo como «pagado».
+- **11.1 — hecha.** Backend: `Pagos.gs` (estado normal por tipo, columna Estado) y `Mes.gs` (`pagado` en los
+  movimientos y el pendiente los incluye). `probarPagos()` en Apps Script: todo ✅ (cargo fijo, puntual de prueba que
+  nace pagado, desmarcar sube el pendiente justo su importe, otro mes rechazado, limpieza). Nueva versión publicada.
+- **11.2 — en curso.** Interfaz: casillas en los puntuales de «Mes» y «Ya está pagado» en «+ Nuevo gasto». `?v=` 7.9.0.
 
 ## Fase 11 — Gastos puntuales pagados o pendientes (v2.6)
 Motivo: Pau apuntó un gasto puntual que pagará cuando cobre; con la 8.2 los puntuales contaban siempre como pagados.
@@ -305,10 +306,15 @@ Decisiones (confirmadas por Pau):
 - `probarPagos()` añade un puntual de prueba (M…, 12,34 € el día 15 del mes, en «Otros»): nace pagado, desmarcar dos
   veces → 1 fila «pendiente» y el pendiente sube justo 12,34, marcar dos veces → sin filas, otro mes → rechazado.
   Limpieza: borra el movimiento y sus filas.
-- **Interfaz (11.2, pendiente):** casilla también en los puntuales de «Mes», atenuados si están pagados (lo no
-  atenuado es lo que queda por pagar); en «+ Nuevo gasto», con Puntual, casilla «Ya está pagado» marcada por defecto
-  (si se desmarca, tras `guardar` se llama a `pagar` con `pagado: false`). Los dictados no cambian (guardado de la v1):
-  se desmarcan después en «Mes». `?v=` 7.9.0.
+- **Interfaz (11.2):** casilla también en los puntuales de «Mes» (`lineaPagable` para fijos y puntuales: mismo marcado
+  optimista, misma caché), atenuados si están pagados: lo no atenuado es lo que queda por pagar. En «+ Nuevo gasto»,
+  con Puntual, casilla «Ya está pagado» marcada por defecto; si se desmarca, tras `guardar` se llama a `pagar` con
+  `pagado: false` en el mes de la fecha (los meses, de `ingresos`, que se pide junto a `registros` al abrir; un mes que
+  no está en la hoja → aviso sin enviar). Si `pagar` falla, el gasto queda guardado y el aviso dice que se desmarque
+  en «Mes». **Deshacer** justo después de un gasto apuntado como pendiente (`pendienteReciente`) llama antes a
+  `pagar` con `pagado: true`: si no, su fila de Pagos quedaría huérfana y el siguiente gasto con el mismo ID (la v1
+  numera desde el máximo) heredaría el «pendiente». Queda el mismo riesgo si se elimina en «Mis registros» un puntual
+  marcado como pendiente (raro; no se cubre). Los dictados no cambian (guardado de la v1): se desmarcan en «Mes».
 
 ## Fase 10 — Gasto con formulario (v2.5)
 Apuntar un gasto escribiéndolo, sin dictar. Decisiones (confirmadas por Pau):
