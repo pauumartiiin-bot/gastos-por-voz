@@ -177,12 +177,13 @@ function redondear2_(x) {
  * Evaluación 7.3: tres meses elegidos a propósito, con su total esperado (con Movimientos vacío) y las
  * reglas que deben estar o no. Se identifican por ID, que no cambia aunque se renombre el concepto.
  */
+// Totales sin el R004 (Aina, 86 €), que se quitó al migrarlo a la categoría «Aina» (7b): antes 1.239 · 1.115 · 1.049.
 const MES_CASOS_ = [
-  { prefijo: 'Noviembre 2026', total: 1239, estan: ['R008', 'R010', 'R012'], faltan: [],
+  { prefijo: 'Noviembre 2026', total: 1153, estan: ['R008', 'R010', 'R012'], faltan: [],
     motivo: 'todo activo: Klarna (último mes), T Jove y Creatina' },
-  { prefijo: 'Enero 2027', total: 1115, estan: ['R009', 'R012'], faltan: ['R008', 'R010'],
+  { prefijo: 'Enero 2027', total: 1029, estan: ['R009', 'R012'], faltan: ['R008', 'R010'],
     motivo: 'última cuota de Shein; sin Klarna ni T Jove; con Creatina' },
-  { prefijo: 'Febrero 2027', total: 1049, estan: ['R010'], faltan: ['R009', 'R012'],
+  { prefijo: 'Febrero 2027', total: 963, estan: ['R010'], faltan: ['R009', 'R012'],
     motivo: 'sin Shein ni Creatina; vuelve T Jove (cada 3 meses)' }
 ];
 
