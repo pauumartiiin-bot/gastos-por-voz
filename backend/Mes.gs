@@ -183,16 +183,18 @@ function redondear2_(x) {
 }
 
 /**
- * Evaluación 7.3: tres meses elegidos a propósito, con su total esperado (con Movimientos vacío) y las
- * reglas que deben estar o no. Se identifican por ID, que no cambia aunque se renombre el concepto.
+ * Evaluación 7.3: tres meses elegidos a propósito, con las reglas que deben estar o no (por ID, que no cambia
+ * aunque se renombre el concepto). Fallo = no cuadra o falta/sobra una regla. El total es solo una referencia:
+ * cambia cada vez que se apunta un gasto real, así que si no coincide es ⚠️, no ❌.
  */
-// Totales sin el R004 (Aina, 86 €), que se quitó al migrarlo a la categoría «Aina» (7b): antes 1.239 · 1.115 · 1.049.
+// Totales de referencia (sin gastos puntuales) a 25 oct 2026, con R014, R016 y R017 (81 €) y sin el R004.
+// Historial: 1.239 · 1.115 · 1.049 (7.3) → 1.153 · 1.029 · 963 (8.2, sin R004) → 1.234 · 1.110 · 1.044.
 const MES_CASOS_ = [
-  { prefijo: 'Noviembre 2026', total: 1153, estan: ['R008', 'R010', 'R012'], faltan: [],
+  { prefijo: 'Noviembre 2026', total: 1234, estan: ['R008', 'R010', 'R012'], faltan: [],
     motivo: 'todo activo: Klarna (último mes), T Jove y Creatina' },
-  { prefijo: 'Enero 2027', total: 1029, estan: ['R009', 'R012'], faltan: ['R008', 'R010'],
+  { prefijo: 'Enero 2027', total: 1110, estan: ['R009', 'R012'], faltan: ['R008', 'R010'],
     motivo: 'última cuota de Shein; sin Klarna ni T Jove; con Creatina' },
-  { prefijo: 'Febrero 2027', total: 963, estan: ['R010'], faltan: ['R009', 'R012'],
+  { prefijo: 'Febrero 2027', total: 1044, estan: ['R010'], faltan: ['R009', 'R012'],
     motivo: 'sin Shein ni Creatina; vuelve T Jove (cada 3 meses)' }
 ];
 
@@ -241,13 +243,10 @@ function comprobarCasoMes_(caso, r) {
   if (!r.cuadra) fallos.push('no cuadra');
   caso.estan.filter((id) => ids.indexOf(id) < 0).forEach((id) => fallos.push('falta ' + id));
   caso.faltan.filter((id) => ids.indexOf(id) >= 0).forEach((id) => fallos.push('sobra ' + id));
-  // El total esperado supone Movimientos vacío: con gastos puntuales en el mes, puede cambiar sin ser un error.
-  const totalOk = r.cabecera.total_previsto === caso.total;
-  if (!totalOk && !movimientos) fallos.push('total ' + r.cabecera.total_previsto + ', esperaba ' + caso.total);
-
-  const aviso = !totalOk && movimientos
-    ? ' ⚠️ total ' + r.cabecera.total_previsto + ' (esperaba ' + caso.total + ' con Movimientos vacío; este mes tiene ' + movimientos + ')'
-    : '';
+  // El total depende de los datos reales (reglas nuevas, gastos puntuales): avisa, pero no es un fallo.
+  const aviso = r.cabecera.total_previsto === caso.total ? ''
+    : ' ⚠️ total ' + r.cabecera.total_previsto + ' (referencia ' + caso.total + ' sin gastos puntuales; este mes tiene ' +
+      movimientos + '): ¿has apuntado gastos o reglas nuevas?';
   Logger.log((fallos.length ? '❌ ' : '✅ ') + caso.prefijo + ' (' + caso.motivo + ') · ' + r.ms + ' ms' +
              (fallos.length ? ' → ' + fallos.join(' · ') : '') + aviso);
   return !fallos.length;
