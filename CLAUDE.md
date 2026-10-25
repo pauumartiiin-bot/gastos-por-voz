@@ -85,7 +85,7 @@ Reglas:
 
 ## Estructura del repo
 ```
-index.html              página: token, crear (dictar → vista previa → guardar / corregir / deshacer, nueva categoría y nuevo ingreso), mes, mis registros, ajustes
+index.html              página: token, crear (dictar → vista previa → guardar / corregir / deshacer, y nuevo gasto, ingreso o categoría), mes, mis registros, ajustes
 styles.css              estilos; colores como variables CSS para tema claro y oscuro
 app.js                  lógica del cliente (tema, vistas, detección de silencio, llamadas a la API)
 config.js               URL del endpoint de Apps Script (no secreta)
@@ -276,6 +276,29 @@ marcha. El código de la v1 no está publicado: se explica en una línea. **Con 
   fecha intacta. En la N3 el importe 1370 se quedó al pasar a «Comisiones» (`importeAuto` ya era `false`); el resto
   (concepto y aviso) bien. Pau decide dejarlo así. README: sección «Ingresos: un formulario, no un LLM» y dos filas
   en Decisiones.
+
+**Fase 10 — Gasto con formulario (v2.5) — en curso.** Detalle en la sección «Fase 10». Solo interfaz: sin cambios en
+Apps Script. `?v=` 7.8.0.
+
+## Fase 10 — Gasto con formulario (v2.5)
+Apuntar un gasto escribiéndolo, sin dictar. Decisiones (confirmadas por Pau):
+- **Opción A: el formulario monta el mismo JSON que devuelve Haiku** (`CAMPOS` de la v1: `concepto`, `importe`,
+  `categoria`, `frecuencia`, `cada_meses`, `tipo`, `fecha_referencia`, `dia_de_cobro`, `fecha_fin`, `reemplaza_id`,
+  `supuestos`, `preguntas`) y lo envía a la acción **`guardar` de la v1**: `validarInterpretacion`, el ID, la pestaña
+  (Movimientos o Recurrentes) y el Deshacer son los de siempre. Cero backend. Descartadas: una acción nueva (duplicaría la
+  validación) y pasar el texto por Haiku (más lento y puede reinterpretar lo que ya está estructurado).
+- **Frase:** `(formulario) categoría <elegida>`. La v1 (`categoriaDicha_`) da prioridad a una categoría nombrada en la
+  frase si hay exactamente una: con el concepto en la frase, «Regalo Aina» en «Otros» acabaría en «Aina». La nota de la
+  fila queda `Dictado: "(formulario) categoría Otros"` («Dictado:» lo escribe la v1).
+- **Tarjeta «+ Nuevo gasto»** la primera en «Crear» (Nuevo gasto · Nuevo ingreso · Nueva categoría). Campos: concepto
+  (≤ 60), importe, categoría (desplegable con las de la hoja, pedidas a `registros` al abrir; empieza en «Elige una
+  categoría»), frecuencia (Puntual por defecto · Mensual · Anual · Semanal), fecha («Día del gasto» o «Primer cargo»;
+  hoy), «Cada cuántos meses» solo en Mensual (1, 2, 3, 4, 6) y «Último cargo» opcional en recurrentes.
+- **Fuera:** tipo «presupuesto» (siempre «fijo»), cambio de precio (está en «Mis registros») y día de cobro distinto
+  al de la fecha (la v1 usa el de la fecha).
+- Probado en el navegador contra el `validarInterpretacion` real de la v1 (recuperado de esta sesión): puntual,
+  mensual cada 3 con fin, semanal y anual se aceptan; fecha a más de 730 días → «No se puede guardar: Fecha fuera de
+  rango…» dentro de la tarjeta.
 
 ## Pendientes con plan preparado (sin empezar)
 Pau los dejó para más adelante. Antes de empezar: repasar el plan con Pau y esperar confirmación.

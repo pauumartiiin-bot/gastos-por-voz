@@ -30,7 +30,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800&display=swap">
   <!-- ?v= obliga al navegador a descargar los archivos nuevos en cada versión -->
-  <link rel="stylesheet" href="styles.css?v=7.7.0">
+  <link rel="stylesheet" href="styles.css?v=7.8.0">
 </head>
 <body>
   <div class="halo halo-a" aria-hidden="true"></div>
@@ -86,19 +86,40 @@
         </div>
       </article>
 
-      <!-- Nueva categoría (fase 7b): se crea con una plantilla, no por voz -->
-      <details id="nueva-categoria" class="tarjeta plegable">
-        <summary>+ Nueva categoría</summary>
-        <form id="form-categoria" class="form-categoria" novalidate>
-          <label class="campo" for="categoria-nombre">Nombre
-            <input id="categoria-nombre" type="text" maxlength="30" autocomplete="off" autocapitalize="sentences">
+      <!-- Nuevo gasto (fase 10): el mismo JSON que devuelve Haiku al dictar, escrito a mano; lo valida «guardar» de la v1 -->
+      <details id="nuevo-gasto" class="tarjeta plegable">
+        <summary>+ Nuevo gasto</summary>
+        <form id="form-gasto" class="form-categoria" novalidate>
+          <label class="campo" for="gasto-concepto">Concepto
+            <input id="gasto-concepto" type="text" maxlength="60" autocomplete="off" autocapitalize="sentences">
           </label>
-          <label class="campo" for="categoria-descripcion">Descripción
-            <textarea id="categoria-descripcion" rows="3" maxlength="150"></textarea>
-            <small>Qué gastos entran. Sirve para clasificar tus dictados. Ej.: alquiler, luz e internet compartidos con Aina.</small>
+          <label class="campo" for="gasto-importe">Importe (€)
+            <input id="gasto-importe" type="text" inputmode="decimal" autocomplete="off">
           </label>
-          <p id="estado-categoria" class="estado" role="status" aria-live="polite"></p>
-          <button id="crear-categoria" class="btn-primario" type="submit">Crear categoría</button>
+          <label class="campo" for="gasto-categoria">Categoría
+            <select id="gasto-categoria"></select>
+          </label>
+          <fieldset class="segmentado segmentado-4" aria-label="Frecuencia">
+            <label><input type="radio" name="gasto-frecuencia" value="puntual" checked><span>Puntual</span></label>
+            <label><input type="radio" name="gasto-frecuencia" value="mensual"><span>Mensual</span></label>
+            <label><input type="radio" name="gasto-frecuencia" value="anual"><span>Anual</span></label>
+            <label><input type="radio" name="gasto-frecuencia" value="semanal"><span>Semanal</span></label>
+          </fieldset>
+          <label class="campo" for="gasto-fecha"><span id="gasto-fecha-texto">Día del gasto</span>
+            <input id="gasto-fecha" type="date">
+          </label>
+          <label id="campo-gasto-cada" class="campo oculto" for="gasto-cada">Cada cuántos meses
+            <select id="gasto-cada">
+              <option value="1">1 (cada mes)</option><option value="2">2</option><option value="3">3 (trimestral)</option>
+              <option value="4">4</option><option value="6">6 (semestral)</option>
+            </select>
+          </label>
+          <label id="campo-gasto-fin" class="campo oculto" for="gasto-fin">Último cargo (opcional)
+            <input id="gasto-fin" type="date">
+            <small>Si se acaba, como una compra a plazos. Vacío = sin fin.</small>
+          </label>
+          <p id="estado-gasto" class="estado" role="status" aria-live="polite"></p>
+          <button id="guardar-gasto" class="btn-primario" type="submit">Guardar gasto</button>
         </form>
       </details>
 
@@ -127,6 +148,22 @@
           <p id="aviso-ingreso" class="aviso aviso-pregunta oculto"></p>
           <p id="estado-ingreso" class="estado" role="status" aria-live="polite"></p>
           <button id="apuntar-ingreso" class="btn-primario" type="submit">Apuntar ingreso</button>
+        </form>
+      </details>
+
+      <!-- Nueva categoría (fase 7b): se crea con una plantilla, no por voz -->
+      <details id="nueva-categoria" class="tarjeta plegable">
+        <summary>+ Nueva categoría</summary>
+        <form id="form-categoria" class="form-categoria" novalidate>
+          <label class="campo" for="categoria-nombre">Nombre
+            <input id="categoria-nombre" type="text" maxlength="30" autocomplete="off" autocapitalize="sentences">
+          </label>
+          <label class="campo" for="categoria-descripcion">Descripción
+            <textarea id="categoria-descripcion" rows="3" maxlength="150"></textarea>
+            <small>Qué gastos entran. Sirve para clasificar tus dictados. Ej.: alquiler, luz e internet compartidos con Aina.</small>
+          </label>
+          <p id="estado-categoria" class="estado" role="status" aria-live="polite"></p>
+          <button id="crear-categoria" class="btn-primario" type="submit">Crear categoría</button>
         </form>
       </details>
 
@@ -226,7 +263,7 @@
     </button>
   </nav>
 
-  <script src="config.js?v=7.7.0"></script>
-  <script src="app.js?v=7.7.0"></script>
+  <script src="config.js?v=7.8.0"></script>
+  <script src="app.js?v=7.8.0"></script>
 </body>
 </html>
