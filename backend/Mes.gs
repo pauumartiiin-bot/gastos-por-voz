@@ -30,7 +30,7 @@ function mes_(p) {
   return Object.assign(
     { etiqueta: elegido.etiqueta, mes_inicio: elegido.inicio, por_defecto: porDefecto.etiqueta,
       meses: meses.map((m) => m.etiqueta) },
-    construirMes_(hoja, zona),
+    construirMes_(hoja, zona, pagosDelMes_(libro, elegido.etiqueta, zona)),   // Pagos.gs (fase 8.2)
     { ms: Date.now() - inicio });
 }
 
@@ -100,8 +100,12 @@ function leerMesEnHoja_(libro, etiqueta) {
   }
 }
 
-/** Valores leídos → cabecera, categorías (orden del Resumen) y control «cuadra». Solo transforma, no calcula. */
-function construirMes_(h, zona) {
+/**
+ * Valores leídos → cabecera, categorías (orden del Resumen) y control «cuadra». Solo transforma, no calcula.
+ * pagos = { id: 'yyyy-MM-ddTHH:mm' } de las reglas marcadas como pagadas ese mes (fase 8.2).
+ */
+function construirMes_(h, zona, pagos) {
+  pagos = pagos || {};
   const desde = textoFecha_(h.cabecera[0], zona);
   const hasta = textoFecha_(h.cabecera[1], zona);
 
@@ -110,7 +114,8 @@ function construirMes_(h, zona) {
   const reglas = agrupar_(h.calculo.filter((f) => f[0] && Number(f[14]) > 0).map((f) => ({
     categoria: String(f[2]).trim(),
     id: String(f[0]), concepto: String(f[1]), tipo: String(f[3]), importe: redondear2_(f[15]),
-    fecha_cargo: f[13] instanceof Date ? textoFecha_(f[13], zona) : null, veces: Number(f[14])
+    fecha_cargo: f[13] instanceof Date ? textoFecha_(f[13], zona) : null, veces: Number(f[14]),
+    pagado: String(f[0]) in pagos, pagado_el: pagos[String(f[0])] || null
   })));
 
   // Movimientos: A ID, B Fecha, C Concepto, D Importe, E Categoría; solo los del mes.
@@ -133,11 +138,14 @@ function construirMes_(h, zona) {
 
   const totalPrevisto = redondear2_(h.cabecera[3]);
   const suma = categorias.reduce((s, c) => s + c.total, 0);
+  // Pendiente de pagar: cargos fijos sin marcar (los presupuestos y los gastos puntuales no se marcan).
+  const pendiente = categorias.reduce((s, c) => s + c.reglas
+    .filter((g) => g.tipo !== 'presupuesto' && !g.pagado).reduce((t, g) => t + g.importe, 0), 0);
   return {
     cabecera: {
       ingreso: redondear2_(h.cabecera[2]), previsto_ingreso: redondear2_(h.ingreso[0]),
       cobrado: redondear2_(h.ingreso[1]), origen: String(h.ingreso[2]),
-      total_previsto: totalPrevisto, restante: redondear2_(h.cabecera[4])
+      total_previsto: totalPrevisto, restante: redondear2_(h.cabecera[4]), pendiente: redondear2_(pendiente)
     },
     categorias: categorias,
     cuadra: Math.round(suma * 100) === Math.round(totalPrevisto * 100)
@@ -240,12 +248,13 @@ function logMes_(r) {
   const c = r.cabecera;
   Logger.log('== ' + r.etiqueta + ' (inicio ' + r.mes_inicio + ') · ' + r.ms + ' ms');
   Logger.log('Ingreso ' + c.ingreso + ' (' + c.origen + '; previsto ' + c.previsto_ingreso + ', cobrado ' + c.cobrado +
-             ') · Total previsto ' + c.total_previsto + ' · Restante ' + c.restante);
+             ') · Total previsto ' + c.total_previsto + ' · Restante ' + c.restante + ' · Pendiente de pagar ' + c.pendiente);
   r.categorias.forEach((k) => {
     Logger.log('  ' + k.nombre + ': total ' + k.total + ' (fijos ' + k.fijos + ', presupuesto ' + k.presupuesto +
                ', puntuales ' + k.puntuales + ', disponible ' + k.disponible + ')');
     k.reglas.forEach((g) => Logger.log('      ' + g.id + ' ' + g.concepto + ' · ' + g.tipo + ' · ' + g.importe +
-                                       ' · ' + (g.fecha_cargo || 'semanal') + (g.veces > 1 ? ' × ' + g.veces : '')));
+                                       ' · ' + (g.fecha_cargo || 'semanal') + (g.veces > 1 ? ' × ' + g.veces : '') +
+                                       (g.pagado ? ' · ✓ pagado' : '')));
     k.movimientos.forEach((m) => Logger.log('      ' + m.id + ' ' + m.concepto + ' · ' + m.fecha + ' · ' + m.importe));
   });
   Logger.log('Cuadra: ' + (r.cuadra ? '✅' : '❌') + ' (suma de categorías = total previsto)');

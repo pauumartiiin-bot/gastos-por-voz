@@ -1,4 +1,4 @@
-// Fase 7b: «Crear» (dictar → vista previa → guardar o corregir, y nueva categoría), «Mes» y «Mis registros».
+// Fases 7–8: «Crear» (dictar → vista previa → guardar o corregir, y nueva categoría), «Mes» (con pagos) y «Mis registros».
 
 const CLAVE_TOKEN = 'gastos_token';
 const CLAVE_TEMA = 'gastos_tema';
@@ -38,8 +38,9 @@ function irA(vista) {
   mostrar('vista-dictar', vista === 'dictar');
   mostrar('vista-mes', vista === 'mes');
   mostrar('vista-registros', vista === 'registros');
-  // Siempre datos frescos: la hoja puede haber cambiado. «Mes» se abre en el mes por defecto.
-  if (vista === 'mes') cargarMes();
+  // Siempre datos frescos: la hoja puede haber cambiado. «Mes» vuelve al mes que estabas mirando
+  // (memoria solo mientras la app sigue abierta; al abrirla, el mes por defecto).
+  if (vista === 'mes') cargarMes(mesDestino);
   if (vista === 'registros') cargarRegistros();
   document.querySelectorAll('.barra button').forEach((b) => {
     if (b.dataset.vista === vista) b.setAttribute('aria-current', 'page');
@@ -391,7 +392,7 @@ async function crearCategoria(e) {
   }
 }
 
-/* ---------- Mes (fase 7): solo lectura ---------- */
+/* ---------- Mes (fase 7) y casillas de pagado (fase 8.3) ---------- */
 
 let mesDatos = null;    // última respuesta de "mes"
 let mesDestino = null;  // mes al que apuntan las flechas: cambia en cada toque, antes de que llegue la respuesta
@@ -493,6 +494,7 @@ function pintarMes() {
   $('mes-ingreso').textContent = euros(c.ingreso);
   $('mes-origen').textContent = c.origen;
   $('mes-previsto').textContent = euros(c.total_previsto);
+  $('mes-pendiente').textContent = euros(c.pendiente);
   $('mes-restante').textContent = euros(c.restante);
   $('mes-restante').classList.toggle('negativo', c.restante < 0);
 
@@ -510,15 +512,8 @@ function tarjetaCategoria(k) {
   cab.append(crear('h3', null, k.nombre), crear('span', 'categoria-total', euros(k.total)));
   t.append(cab);
 
-  // Las reglas de presupuesto no son un cargo: se ven como barra, no como línea.
-  k.reglas.filter((g) => g.tipo !== 'presupuesto').forEach((g) => {
-    const linea = lineaMes(g.concepto, g.fecha_cargo ? fechaCorta(g.fecha_cargo) : 'semanal',
-      g.importe, g.veces > 1 ? '× ' + g.veces : '');
-    // Preparado para marcar «pagado» en la fase 8 (id + fecha identifican la línea del mes).
-    linea.dataset.id = g.id;
-    linea.dataset.fecha = g.fecha_cargo || '';
-    t.append(linea);
-  });
+  // Las reglas de presupuesto no son un cargo: se ven como barra, no como línea, y no se marcan.
+  k.reglas.filter((g) => g.tipo !== 'presupuesto').forEach((g) => t.append(lineaCargo(g)));
   if (k.presupuesto > 0) t.append(barraPresupuesto(k));
   if (k.movimientos.length) {
     const movs = crear('div', 'movimientos-mes');
@@ -528,12 +523,52 @@ function tarjetaCategoria(k) {
   return t;
 }
 
-function lineaMes(concepto, cuando, importe, veces) {
-  const linea = crear('div', 'linea-mes');
+function lineaMes(concepto, cuando, importe, veces, etiqueta = 'div') {
+  const linea = crear(etiqueta, 'linea-mes');
   linea.append(crear('span', 'linea-concepto', concepto),
     crear('span', 'linea-fecha', veces ? cuando + ' ' + veces : cuando),
     crear('span', 'linea-importe', euros(importe)));
   return linea;
+}
+
+// Cargo fijo con su casilla de «pagado»: toda la línea es la zona de toque (es un <label>).
+function lineaCargo(g) {
+  const linea = lineaMes(g.concepto, g.fecha_cargo ? fechaCorta(g.fecha_cargo) : 'semanal',
+    g.importe, g.veces > 1 ? '× ' + g.veces : '', 'label');
+  linea.classList.add('linea-cargo');
+  linea.classList.toggle('pagada', g.pagado);
+  linea.dataset.id = g.id;
+  const casilla = crear('input');
+  casilla.type = 'checkbox';
+  casilla.checked = g.pagado;
+  casilla.addEventListener('change', () => marcarPago(g, casilla));
+  linea.prepend(casilla);
+  return linea;
+}
+
+// Marcado optimista: la casilla y el pendiente cambian al instante; si el servidor falla, vuelven atrás.
+async function marcarPago(g, casilla) {
+  const datos = mesDatos;
+  const pagado = casilla.checked;
+  aplicarPago(datos, g, casilla, pagado);
+  casilla.disabled = true; // una petición por casilla: dos toques rápidos podrían llegar desordenados
+  try {
+    await api('pagar', { etiqueta: datos.etiqueta, id: g.id, pagado });
+  } catch (err) {
+    aplicarPago(datos, g, casilla, !pagado);
+    notificar('No se ha podido marcar «' + g.concepto + '»: ' + err.message, false, true);
+  } finally {
+    casilla.disabled = false;
+  }
+}
+
+function aplicarPago(datos, g, casilla, pagado) {
+  g.pagado = pagado;
+  casilla.checked = pagado;
+  casilla.parentElement.classList.toggle('pagada', pagado);
+  const c = datos.cabecera;
+  c.pendiente = Math.round((c.pendiente + (pagado ? -g.importe : g.importe)) * 100) / 100;
+  if (datos === mesDatos) $('mes-pendiente').textContent = euros(c.pendiente); // si ya cambiaste de mes, no se toca
 }
 
 function barraPresupuesto(k) {

@@ -20,7 +20,8 @@ const ACCIONES_ = {
   eliminar: (p, t) => eliminarRegistro(t, p.hoja, p.id),
   mes: (p) => mes_(p),   // Fase 7: Mes.gs
   categoria: (p) => crearCategoria_(p),   // Fase 7b: Categorias.gs
-  renombrar: (p) => renombrar_(p)   // Fase 8.1: Renombrar.gs
+  renombrar: (p) => renombrar_(p),   // Fase 8.1: Renombrar.gs
+  pagar: (p) => pagar_(p)   // Fase 8.2: Pagos.gs
 };
 
 function doPost(e) {

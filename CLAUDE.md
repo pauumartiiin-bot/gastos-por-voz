@@ -49,6 +49,7 @@ Petición: un único `doPost` (en `backend/Api.gs`) que enruta por `accion`. Cue
 | `mes` | `etiqueta?` (sin ella, el mes por defecto) | `mes_` (nuevo, `backend/Mes.gs`) con `libro_` y `conBloqueo_` | `etiqueta`, `mes_inicio`, `por_defecto`, `meses`, `cabecera`, `categorias`, `cuadra`, `ms` (detalle en «Fase 7») |
 | `categoria` | `nombre`, `descripcion` | `crearCategoria_` (nuevo, `backend/Categorias.gs`) con `libro_`, `conBloqueo_`, `normalizar` y `apuntarDeshacer_` | `nombre`, `desc`, `huecos_libres` (detalle en «Fase 7b») |
 | `renombrar` | `hoja` (`Recurrentes` \| `Movimientos`), `id`, `concepto` | `renombrar_` (nuevo, `backend/Renombrar.gs`) con `libro_`, `conBloqueo_`, `buscarFilaPorId_`, `COL`/`COLM` y `apuntarDeshacer_` | `id`, `concepto`, `desc` (detalle en «Fase 8») |
+| `pagar` | `etiqueta`, `id`, `pagado` (`true` \| `false`) | `pagar_` (nuevo, `backend/Pagos.gs`) con `libro_`, `conBloqueo_`, `buscarFilaPorId_` y `COL` | `etiqueta`, `id`, `pagado`, `pagado_el` (detalle en «Fase 8») |
 
 - En `dictar` con `corrige`, lo dictado es el cambio pedido y `frase` es la frase original (así lo espera `interpretar`).
 - `ms_interpretar` incluye leer el contexto de la hoja + Haiku + validación.
@@ -94,6 +95,7 @@ backend/Evaluacion.gs   evaluación 6.4 con audios de Drive (se ejecuta desde el
 backend/Mes.gs          acción mes (fase 7): lee el mes de la hoja y restaura Resumen!B1; se copia a mano
 backend/Categorias.gs   acción categoria (fase 7b): crea una categoría antes de «Otros»; se copia a mano
 backend/Renombrar.gs    acción renombrar (fase 8.1): cambia el concepto de un gasto; se copia a mano
+backend/Pagos.gs        acción pagar (fase 8.2): marca o desmarca un cargo fijo en la pestaña Pagos; se copia a mano
 docs/                   capturas del README (generadas con datos inventados)
 CLAUDE.md               este archivo
 README.md               README de portfolio (fase 6.5)
@@ -241,7 +243,15 @@ marcha. El código de la v1 no está publicado: se explica en una línea. **Con 
   entendido nada en el audio» con prob. sin voz 0,89. Culpable confirmado: Web Audio abierto durante la grabación.
 
 **Fase 8 — Renombrar gastos y marcar pagos (v2.3) — en curso.** Detalle en la sección «Fase 8».
-- **8.1 — en curso.** Renombrar gastos: `backend/Renombrar.gs` + línea en `Api.gs` + campo «Nombre» en Mis registros.
+- **8.1 — hecha.** Renombrar gastos: `backend/Renombrar.gs` + línea en `Api.gs` + campo «Nombre» en Mis registros.
+  `probarRenombrar()` en Apps Script: validaciones 9/9, renombrado real de R001 y limpieza ✅, `ULTIMO` intacto.
+  En el iPhone (R5–R8 OK): renombrar, Deshacer, y el nombre nuevo de un recurrente sale en «Mes» y en el Resumen.
+- **8.2 — hecha.** Marcar pagos (backend): `backend/Pagos.gs`, `Mes.gs` devuelve `pagado`/`pagado_el` y `pendiente`,
+  línea en `Api.gs` y `probarPagos()`. En Apps Script: validaciones 4/4, marcar dos veces → 1 fila, el pendiente baja
+  justo el importe (Máster, 180 €) y vuelve al desmarcar; limpieza ✅. Pendiente de noviembre 853 €, no 939: el R004
+  (Aina, 86 €) ya no está en Recurrentes tras la migración de la 7b → los totales de `MES_CASOS_` (7.3) suponían el R004.
+- **8.3 — en curso.** Interfaz de pagos: casilla en cada cargo fijo, cabecera con «Pendiente de pagar» y memoria del mes.
+  `?v=` 7.5.0.
 
 ## Fase 8 — Renombrar gastos y marcar pagos (v2.3)
 
@@ -259,8 +269,34 @@ La v1 (`editarRegistro`) solo edita importe y categoría: para cambiar el nombre
   cada cambio tiene su Deshacer; con un único «Guardar cambios», Deshacer solo revertiría la última de dos
   operaciones). Notificación «"Aina" → "Piso Aina"» con Deshacer y la lista se recarga. `?v=` 7.4.0.
 
-### 8.2 y siguientes: marcar pagos
-Pendiente de diseño. Punto abierto: la clave `id` + `fecha_cargo` no sirve para las reglas semanales (sin fecha).
+### 8.2 Marcar pagos (backend) y 8.3 (interfaz)
+Decisiones (todas confirmadas por Pau):
+- Solo se marcan los **cargos fijos** del mes (reglas que no son de tipo «presupuesto»). Los gastos puntuales ya
+  están pagados al apuntarlos y los presupuestos no son un cargo.
+- **Pestaña nueva «Pagos»** (`Mes · ID · Pagado_el`), que crea la app la primera vez: una fila = una regla pagada en
+  un mes; desmarcar borra la fila. No cambia ninguna fórmula: es informativo.
+- **Clave = mes + ID** (no `fecha_cargo`): resuelve las semanales (sin fecha). Una semanal (× 4) es una sola casilla.
+- **No usa `ULTIMO`**: desmarcar es volver a tocar la casilla; así no se pisa el Deshacer de la última acción real.
+- Se puede marcar en **cualquier mes** (también futuros, para pagos adelantados).
+
+Backend (8.2):
+- Acción `pagar` (`backend/Pagos.gs`): `{ etiqueta, id, pagado }`. Mes que no está en Meses o `pagado` no booleano →
+  `entrada`. Regla inexistente o de tipo presupuesto → `rechazado` con `mensaje`. Idempotente: marcar dos veces no
+  duplica la fila y desmarcar algo sin marcar no falla. Responde `{ etiqueta, id, pagado, pagado_el }`
+  (`pagado_el` = "yyyy-MM-ddTHH:mm" con la zona de la hoja).
+- `mes_` (Mes.gs) añade a cada regla `pagado` y `pagado_el`, y a la cabecera `pendiente` = suma de los cargos
+  fijos del mes sin marcar. Lee Pagos fuera del patrón de B1 (no depende del mes del Resumen).
+- `probarPagos()` (editor): validaciones (mes inventado, `pagado` no booleano, regla inexistente, presupuesto) y,
+  en noviembre, marcar dos veces (1 fila), comprobar que el pendiente baja justo el importe, desmarcar dos veces y
+  volver al pendiente inicial. Limpieza en `finally`; si la pestaña Pagos la creó la prueba, la borra.
+
+Interfaz (8.3): casilla en cada cargo fijo de «Mes»; toda la línea es un `<label>`, así que se marca tocando cualquier
+parte. Marcado optimista: la línea se atenúa y el pendiente cambia al instante; si el servidor falla, vuelve atrás y
+avisa con una notificación de error (sin Deshacer: desmarcar es volver a tocar). Mientras su petición está en vuelo la
+casilla se desactiva (dos toques rápidos podrían llegar desordenados) y, mientras se carga otro mes, no se puede tocar
+ninguna. Cabecera: Ingreso · Previsto · Pendiente de pagar y el Restante grande debajo. **Memoria del mes** mientras la
+app está abierta: al volver a la pestaña se recarga el mes que mirabas (`mesDestino`); al abrir la app, el mes por
+defecto. `?v=` 7.5.0.
 
 ## Fase 7b — Crear categorías (v2.2)
 
