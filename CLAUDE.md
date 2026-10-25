@@ -30,7 +30,7 @@ iPhone (esta app, GitHub Pages, instalada en pantalla de inicio)
   `redirect: 'follow'` (Apps Script responde con una redirección).
 - Interfaz en español. Comentarios del código en español, breves.
 
-## Contrato de la API (fases 6.1–8)
+## Contrato de la API (fases 6.1–9)
 Petición: un único `doPost` (en `backend/Api.gs`) que enruta por `accion`. Cuerpo JSON enviado como texto plano:
 ```json
 { "t": "<token>", "accion": "dictar", ...parámetros }
@@ -50,6 +50,9 @@ Petición: un único `doPost` (en `backend/Api.gs`) que enruta por `accion`. Cue
 | `categoria` | `nombre`, `descripcion` | `crearCategoria_` (nuevo, `backend/Categorias.gs`) con `libro_`, `conBloqueo_`, `normalizar` y `apuntarDeshacer_` | `nombre`, `desc`, `huecos_libres` (detalle en «Fase 7b») |
 | `renombrar` | `hoja` (`Recurrentes` \| `Movimientos`), `id`, `concepto` | `renombrar_` (nuevo, `backend/Renombrar.gs`) con `libro_`, `conBloqueo_`, `buscarFilaPorId_`, `COL`/`COLM` y `apuntarDeshacer_` | `id`, `concepto`, `desc` (detalle en «Fase 8») |
 | `pagar` | `etiqueta`, `id`, `pagado` (`true` \| `false`) | `pagar_` (nuevo, `backend/Pagos.gs`) con `libro_`, `conBloqueo_`, `buscarFilaPorId_` y `COL` | `etiqueta`, `id`, `pagado`, `pagado_el` (detalle en «Fase 8») |
+| `ingresos` | — | `ingresos_` (nuevo, `backend/Ingresos.gs`) con `libro_` y `normalizar` | `hoy`, `meses` (`etiqueta`, `inicio`, `previsto`, `nomina`), `ingresos` (últimos 20) (detalle en «Fase 9») |
+| `ingreso` | `tipo`, `importe`, `fecha`, `mes`, `concepto?` | `apuntarIngreso_` (nuevo) con `conBloqueo_`, `siguienteId_`, `escribirFila_`, `fechaSerial_`, `ahoraSerial_` y `apuntarDeshacer_` | `id`, `desc`, `ingreso` |
+| `borrar_ingreso` | `id` | `borrarIngreso_` (nuevo) con `conBloqueo_`, `buscarFilaPorId_`, `aJSON_` y `apuntarDeshacer_` | `id`, `desc` |
 
 - En `dictar` con `corrige`, lo dictado es el cambio pedido y `frase` es la frase original (así lo espera `interpretar`).
 - `ms_interpretar` incluye leer el contexto de la hoja + Haiku + validación.
@@ -96,6 +99,7 @@ backend/Mes.gs          acción mes (fase 7): lee el mes de la hoja y restaura R
 backend/Categorias.gs   acción categoria (fase 7b): crea una categoría antes de «Otros»; se copia a mano
 backend/Renombrar.gs    acción renombrar (fase 8.1): cambia el concepto de un gasto; se copia a mano
 backend/Pagos.gs        acción pagar (fase 8.2): marca o desmarca un cargo fijo en la pestaña Pagos; se copia a mano
+backend/Ingresos.gs     acciones ingresos, ingreso y borrar_ingreso (fase 9.1); se copia a mano
 docs/                   capturas del README (generadas con datos inventados)
 CLAUDE.md               este archivo
 README.md               README de portfolio (fase 6.5)
@@ -260,6 +264,44 @@ marcha. El código de la v1 no está publicado: se explica en una línea. **Con 
   Probado en el iPhone (C1–C11 OK): mes nuevo ~3 s; ya visto, al instante con «Actualizando…» y luego «del servidor»;
   toques rápidos; marcar con una actualización en camino no se pisa; un gasto dictado aparece solo a los ~3 s; caché
   vacía al reabrir; sin conexión, se queda lo guardado con «No se ha podido actualizar». README: fila en Decisiones.
+
+**Fase 9 — Ingresos desde la app (v2.4) — en curso.** Detalle en la sección «Fase 9».
+- **9.1 — en curso.** Backend: `backend/Ingresos.gs` + tres líneas en `Api.gs` + `probarIngresos()`.
+
+## Fase 9 — Ingresos desde la app (v2.4)
+
+### Objetivo y decisiones (confirmadas por Pau)
+Apuntar nómina, comisiones y extras desde el móvil. Al apuntar, «Mes» pasa de «previsto» a «cobrado» y, con la
+nómina del mes siguiente, cambia el mes por defecto.
+- **Sin cambiar la hoja.** El Resumen usa lo cobrado en cuanto un mes tiene algún ingreso (`B4 = IF(E5>0, E5, E4)`):
+  apuntar solo las comisiones dejaría fuera el previsto. No pasa porque las comisiones llegan **a la vez** que la
+  nómina (dos transferencias el mismo día). Si se apuntan comisiones o extras en un mes sin nómina, la app avisa.
+- **Formulario, no voz:** el prompt de Haiku es de la v1 y son 3–4 datos al mes con una regla clara.
+- **Tarjeta plegada «+ Nuevo ingreso» en «Crear»** (debajo de «+ Nueva categoría»): tipo (nómina por defecto),
+  importe (en nómina, el previsto del mes propuesto), fecha (hoy), mes propuesto con la regla de la Guía (**si
+  entra a partir del día 20, va al mes siguiente**; se puede cambiar) y concepto opcional («Nómina octubre»: tipo +
+  mes de la fecha). Sin Notas.
+- **Nómina repetida en el mismo mes → `rechazado`** (una paga extra va como «extra»).
+- **Sección «Ingresos» en «Mis registros»** (últimos 20) con Eliminar (dos toques + Deshacer). Sin editar: para
+  corregir, borrar y volver a apuntar.
+- Propuesta sin implementar: listar en la cabecera de «Mes» los ingresos que forman el «cobrado».
+
+### 9.1 Backend (`backend/Ingresos.gs`)
+- `ingresos` (solo lectura, no toca B1): `hoy`, `meses` con `previsto` (Meses!C) y `nomina` (si ya tiene una), e
+  `ingresos` (últimos 20 por fecha, `{ id, fecha, mes, concepto, tipo, importe }`).
+- `ingreso`: tipo fuera de la lista o mes que no está en Meses → `entrada`. Validaciones (`rechazado` con mensaje, no
+  escriben): importe > 0 y ≤ 100.000 (se redondea a 2 decimales), fecha válida y como mucho 60 días en el futuro,
+  concepto ≤ 60 sin `= + - @` al principio, nómina no repetida. ID con `siguienteId_(hoja, 'I')`; fecha como número de
+  serie (`fechaSerial_`) y Registrado con `ahoraSerial_` (v1). Deshacer: `{ op: 'borrar', hoja: 'Ingresos', id }`.
+- `borrar_ingreso`: Deshacer con `{ op: 'fila', hoja: 'Ingresos', valores }` (valores con `aJSON_`). El paso «fila»
+  de la v1 aplica los formatos de Movimientos (columnas 2, 4 y 7): en Ingresos no estropea nada (4 y 7 son texto) y la
+  columna de importe ya tiene su formato en la hoja. La fila recuperada vuelve al final.
+- `probarIngresos()` (editor): validaciones puras + `entrada`; una nómina real en el último mes de Meses (fila,
+  «Mes» la cuenta como cobrada, sale en la lista, no deja apuntar otra), borrarla y el Deshacer de verdad
+  (`deshacer` de la v1 con el TOKEN de las propiedades). Limpieza en `finally` (Ingresos y `ULTIMO` como estaban).
+
+### 9.2 Interfaz (pendiente)
+Tarjeta «+ Nuevo ingreso» en «Crear» y sección «Ingresos» en «Mis registros». `?v=` 7.7.0.
 
 ## Fase 8 — Renombrar gastos y marcar pagos (v2.3)
 
