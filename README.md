@@ -250,7 +250,7 @@ acabaría en «Aina»; por eso la frase solo nombra la categoría elegida.
 |---|---|---|
 | `whisper-large-v3` sin vocabulario | turbo, o usar vocabulario | La evaluación anterior |
 | Filtro de silencio solo en el servidor (`no_speech_prob`) | Medir también el volumen en el móvil (Web Audio) | Lo tuve y lo quité: en el iPhone, tener Web Audio abierto mientras se graba bajaba el nivel del micrófono y bloqueaba dictados reales («No te he oído» tras el primero). El filtro del servidor ya frenaba el silencio (0,99) sin falsos bloqueos |
-| Una sola petición `dictar` | Transcribir e interpretar por separado | Cada viaje a Apps Script cuesta ~2,5 s |
+| Una sola petición `dictar` | Transcribir e interpretar por separado | Cada viaje a Apps Script cuesta ~2 s (medido) |
 | `fetch` con `Content-Type: text/plain` y `redirect: 'follow'` | JSON normal | Evita el *preflight* de CORS, que Apps Script no admite, y sigue su redirección |
 | Vista previa antes de guardar | Guardar directamente | El modelo puede equivocarse; la persona tiene la última palabra |
 | Deshacer de un solo paso, en una notificación flotante | Historial completo | El servidor guarda solo la última acción: más simple y suficiente |
@@ -266,21 +266,29 @@ acabaría en «Aina»; por eso la frase solo nombra la categoría elegida.
 | «Cambiar nombre» con su propio botón | Un único «Guardar cambios» para nombre, importe y categoría | Cada cambio tiene su Deshacer; con uno solo, Deshacer revertiría solo la última de dos operaciones |
 | Ingresos con formulario y mes propuesto por la regla del día 20 | Dictarlos, o elegir siempre el mes a mano | Son pocos datos y siempre iguales; el prompt de Haiku es de la v1 y la regla acierta en el caso habitual |
 | Corregir un ingreso borrándolo y volviéndolo a apuntar | Un editor de ingresos | Pasa pocas veces; menos código que mantener |
+| Dejar la latencia como está tras medirla tramo a tramo | Cachear el contexto de la hoja o calentar Apps Script | La caché ahorraba ~0,3 s tocando código de la v1 y calentar no cambiaba nada (frío ≈ caliente); el grueso (~2 s) es Apps Script |
 | Gasto con formulario que reutiliza el guardado de los dictados | Una acción nueva en el servidor, o pasar el texto por Haiku | Una sola validación para todo; sin LLM, lo escrito no se reinterpreta |
 
 ## Latencia
 
-Un dictado tarda **~6–7 s** de principio a fin:
+Un dictado tarda **4,6 s de mediana** (4,1–5,7 s), medido tramo a tramo en 10 dictados reales: el servidor
+devuelve su propio tiempo (`ms_servidor`) y el móvil resta ese dato del total.
 
-| Tramo | Tiempo |
-|---|---|
-| Groq Whisper | ~0,4 s |
-| Claude Haiku + validación | ~1,8 s |
-| Leer la hoja (contexto para Haiku) | ~1 s |
-| Apps Script: subida, arranque y redirección | ~2,5 s |
+| Tramo | Mediana | Peso |
+|---|---|---|
+| Apps Script: subida, arranque y redirección | 1,98 s | 43 % |
+| Claude Haiku + validación | ~1,7 s | 37 % |
+| Leer la hoja (contexto para Haiku) | ~0,4 s | 9 % |
+| Groq Whisper | 0,36 s | 8 % |
+| Resto del servidor | 0,23 s | 5 % |
 
-El modelo de voz no es el cuello de botella; Apps Script sí. La mejora más directa sería cachear el
-contexto de la hoja (en una prueba bajó de ~720 ms a 47 ms).
+**Medir antes de optimizar me ahorró un cambio inútil.** Mi plan era cachear el contexto de la hoja, porque
+calculaba que costaba ~1 s. Pero esa cifra salía de restar dos medidas tomadas en condiciones distintas. Medido
+directamente, cuesta ~0,4 s, así que la caché ahorraría ~0,3 s a cambio de tocar código estable de la v1.
+Calentar Apps Script antes de dictar tampoco serviría: en frío tarda casi lo mismo que en caliente. Y el tamaño
+del audio no cambia el tiempo de red. Lo que queda es el coste fijo de Apps Script (~2 s) y la variabilidad de
+Haiku (con la misma frase, entre 1,3 y 6,5 s). Bajarlo de verdad exigiría sacar la API de Apps Script a otro
+servidor, y para una app personal no compensa: lo dejé así a propósito.
 
 En la pestaña «Mes», un mes nuevo tarda ~3 s (detalle en [su sección](#pestaña-mes-la-hoja-como-única-fuente-de-verdad)); volver a uno ya
 visto es instantáneo gracias a la caché, que se actualiza por detrás.
@@ -298,7 +306,8 @@ visto es instantáneo gracias a la caché, que se actualiza por detrás.
 
 - **Marcas poco comunes** («Glovo» → «Globo»). Una opción es comparar el concepto con los que ya existen en la hoja.
 - **Ajustar el umbral de silencio** con más datos. La app lo sigue midiendo en el modo pruebas.
-- **Bajar la latencia** cacheando el contexto de la hoja.
+- **La latencia (~4,6 s) es sobre todo Apps Script y Haiku.** La medí y decidí no optimizarla: lo barato
+  ahorraba ~0,3 s y lo que de verdad la bajaría (otro servidor) no compensa en una app personal.
 - **Ampliar la evaluación** con otra voz y varias pasadas por configuración.
 - **La primera visita a cada mes tarda ~3 s.** Los ya vistos salen al instante, pero la caché se borra al cerrar la app.
 - **El Resumen tiene sitio para 12 categorías.** La app respeta el límite y avisa, pero ampliarlo es trabajo en la hoja.

@@ -316,7 +316,7 @@ En Apps Script (Nueva versión publicada): `probarIngresos()` 14/14 y todo ✅, 
 nómina (100 €) y comisiones (50 €) de prueba en diciembre → 2 líneas y «cobrado 150 €», al instante desde la caché,
 bien en oscuro, y al borrarlas en «Mis registros» el bloque desaparece. README: viñeta en «Ingresos».
 
-**Fase B.1 — Medir la latencia del dictado — hecha.** Detalle en «Pendientes → B». `dictar` devuelve
+**Fase B — Latencia del dictado — cerrada (B.1 hecha; B.2: no optimizar).** Detalle en «Pendientes → B». `dictar` devuelve
 `ms_servidor` (Api.gs); el modo pruebas enseña «Audio enviado» (KB del base64), «Servidor» y «Red y arranque»
 (total − `ms_servidor`). `medirLatencia()` (`backend/Latencia.gs`). `?v=` 7.11.0. Resultados (25 oct, noche):
 - `medirLatencia()`: `libro_()` 1.ª 213 ms (luego 1–2); `leerContexto_()` 1.ª 200 ms (luego 96–130);
@@ -329,7 +329,7 @@ bien en oscuro, y al borrarlas en «Mis registros» el bloque desaparece. README
   6.2/6.4 era una estimación indirecta). **Frío ≈ caliente** (2.189 y 2.034 ms frente a ~1.950): calentar no ayuda.
   Red y arranque no depende del tamaño del audio (103–151 KB → mismo tiempo): es el coste fijo de Apps Script.
   La latencia ya es menor que en la 6.1 (5,7–7,6 s).
-- Pendiente: decidir la B.2 con Pau (ninguna opción prevista llega al ~1 s del criterio de éxito).
+- B.2 decidida: cerrar sin optimizar (sección «Fase B»).
 
 ## Fase 12 — Ingresos del mes en la cabecera de «Mes» (v2.7)
 Antes, pendiente A. Objetivo: ver de un vistazo qué forma el «cobrado» (p. ej. «Nómina octubre · 28 oct · 1.370 €» y
@@ -397,11 +397,14 @@ Apuntar un gasto escribiéndolo, sin dictar. Decisiones (confirmadas por Pau):
   mensual cada 3 con fin, semanal y anual se aceptan; fecha a más de 730 días → «No se puede guardar: Fecha fuera de
   rango…» dentro de la tarjeta.
 
-## Pendientes con plan preparado
-Pau los dejó para más adelante. Antes de empezar: repasar el plan con Pau y esperar confirmación.
+## Fase B — Latencia del dictado (cerrada sin optimizar)
+**Decisión (Pau, tras la B.1): opción 1, cerrar la B sin tocar código.** Ninguna opción barata llegaba al ~1 s del
+criterio de éxito (caché del contexto ~0,3 s tocando la v1; calentar ~0,1 s) y lo que de verdad bajaría la latencia
+(sacar la API de Apps Script a otro servidor, hasta ~1,5 s) no compensa en una app personal. `ms_servidor`, los datos del
+modo pruebas y `medirLatencia()` se quedan para seguir midiendo. README: sección «Latencia» con la tabla de tramos y
+fila en Decisiones. Plan original y lo que se esperaba antes de medir:
 
-### B. Bajar la latencia del dictado (~6–7 s)
-Lo medido: Groq ~0,4 s; `ms_interpretar` 2,6–3,9 s, del que ~1 s es leer la hoja (`leerContexto_` de la v1: abre el
+Lo medido antes de la B.1 (estimaciones): Groq ~0,4 s; `ms_interpretar` 2,6–3,9 s, del que ~1 s es leer la hoja (`leerContexto_` de la v1: abre el
 libro y lee Categorías y Recurrentes en **cada** dictado; en la 6.2, 720 ms frente a 47 ms con caché); y ~2,5 s de
 Apps Script (subida, arranque y redirección) que hoy no sabemos repartir.
 - **B.1 Medir antes de tocar nada** (sin cambios en la v1; confirmado por Pau, con el tamaño del audio):
