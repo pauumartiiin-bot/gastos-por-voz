@@ -297,6 +297,16 @@ README: sección «Gasto con formulario: otro proponente, el mismo validador» y
   siguiente con el mismo ID no hereda nada. README: «Marcar pagos» con los puntuales y las huérfanas, y dos filas en
   Decisiones.
 
+**C — Zona horaria de la hoja — hecha.** Visto en la 11.3: la hoja estaba en «Hora del Pacífico» (8 h por detrás
+de Madrid; la v1 usa `CONFIG.ZONA` para «Registrado»), así que «hoy» y el mes por defecto (`getSpreadsheetTimeZone` en
+`Mes.gs` e `Ingresos.gs`) se habrían atrasado un día entre las 00:00 y las 08:00. Sin código: Pau la cambió a Madrid
+(Archivo → Configuración). Z1–Z6 OK salvo Z3 (`probarMes` 1/3), que no era de la zona: las fechas se guardan sin hora y
+no se movieron. Eran datos reales nuevos (R014, R016, R017: 81 €/mes; M001: 28 € en noviembre).
+Arreglo de raíz en `probarMes`: el total pasa a ser una referencia (⚠️ si no coincide, nunca ❌); fallar solo es
+no cuadrar o que falte o sobre una regla. Referencias actualizadas a 1.234 · 1.110 · 1.044 €. En Apps Script (Z3a–Z3f OK): 3/3 ✅, noviembre con ⚠️ 1.262 (por M001, 28 €), enero y febrero sin aviso, y «Mes» en la app
+con el mismo 1.262 €. Cosmético: las marcas
+`Marcado_el` anteriores al cambio (p. ej. M001, 11:48) quedan con 8 h de menos.
+
 ## Fase 11 — Gastos puntuales pagados o pendientes (v2.6)
 Motivo: Pau apuntó un gasto puntual que pagará cuando cobre; con la 8.2 los puntuales contaban siempre como pagados.
 Decisiones (confirmadas por Pau):
@@ -363,13 +373,6 @@ Pau los dejó para más adelante. Antes de empezar: repasar el plan con Pau y es
   tocar «Ingreso»; si cada línea lleva a «Mis registros» para borrarla (propuesta: no; se borra desde allí).
 - **Pruebas:** `probarMes()` en Apps Script y plantilla de iPhone (mes con nómina + comisiones, mes sin ingresos,
   apuntar un ingreso y volver a «Mes»: aparece tras «Actualizando…»).
-
-### C. Zona horaria de la hoja
-Visto en la 11.3: `probarPagos()` se ejecutó a las 21:23 (Madrid) y la marca salió `13:23` → la hoja va 8 h por detrás
-de Madrid, mientras que la v1 usa `CONFIG.ZONA` para «Registrado». Las fechas de los gastos no se ven afectadas (se
-guardan como número de serie, sin hora), pero «hoy» y el mes por defecto (`Mes.gs`, `Ingresos.gs`, con
-`getSpreadsheetTimeZone`) irían un día atrasados entre las 00:00 y las 08:00 en España. Propuesta: que Pau ponga
-Archivo → Configuración → Zona horaria = Madrid y comprobar después `probarMes()` y una fecha de Registrado.
 
 ### B. Bajar la latencia del dictado (~6–7 s)
 Lo medido: Groq ~0,4 s; `ms_interpretar` 2,6–3,9 s, del que ~1 s es leer la hoja (`leerContexto_` de la v1: abre el
@@ -643,7 +646,8 @@ Respuesta (además de `ok: true`):
 | Enero 2027 | 1.115 € | Última cuota de Shein; sin Klarna ni T Jove; con Creatina |
 | Febrero 2027 | 1.049 € | Sin Shein ni Creatina; vuelve T Jove (cada 3 meses) |
 
-  Desde la 8.2 (sin el R004 de 86 €, migrado a la categoría «Aina»): 1.153 · 1.029 · 963 €.
+  Desde la 8.2 (sin el R004 de 86 €, migrado a la categoría «Aina»): 1.153 · 1.029 · 963 €. Desde la C (con R014,
+  R016 y R017): 1.234 · 1.110 · 1.044 €, solo como referencia (⚠️ si no coincide).
 
   Además: tras la prueba, `Resumen!B1` sigue en el mes que había (comprueba la restauración). En el iPhone,
   noviembre muestra lo mismo que el Resumen.
