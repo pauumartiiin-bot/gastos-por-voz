@@ -316,11 +316,20 @@ En Apps Script (Nueva versión publicada): `probarIngresos()` 14/14 y todo ✅, 
 nómina (100 €) y comisiones (50 €) de prueba en diciembre → 2 líneas y «cobrado 150 €», al instante desde la caché,
 bien en oscuro, y al borrarlas en «Mis registros» el bloque desaparece. README: viñeta en «Ingresos».
 
-**Fase B.1 — Medir la latencia del dictado — en pruebas.** Detalle en «Pendientes → B». `dictar` devuelve
-`ms_servidor` (Api.gs); el modo pruebas enseña «Audio enviado» (KB del base64, lo que viaja), «Servidor» y «Red y
-arranque» (total − `ms_servidor`). `medirLatencia()` (`backend/Latencia.gs`, editor). `?v=` 7.11.0. Probado en local
-(doPost con mocks y el modo pruebas en el iPhone 13 simulado, con voz y con silencio). Falta: copiar Api.gs y
-Latencia.gs, Nueva versión, `medirLatencia()` y 10 dictados reales.
+**Fase B.1 — Medir la latencia del dictado — hecha.** Detalle en «Pendientes → B». `dictar` devuelve
+`ms_servidor` (Api.gs); el modo pruebas enseña «Audio enviado» (KB del base64), «Servidor» y «Red y arranque»
+(total − `ms_servidor`). `medirLatencia()` (`backend/Latencia.gs`). `?v=` 7.11.0. Resultados (25 oct, noche):
+- `medirLatencia()`: `libro_()` 1.ª 213 ms (luego 1–2); `leerContexto_()` 1.ª 200 ms (luego 96–130);
+  `interpretar()` [2815, 1359, 2831, 1350, 6568] ms → Haiku muy variable (1,3–6,5 s). Abrir y leer en frío ≈ 413 ms.
+- 10 dictados reales (2 tandas de 5; 1 y 6 en frío). Medianas: **total 4.627 ms** (4.131–5.672) · red y arranque
+  1.980 (1.693–2.189) · interpretar 2.128 (1.578–3.039) · Groq 365 (328–670) · servidor 2.759 · resto de doPost 225
+  (servidor − Groq − interpretar) · audio 103–151 KB.
+- Lectura: la mediana se reparte en ~2,0 s de red y arranque (43 %), ~2,1 s de interpretar (46 %: ~0,4 s de leer la
+  hoja + ~1,7 s de Haiku), ~0,4 s de Groq y ~0,2 s del resto. **Leer la hoja cuesta ~0,4 s, no ~1 s** (la cifra de la
+  6.2/6.4 era una estimación indirecta). **Frío ≈ caliente** (2.189 y 2.034 ms frente a ~1.950): calentar no ayuda.
+  Red y arranque no depende del tamaño del audio (103–151 KB → mismo tiempo): es el coste fijo de Apps Script.
+  La latencia ya es menor que en la 6.1 (5,7–7,6 s).
+- Pendiente: decidir la B.2 con Pau (ninguna opción prevista llega al ~1 s del criterio de éxito).
 
 ## Fase 12 — Ingresos del mes en la cabecera de «Mes» (v2.7)
 Antes, pendiente A. Objetivo: ver de un vistazo qué forma el «cobrado» (p. ej. «Nómina octubre · 28 oct · 1.370 €» y
