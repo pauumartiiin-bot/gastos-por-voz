@@ -19,7 +19,8 @@ const ACCIONES_ = {
   baja: (p, t) => darDeBaja(t, p.id, p.fecha_fin),
   eliminar: (p, t) => eliminarRegistro(t, p.hoja, p.id),
   mes: (p) => mes_(p),   // Fase 7: Mes.gs
-  categoria: (p) => crearCategoria_(p)   // Fase 7b: Categorias.gs
+  categoria: (p) => crearCategoria_(p),   // Fase 7b: Categorias.gs
+  renombrar: (p) => renombrar_(p)   // Fase 8.1: Renombrar.gs
 };
 
 function doPost(e) {
