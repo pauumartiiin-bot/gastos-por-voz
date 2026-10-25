@@ -31,8 +31,8 @@ con Claude Haiku y la validaba con código. La **v2** (este repositorio) añade:
   las categorías con presupuesto. [Cómo funciona](#pestaña-mes-la-hoja-como-única-fuente-de-verdad).
 - **Categorías propias** (v2.2): crear una categoría con nombre y descripción desde el móvil; la descripción
   le dice a Haiku qué gastos entran. [Cómo funciona](#categorías-la-descripción-también-es-un-prompt).
-- **Renombrar y marcar pagos** (v2.3): cambiar el nombre de un gasto y marcar como pagado cada cargo fijo del
-  mes, con el pendiente de pagar en la cabecera. [Cómo funciona](#marcar-pagos-interfaz-optimista).
+- **Renombrar y marcar pagos** (v2.3 y v2.6): cambiar el nombre de un gasto y marcar cada gasto del mes como
+  pagado o pendiente, con el pendiente de pagar en la cabecera. [Cómo funciona](#marcar-pagos-interfaz-optimista).
 - **Ingresos** (v2.4): apuntar la nómina, las comisiones y los extras desde el móvil, con el mes propuesto
   por una regla. [Cómo funciona](#ingresos-un-formulario-no-un-llm).
 - **Gasto con formulario** (v2.5): apuntar un gasto escribiéndolo, sin dictar, con la misma validación que un
@@ -182,12 +182,16 @@ escrito por la persona, acaba funcionando como instrucción para el modelo, sin 
 
 ## Marcar pagos: interfaz optimista
 
-Cada cargo fijo del mes lleva una casilla para marcarlo como pagado, y la cabecera enseña cuánto queda
-**pendiente de pagar** ([`backend/Pagos.gs`](backend/Pagos.gs)). Los presupuestos no se marcan (no son un
-cargo) y los gastos puntuales ya están pagados al apuntarlos.
+Cada gasto del mes lleva una casilla de pagado y la cabecera enseña cuánto queda **pendiente de pagar**
+([`backend/Pagos.gs`](backend/Pagos.gs)). Los presupuestos no se marcan (no son un cargo). Las líneas pagadas se
+atenúan: lo que se ve sin atenuar es lo que queda por pagar.
 
-- **Una pestaña aparte, «Pagos»** (mes · ID del cargo · fecha), que la app crea la primera vez. No toca
-  ninguna fórmula: marcar un pago es informativo y no puede descuadrar el Resumen.
+- **Cada tipo nace en su estado normal.** Un cargo fijo nace pendiente y se marca al pagarlo; un gasto puntual
+  nace pagado (casi todos se pagan al momento) y se desmarca si se pagará más adelante. Al apuntarlo con el
+  formulario, la casilla «Ya está pagado» permite crearlo directamente como pendiente.
+- **Una pestaña aparte, «Pagos»** (mes · ID · fecha · estado), que la app crea la primera vez y que guarda
+  **solo lo que se aparta de lo normal**: un fijo pagado o un puntual pendiente. Así no hay una fila por cada
+  café y los datos antiguos siguieron valiendo sin migrarlos. No toca ninguna fórmula: es informativo.
 - **La clave es mes + ID**, no la fecha del cargo: los cargos semanales no tienen una fecha única en el mes,
   y un «× 4» es una sola casilla.
 - **Interfaz optimista.** Apps Script tarda unos 3 s; esperar su respuesta para rellenar una casilla se
@@ -197,6 +201,10 @@ cargo) y los gastos puntuales ya están pagados al apuntarlos.
 - **Una petición por casilla.** Mientras se guarda, la casilla no responde: con dos toques rápidos, el
   «desmarcar» podría llegar al servidor antes que el «marcar».
 - **Sin Deshacer.** Desmarcar es volver a tocar, y así marcar un pago no pisa el Deshacer de la última acción real.
+- **Sin marcas huérfanas.** La hoja numera los gastos desde el ID más alto: si se borra el M031, el siguiente vuelve
+  a ser M031. En las pruebas, un gasto nuevo heredó así el «pendiente» de uno borrado. El primer arreglo, en el
+  móvil, solo cubría el Deshacer; el definitivo está en el servidor: tras eliminar o deshacer, se borran de Pagos
+  las filas de gastos que ya no existen, vengan del camino que vengan.
 
 En «Mis registros», además, se puede **cambiar el nombre** de un gasto
 ([`backend/Renombrar.gs`](backend/Renombrar.gs)). En un cargo recurrente, el nombre nuevo sale en todos los meses.
@@ -249,6 +257,8 @@ acabaría en «Aina»; por eso la frase solo nombra la categoría elegida.
 | Descripción obligatoria al crear una categoría | Solo el nombre | Haiku la usa para clasificar los dictados |
 | Pagos en una pestaña propia, con clave mes + ID | Una columna en los cargos, o la fecha como clave | No toca las fórmulas y resuelve los cargos semanales, que no tienen fecha |
 | Casilla de pagado optimista, con vuelta atrás si falla | Esperar a la respuesta del servidor | Respuesta inmediata con un servidor de ~3 s |
+| Pagos guarda solo las excepciones al estado normal (fijo pendiente, puntual pagado) | Una fila por gasto y mes | Casi vacía, sin migrar los datos de antes y sin marcar cada café |
+| Limpiar las marcas de gastos borrados en el servidor | Parchearlo en el móvil | Un problema de integridad de datos se arregla donde viven los datos; el parche del móvil solo cubría un camino |
 | Caché de meses que enseña lo guardado y a la vez lo actualiza (*stale-while-revalidate*), solo en memoria | Caché pura, o pedir también los meses de al lado por adelantado | La caché pura habría que borrarla en cada guardar, editar o deshacer, y un olvido enseñaría datos viejos; adelantar meses ocuparía la hoja (cada petición escribe `B1`) y retrasaría el mes que quieres ver |
 | «Cambiar nombre» con su propio botón | Un único «Guardar cambios» para nombre, importe y categoría | Cada cambio tiene su Deshacer; con uno solo, Deshacer revertiría solo la última de dos operaciones |
 | Ingresos con formulario y mes propuesto por la regla del día 20 | Dictarlos, o elegir siempre el mes a mano | Son pocos datos y siempre iguales; el prompt de Haiku es de la v1 y la regla acierta en el caso habitual |

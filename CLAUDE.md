@@ -283,16 +283,19 @@ Apps Script. `?v=` 7.8.0. Probado en el iPhone (G1–G12 OK): orden de las tarje
 («Mensual · cada 3 meses» en Mis registros) y solo en su mes en «Mes», fecha de 2030 rechazada dentro de la tarjeta.
 README: sección «Gasto con formulario: otro proponente, el mismo validador» y fila en Decisiones.
 
-**Fase 11 — Gastos puntuales pagados o pendientes (v2.6) — en curso.** Detalle en la sección «Fase 11».
+**Fase 11 — Gastos puntuales pagados o pendientes (v2.6) — hecha.** Detalle en la sección «Fase 11».
 - **11.1 — hecha.** Backend: `Pagos.gs` (estado normal por tipo, columna Estado) y `Mes.gs` (`pagado` en los
   movimientos y el pendiente los incluye). `probarPagos()` en Apps Script: todo ✅ (cargo fijo, puntual de prueba que
   nace pagado, desmarcar sube el pendiente justo su importe, otro mes rechazado, limpieza). Nueva versión publicada.
-- **11.2 — hecha salvo U8/U9.** Interfaz: casillas en los puntuales de «Mes» y «Ya está pagado» en «+ Nuevo gasto».
+- **11.2 — hecha (U8/U9 resueltas en la 11.3).** Interfaz: casillas en los puntuales de «Mes» y «Ya está pagado» en «+ Nuevo gasto».
   `?v=` 7.9.0. En el iPhone U1–U7, U10 y U11 OK. **U8/U9 ❌:** tras borrar un gasto pendiente de prueba (M002, octubre),
   su fila siguió en Pagos y el siguiente gasto de octubre, que la v1 volvió a numerar M002, salió pendiente. El parche
   del cliente (quitar la marca antes del Deshacer) estaba en el sitio equivocado: solo cubría un camino.
-- **11.3 — en curso.** Limpieza de filas huérfanas en el servidor tras `eliminar` y `deshacer`; `limpiarPagos()` en el
-  editor; fuera el parche del cliente. `?v=` 7.9.1.
+- **11.3 — hecha.** Limpieza de filas huérfanas en el servidor tras `eliminar` y `deshacer`; `limpiarPagos()` en el
+  editor; fuera el parche del cliente. `?v=` 7.9.1. `probarPagos()` en Apps Script: todo ✅ y borró la huérfana real
+  (M002, octubre). En el iPhone L2–L7 OK: Deshacer y eliminar en «Mis registros» ya no dejan filas, y el gasto
+  siguiente con el mismo ID no hereda nada. README: «Marcar pagos» con los puntuales y las huérfanas, y dos filas en
+  Decisiones.
 
 ## Fase 11 — Gastos puntuales pagados o pendientes (v2.6)
 Motivo: Pau apuntó un gasto puntual que pagará cuando cobre; con la 8.2 los puntuales contaban siempre como pagados.
@@ -360,6 +363,13 @@ Pau los dejó para más adelante. Antes de empezar: repasar el plan con Pau y es
   tocar «Ingreso»; si cada línea lleva a «Mis registros» para borrarla (propuesta: no; se borra desde allí).
 - **Pruebas:** `probarMes()` en Apps Script y plantilla de iPhone (mes con nómina + comisiones, mes sin ingresos,
   apuntar un ingreso y volver a «Mes»: aparece tras «Actualizando…»).
+
+### C. Zona horaria de la hoja
+Visto en la 11.3: `probarPagos()` se ejecutó a las 21:23 (Madrid) y la marca salió `13:23` → la hoja va 8 h por detrás
+de Madrid, mientras que la v1 usa `CONFIG.ZONA` para «Registrado». Las fechas de los gastos no se ven afectadas (se
+guardan como número de serie, sin hora), pero «hoy» y el mes por defecto (`Mes.gs`, `Ingresos.gs`, con
+`getSpreadsheetTimeZone`) irían un día atrasados entre las 00:00 y las 08:00 en España. Propuesta: que Pau ponga
+Archivo → Configuración → Zona horaria = Madrid y comprobar después `probarMes()` y una fecha de Registrado.
 
 ### B. Bajar la latencia del dictado (~6–7 s)
 Lo medido: Groq ~0,4 s; `ms_interpretar` 2,6–3,9 s, del que ~1 s es leer la hoja (`leerContexto_` de la v1: abre el
