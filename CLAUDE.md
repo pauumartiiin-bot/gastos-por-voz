@@ -316,7 +316,7 @@ En Apps Script (Nueva versión publicada): `probarIngresos()` 14/14 y todo ✅, 
 nómina (100 €) y comisiones (50 €) de prueba en diciembre → 2 líneas y «cobrado 150 €», al instante desde la caché,
 bien en oscuro, y al borrarlas en «Mis registros» el bloque desaparece. README: viñeta en «Ingresos».
 
-**Fase B — Latencia del dictado — cerrada (B.1 hecha; B.2: no optimizar).** Detalle en «Pendientes → B». `dictar` devuelve
+**Fase B — Latencia del dictado — cerrada (B.1 hecha; B.2: no optimizar).** Detalle en la sección «Fase B». `dictar` devuelve
 `ms_servidor` (Api.gs); el modo pruebas enseña «Audio enviado» (KB del base64), «Servidor» y «Red y arranque»
 (total − `ms_servidor`). `medirLatencia()` (`backend/Latencia.gs`). `?v=` 7.11.0. Resultados (25 oct, noche):
 - `medirLatencia()`: `libro_()` 1.ª 213 ms (luego 1–2); `leerContexto_()` 1.ª 200 ms (luego 96–130);
