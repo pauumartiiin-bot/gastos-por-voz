@@ -307,9 +307,11 @@ no cuadrar o que falte o sobre una regla. Referencias actualizadas a 1.234 · 1.
 con el mismo 1.262 €. Cosmético: las marcas
 `Marcado_el` anteriores al cambio (p. ej. M001, 11:48) quedan con 8 h de menos.
 
-**Fase 12 — Ingresos en la cabecera de «Mes» (v2.7) — en pruebas.** Detalle en la sección «Fase 12». Probado en
-local (`probarIngresos()` con hoja simulada y la cabecera en el iPhone 13 simulado, claro y oscuro). Falta: copiar
-`Mes.gs` e `Ingresos.gs`, Nueva versión, `probarIngresos()`/`probarMes()` en Apps Script y pruebas en el iPhone.
+**Fase 12 — Ingresos en la cabecera de «Mes» (v2.7) — hecha.** Detalle en la sección «Fase 12». `?v=` 7.10.0.
+En Apps Script (Nueva versión publicada): `probarIngresos()` 14/14 y todo ✅, incluida «Nómina 1234.56 + Comisiones 250 =
+1484.56 · cobrado 1484.56», y limpieza ✅; `probarMes()` 3/3 ✅. En el iPhone E5–E10 OK: mes sin ingresos sin bloque,
+nómina (100 €) y comisiones (50 €) de prueba en diciembre → 2 líneas y «cobrado 150 €», al instante desde la caché,
+bien en oscuro, y al borrarlas en «Mis registros» el bloque desaparece. README: viñeta en «Ingresos».
 
 ## Fase 12 — Ingresos del mes en la cabecera de «Mes» (v2.7)
 Antes, pendiente A. Objetivo: ver de un vistazo qué forma el «cobrado» (p. ej. «Nómina octubre · 28 oct · 1.370 €» y

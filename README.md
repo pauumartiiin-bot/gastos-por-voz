@@ -226,6 +226,9 @@ se equivoca, así que aquí no hay modelo ([`backend/Ingresos.gs`](backend/Ingre
   falta cambiar la fórmula: basta con el aviso.
 - **Efecto en «Mes»:** al apuntar la nómina, el mes pasa de «previsto» a «cobrado» y, si es la del mes
   siguiente, ese pasa a ser el mes por defecto. Lo provoca un dato real, no una fecha fija.
+- **De dónde sale el «cobrado».** La cabecera de «Mes» lista los ingresos del mes (concepto · fecha · importe)
+  debajo de las cifras. Una prueba exige que sumen justo lo que la hoja cuenta como cobrado, y la ejecuto con
+  ingresos de prueba que crea y borra ella misma: con la pestaña vacía, la comprobación solo diría 0 = 0.
 
 ## Gasto con formulario: otro proponente, el mismo validador
 
