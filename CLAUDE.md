@@ -30,7 +30,7 @@ iPhone (esta app, GitHub Pages, instalada en pantalla de inicio)
   `redirect: 'follow'` (Apps Script responde con una redirección).
 - Interfaz en español. Comentarios del código en español, breves.
 
-## Contrato de la API (fases 6.1–10)
+## Contrato de la API (fases 6.1–11)
 Petición: un único `doPost` (en `backend/Api.gs`) que enruta por `accion`. Cuerpo JSON enviado como texto plano:
 ```json
 { "t": "<token>", "accion": "dictar", ...parámetros }
@@ -49,7 +49,7 @@ Petición: un único `doPost` (en `backend/Api.gs`) que enruta por `accion`. Cue
 | `mes` | `etiqueta?` (sin ella, el mes por defecto) | `mes_` (nuevo, `backend/Mes.gs`) con `libro_` y `conBloqueo_` | `etiqueta`, `mes_inicio`, `por_defecto`, `meses`, `cabecera`, `categorias`, `cuadra`, `ms` (detalle en «Fase 7») |
 | `categoria` | `nombre`, `descripcion` | `crearCategoria_` (nuevo, `backend/Categorias.gs`) con `libro_`, `conBloqueo_`, `normalizar` y `apuntarDeshacer_` | `nombre`, `desc`, `huecos_libres` (detalle en «Fase 7b») |
 | `renombrar` | `hoja` (`Recurrentes` \| `Movimientos`), `id`, `concepto` | `renombrar_` (nuevo, `backend/Renombrar.gs`) con `libro_`, `conBloqueo_`, `buscarFilaPorId_`, `COL`/`COLM` y `apuntarDeshacer_` | `id`, `concepto`, `desc` (detalle en «Fase 8») |
-| `pagar` | `etiqueta`, `id`, `pagado` (`true` \| `false`) | `pagar_` (nuevo, `backend/Pagos.gs`) con `libro_`, `conBloqueo_`, `buscarFilaPorId_` y `COL` | `etiqueta`, `id`, `pagado`, `pagado_el` (detalle en «Fase 8») |
+| `pagar` | `etiqueta`, `id` (regla R… o gasto puntual M…), `pagado` (`true` \| `false`) | `pagar_` (nuevo, `backend/Pagos.gs`) con `libro_`, `conBloqueo_`, `buscarFilaPorId_`, `COL` y `COLM` | `etiqueta`, `id`, `pagado`, `pagado_el` (detalle en «Fase 8» y «Fase 11») |
 | `ingresos` | — | `ingresos_` (nuevo, `backend/Ingresos.gs`) con `libro_` y `normalizar` | `hoy`, `meses` (`etiqueta`, `inicio`, `previsto`, `nomina`), `ingresos` (últimos 20) (detalle en «Fase 9») |
 | `ingreso` | `tipo`, `importe`, `fecha`, `mes`, `concepto?` | `apuntarIngreso_` (nuevo) con `conBloqueo_`, `siguienteId_`, `escribirFila_`, `fechaSerial_`, `ahoraSerial_` y `apuntarDeshacer_` | `id`, `desc`, `ingreso` |
 | `borrar_ingreso` | `id` | `borrarIngreso_` (nuevo) con `conBloqueo_`, `buscarFilaPorId_`, `aJSON_` y `apuntarDeshacer_` | `id`, `desc` |
@@ -98,7 +98,7 @@ backend/Evaluacion.gs   evaluación 6.4 con audios de Drive (se ejecuta desde el
 backend/Mes.gs          acción mes (fase 7): lee el mes de la hoja y restaura Resumen!B1; se copia a mano
 backend/Categorias.gs   acción categoria (fase 7b): crea una categoría antes de «Otros»; se copia a mano
 backend/Renombrar.gs    acción renombrar (fase 8.1): cambia el concepto de un gasto; se copia a mano
-backend/Pagos.gs        acción pagar (fase 8.2): marca o desmarca un cargo fijo en la pestaña Pagos; se copia a mano
+backend/Pagos.gs        acción pagar (fases 8.2 y 11.1): marca cargos fijos y gastos puntuales en la pestaña Pagos; se copia a mano
 backend/Ingresos.gs     acciones ingresos, ingreso y borrar_ingreso (fase 9.1); se copia a mano
 docs/                   capturas del README (generadas con datos inventados)
 CLAUDE.md               este archivo
@@ -282,6 +282,39 @@ Apps Script. `?v=` 7.8.0. Probado en el iPhone (G1–G12 OK): orden de las tarje
 «Aina») en Movimientos, Deshacer, campos de recurrente según la frecuencia, mensual cada 3 con fin en Recurrentes
 («Mensual · cada 3 meses» en Mis registros) y solo en su mes en «Mes», fecha de 2030 rechazada dentro de la tarjeta.
 README: sección «Gasto con formulario: otro proponente, el mismo validador» y fila en Decisiones.
+
+**Fase 11 — Gastos puntuales pagados o pendientes (v2.6) — en curso.** Detalle en la sección «Fase 11».
+- **11.1 — hecha.** Backend: `Pagos.gs` (estado normal por tipo, columna Estado) y `Mes.gs` (`pagado` en los
+  movimientos y el pendiente los incluye). `probarPagos()` en Apps Script: todo ✅ (cargo fijo, puntual de prueba que
+  nace pagado, desmarcar sube el pendiente justo su importe, otro mes rechazado, limpieza). Nueva versión publicada.
+- **11.2 — en curso.** Interfaz: casillas en los puntuales de «Mes» y «Ya está pagado» en «+ Nuevo gasto». `?v=` 7.9.0.
+
+## Fase 11 — Gastos puntuales pagados o pendientes (v2.6)
+Motivo: Pau apuntó un gasto puntual que pagará cuando cobre; con la 8.2 los puntuales contaban siempre como pagados.
+Decisiones (confirmadas por Pau):
+- **Opción A: un gasto puntual nace pagado** (la mayoría se paga al momento); se puede desmarcar. Descartadas: según la
+  fecha (futura → pendiente; falla si se apunta hoy y se paga al cobrar) y pendiente por defecto (habría que marcar
+  cada café).
+- **Pestaña Pagos = lo que se aparta de lo normal**, con una columna nueva: `Mes · ID · Marcado_el · Estado`. Cargo fijo
+  (R…): normal pendiente, la fila dice «pagado». Gasto puntual (M…): normal pagado, la fila dice «pendiente». Volver a
+  lo normal borra la fila. Las filas de la 8.2 (sin Estado) valen como «pagado»; al escribir, `hojaPagos_` pone la
+  cabecera nueva (C «Marcado_el», D «Estado») si falta.
+- `pagar`: el ID se busca en Recurrentes (presupuesto → `rechazado`) y luego en Movimientos; un puntual tiene que ser
+  del mes pedido (el mismo mes natural que lee «Mes»), si no → `rechazado` «Ese gasto no es de este mes». `pagado_el`
+  solo cuando queda pagado por una fila.
+- `mes`: cada movimiento trae `pagado`; `pendiente` = cargos fijos sin pagar + puntuales pendientes.
+- `probarPagos()` añade un puntual de prueba (M…, 12,34 € el día 15 del mes, en «Otros»): nace pagado, desmarcar dos
+  veces → 1 fila «pendiente» y el pendiente sube justo 12,34, marcar dos veces → sin filas, otro mes → rechazado.
+  Limpieza: borra el movimiento y sus filas.
+- **Interfaz (11.2):** casilla también en los puntuales de «Mes» (`lineaPagable` para fijos y puntuales: mismo marcado
+  optimista, misma caché), atenuados si están pagados: lo no atenuado es lo que queda por pagar. En «+ Nuevo gasto»,
+  con Puntual, casilla «Ya está pagado» marcada por defecto; si se desmarca, tras `guardar` se llama a `pagar` con
+  `pagado: false` en el mes de la fecha (los meses, de `ingresos`, que se pide junto a `registros` al abrir; un mes que
+  no está en la hoja → aviso sin enviar). Si `pagar` falla, el gasto queda guardado y el aviso dice que se desmarque
+  en «Mes». **Deshacer** justo después de un gasto apuntado como pendiente (`pendienteReciente`) llama antes a
+  `pagar` con `pagado: true`: si no, su fila de Pagos quedaría huérfana y el siguiente gasto con el mismo ID (la v1
+  numera desde el máximo) heredaría el «pendiente». Queda el mismo riesgo si se elimina en «Mis registros» un puntual
+  marcado como pendiente (raro; no se cubre). Los dictados no cambian (guardado de la v1): se desmarcan en «Mes».
 
 ## Fase 10 — Gasto con formulario (v2.5)
 Apuntar un gasto escribiéndolo, sin dictar. Decisiones (confirmadas por Pau):
