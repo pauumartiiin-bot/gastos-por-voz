@@ -105,6 +105,7 @@ backend/Renombrar.gs    acción renombrar (fase 8.1): cambia el concepto de un g
 backend/Pagos.gs        acción pagar (fases 8.2 y 11.1): marca cargos fijos y gastos puntuales en la pestaña Pagos; se copia a mano
 backend/Ingresos.gs     acciones ingresos, ingreso y borrar_ingreso (fase 9.1); se copia a mano
 backend/Latencia.gs     medirLatencia() (fase B.1): cronometra libro_, leerContexto_ e interpretar; se copia a mano
+backend/Migraciones.gs  cambios en la hoja de cada fase (aplicarFase13…), se ejecutan una vez desde el editor; se copia a mano
 docs/                   capturas del README (generadas con datos inventados)
 CLAUDE.md               este archivo
 README.md               README de portfolio (fase 6.5)
@@ -363,6 +364,11 @@ Decisiones (confirmadas por Pau):
 - `probarPeriodos()` (Mes.gs, editor): en todos los meses, E ≤ A, E ≤ F (periodo no vacío ni al revés) y
   E = F del anterior + 1; en el último mes con nómina, un gasto de prueba el primer día del periodo cae en ese mes
   y otro de la víspera en el anterior, con `cuadra` ✅ en los dos. Limpieza en `finally`.
+- **Cambios de la hoja por código:** `aplicarFase13()` (`backend/Migraciones.gs`, una vez desde el editor) hace todo lo
+  anterior en vez de Pau a mano. Antes de escribir comprueba que Meses E1:F1 y Resumen D2:E3 están vacías y que el
+  filtro aparece 37 + 37 veces; si no, no toca nada. Si ya estaba aplicada, no repite nada. Reescribe solo las 25
+  celdas con el filtro (`getFormulas`/`setFormula`, fórmulas en inglés y con comas). Probada contra las fórmulas
+  reales de la hoja (export del 26 oct): 29 celdas del Resumen cambiadas, 0 filtros con B2/B3, segunda vez sin cambios.
 - Datos reales: M001–M003, M005 y M006 están con fecha 1/11 (puestos así a mano). La P1 del iPhone se adapta: cambiar
   la fecha de M006 a 26/10 y comprobar que sigue en noviembre.
 
