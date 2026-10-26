@@ -163,6 +163,13 @@ y no hay que acordarse de borrarla en cada acción. El caso delicado era una car
 la actualización viene de camino, esa respuesta es una foto anterior a tu marca y la desharía. Un contador de
 cambios por mes la detecta y, en ese caso, manda lo guardado.
 
+**Un mes empieza cuando llega su nómina.** Al principio, un gasto del 26 de octubre caía en octubre, aunque la
+nómina de octubre (la que paga noviembre) ya hubiera entrado y «Mes» ya mostrara noviembre. Ahora cada mes tiene un
+periodo, calculado en la propia hoja: va del día en que se cobra su nómina (nunca después del día 1) a la víspera
+de la siguiente. Sin nómina apuntada, es el mes natural. Los gastos puntuales van por ese periodo y los
+recurrentes siguen por mes natural, porque casi todos se cobran el día 1. Un gasto puntual puede cambiar de mes al
+apuntar la nómina, así que su marca de «pendiente» va con el gasto y no con el mes.
+
 ## Categorías: la descripción también es un prompt
 
 Desde la pestaña «Crear» se puede añadir una categoría con **nombre y descripción**
@@ -267,6 +274,7 @@ acabaría en «Aina»; por eso la frase solo nombra la categoría elegida.
 | Ingresos con formulario y mes propuesto por la regla del día 20 | Dictarlos, o elegir siempre el mes a mano | Son pocos datos y siempre iguales; el prompt de Haiku es de la v1 y la regla acierta en el caso habitual |
 | Corregir un ingreso borrándolo y volviéndolo a apuntar | Un editor de ingresos | Pasa pocas veces; menos código que mantener |
 | Dejar la latencia como está tras medirla tramo a tramo | Cachear el contexto de la hoja o calentar Apps Script | La caché ahorraba ~0,3 s tocando código de la v1 y calentar no cambiaba nada (frío ≈ caliente); el grueso (~2 s) es Apps Script |
+| Los gastos puntuales van al mes de la nómina, con el periodo calculado en la pestaña Meses | Mes natural, o calcular el periodo en el código | El mes que se vive empieza con la nómina. Calculado en una sola columna, el Resumen, «Mes», los pagos y la app usan el mismo periodo |
 | Gasto con formulario que reutiliza el guardado de los dictados | Una acción nueva en el servidor, o pasar el texto por Haiku | Una sola validación para todo; sin LLM, lo escrito no se reinterpreta |
 
 ## Latencia

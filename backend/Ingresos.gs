@@ -25,10 +25,11 @@ function ingresos_() {
   lista.filter((i) => normalizar(i.tipo) === 'nomina').forEach((i) => { conNomina[i.mes] = true; });   // v1
 
   const h = libro.getSheetByName('Meses');
-  const meses = h.getLastRow() < 2 ? [] : h.getRange(2, 1, h.getLastRow() - 1, 3).getValues()
+  const meses = h.getLastRow() < 2 ? [] : h.getRange(2, 1, h.getLastRow() - 1, 6).getValues()
     .filter((f) => f[0] instanceof Date && String(f[1]).trim())
     .map((f) => ({ etiqueta: String(f[1]), inicio: textoFecha_(f[0], zona), previsto: redondear2_(f[2]),
-                   nomina: !!conNomina[String(f[1])] }));   // Mes.gs
+                   nomina: !!conNomina[String(f[1])],
+                   periodo_inicio: textoFecha_(f[4], zona) || null, periodo_fin: textoFecha_(f[5], zona) || null }));   // Mes.gs
 
   return {
     hoy: Utilities.formatDate(new Date(), zona, 'yyyy-MM-dd'),

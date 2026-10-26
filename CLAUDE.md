@@ -30,7 +30,7 @@ iPhone (esta app, GitHub Pages, instalada en pantalla de inicio)
   `redirect: 'follow'` (Apps Script responde con una redirección).
 - Interfaz en español. Comentarios del código en español, breves.
 
-## Contrato de la API (fases 6.1–11)
+## Contrato de la API (fases 6.1–13)
 Petición: un único `doPost` (en `backend/Api.gs`) que enruta por `accion`. Cuerpo JSON enviado como texto plano:
 ```json
 { "t": "<token>", "accion": "dictar", ...parámetros }
@@ -50,12 +50,14 @@ Petición: un único `doPost` (en `backend/Api.gs`) que enruta por `accion`. Cue
 | `categoria` | `nombre`, `descripcion` | `crearCategoria_` (nuevo, `backend/Categorias.gs`) con `libro_`, `conBloqueo_`, `normalizar` y `apuntarDeshacer_` | `nombre`, `desc`, `huecos_libres` (detalle en «Fase 7b») |
 | `renombrar` | `hoja` (`Recurrentes` \| `Movimientos`), `id`, `concepto` | `renombrar_` (nuevo, `backend/Renombrar.gs`) con `libro_`, `conBloqueo_`, `buscarFilaPorId_`, `COL`/`COLM` y `apuntarDeshacer_` | `id`, `concepto`, `desc` (detalle en «Fase 8») |
 | `pagar` | `etiqueta`, `id` (regla R… o gasto puntual M…), `pagado` (`true` \| `false`) | `pagar_` (nuevo, `backend/Pagos.gs`) con `libro_`, `conBloqueo_`, `buscarFilaPorId_`, `COL` y `COLM` | `etiqueta`, `id`, `pagado`, `pagado_el` (detalle en «Fase 8» y «Fase 11») |
-| `ingresos` | — | `ingresos_` (nuevo, `backend/Ingresos.gs`) con `libro_` y `normalizar` | `hoy`, `meses` (`etiqueta`, `inicio`, `previsto`, `nomina`), `ingresos` (últimos 20) (detalle en «Fase 9») |
+| `ingresos` | — | `ingresos_` (nuevo, `backend/Ingresos.gs`) con `libro_` y `normalizar` | `hoy`, `meses` (`etiqueta`, `inicio`, `previsto`, `nomina`, `periodo_inicio`, `periodo_fin`), `ingresos` (últimos 20) (detalle en «Fase 9» y «Fase 13») |
 | `ingreso` | `tipo`, `importe`, `fecha`, `mes`, `concepto?` | `apuntarIngreso_` (nuevo) con `conBloqueo_`, `siguienteId_`, `escribirFila_`, `fechaSerial_`, `ahoraSerial_` y `apuntarDeshacer_` | `id`, `desc`, `ingreso` |
 | `borrar_ingreso` | `id` | `borrarIngreso_` (nuevo) con `conBloqueo_`, `buscarFilaPorId_`, `aJSON_` y `apuntarDeshacer_` | `id`, `desc` |
 
 - En `dictar` con `corrige`, lo dictado es el cambio pedido y `frase` es la frase original (así lo espera `interpretar`).
 - `ms_interpretar` incluye leer el contexto de la hoja + Haiku + validación.
+- Fase 13: en `mes`, los `movimientos` son los del **periodo** del mes (Resumen E2:E3, de Meses E:F), no los del mes
+  natural; las reglas siguen por mes natural (B2:B3). `pagar` acepta un puntual si su fecha está en el periodo.
 - `ms_servidor` (fase B.1): de la entrada a la salida de `doPost`. Lo lleva toda respuesta de `dictar`, también el
   `rechazado` por silencio; el resto de acciones no.
 - `vocabulario` (por defecto `false`; solo se usa si llega `true`): se envía a Whisper como `prompt` un texto con conceptos y categorías de la hoja
@@ -330,6 +332,39 @@ bien en oscuro, y al borrarlas en «Mis registros» el bloque desaparece. README
   Red y arranque no depende del tamaño del audio (103–151 KB → mismo tiempo): es el coste fijo de Apps Script.
   La latencia ya es menor que en la 6.1 (5,7–7,6 s).
 - B.2 decidida: cerrar sin optimizar (sección «Fase B»).
+
+**Fase 13 — Los gastos puntuales van al mes de la nómina (v2.8) — en pruebas.** Detalle en la sección «Fase 13».
+`?v=` 7.12.0. Probado en local (hoja simulada con la nómina del 26/10): periodos 27/27, gasto del 26/10 en noviembre
+y del 25/10 en octubre con `cuadra` ✅, marca «pendiente» guardada con la etiqueta de octubre que sigue al gasto y
+`probarPagos()` todo ✅. Falta: la hoja (Pau), copiar Mes.gs, Pagos.gs e Ingresos.gs, Nueva versión, pruebas en el
+editor y en el iPhone.
+
+## Fase 13 — Los gastos puntuales van al mes de la nómina (v2.8)
+Fallo visto en uso real (26 oct): con la nómina de octubre apuntada («Mes» ya abría en noviembre), un gasto del 26/10
+caía en octubre. Había dos ideas de «mes»: el mes por defecto va por la nómina (`mesPorDefecto_`) y los gastos
+puntuales iban por el mes natural (Resumen, `construirMes_`, `estadoNormal_` y «+ Nuevo gasto»).
+Decisiones (confirmadas por Pau):
+- **Periodo de un mes** = del día en que se cobra su nómina a la víspera de la nómina siguiente; sin nómina, el mes
+  natural. **Nunca empieza después del día 1** (si la nómina llega el 2, los cargos del 1 no caen en el mes anterior).
+- **Solo los gastos puntuales.** Los recurrentes siguen por mes natural: `Cálculo!N` usa `YEAR/MONTH(B2)` y
+  `DAY(B3)`, así que B2 y B3 no se tocan.
+- **Una sola fuente de verdad:** Meses E `Inicio_periodo` y F `Fin_periodo` (D queda libre para la fase 14):
+  E2 `=LET(c; MINIFS(Ingresos!$B:$B; Ingresos!$C:$C; B2; Ingresos!$E:$E; "nómina"); IF(c>0; MIN(A2; c); A2))` y
+  F2 `=IF(A3=""; EOMONTH(A2; 0); E3-1)`. Resumen: D2/E2 «Periodo desde» y D3/E3 «Periodo hasta» con `INDEX`/`MATCH`
+  sobre Meses E y F; las 37 + 37 apariciones del filtro de Movimientos (B7, la D de los 12 bloques «cat» y las 12
+  filas de detalle, dos veces cada una) pasan de `$B$2`/`$B$3` a `$E$2`/`$E$3`.
+- **Nada de fórmulas en Movimientos:** `escribirFila_` y `siguienteId_` (v1) usan `getLastRow()`.
+- **Las marcas de Pagos de un puntual van con su ID:** `filasPago_` y `pagosDelMes_` buscan los «M…» solo por ID
+  (`esPuntual_`); al marcar uno cuya fila tiene otra etiqueta, la fila pasa al mes actual. Los «R…» siguen con
+  mes + ID.
+- Código: `mesesDeLaHoja_` y `ingresos_` devuelven `periodo_inicio`/`periodo_fin`; `leerMesEnHoja_` lee Resumen E2:E3
+  y `construirMes_` filtra los movimientos con ellos; `estadoNormal_` recibe el mes y comprueba el periodo; en la app,
+  el gasto pendiente de «+ Nuevo gasto» busca el mes cuyo periodo contiene la fecha.
+- `probarPeriodos()` (Mes.gs, editor): en todos los meses, E ≤ A, E ≤ F (periodo no vacío ni al revés) y
+  E = F del anterior + 1; en el último mes con nómina, un gasto de prueba el primer día del periodo cae en ese mes
+  y otro de la víspera en el anterior, con `cuadra` ✅ en los dos. Limpieza en `finally`.
+- Datos reales: M001–M003, M005 y M006 están con fecha 1/11 (puestos así a mano). La P1 del iPhone se adapta: cambiar
+  la fecha de M006 a 26/10 y comprobar que sigue en noviembre.
 
 ## Fase 12 — Ingresos del mes en la cabecera de «Mes» (v2.7)
 Antes, pendiente A. Objetivo: ver de un vistazo qué forma el «cobrado» (p. ej. «Nómina octubre · 28 oct · 1.370 €» y
