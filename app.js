@@ -402,7 +402,7 @@ async function crearCategoria(e) {
 // Monta el mismo JSON que devuelve Haiku al dictar y lo guarda con «guardar» de la v1: la validación, el ID
 // y el Deshacer son los de siempre. Al validador le da igual quién propone: el modelo o un formulario.
 
-let mesesGasto = [];        // meses de la hoja ({ etiqueta, inicio }): para dejar un puntual pendiente en su mes
+let mesesGasto = [];        // meses de la hoja (con su periodo, fase 13): para dejar un puntual pendiente en su mes
 
 function estadoGasto(mensaje, esError = false) {
   $('estado-gasto').textContent = mensaje;
@@ -476,7 +476,8 @@ async function guardarGasto(e) {
   };
   // Un puntual sin pagar se guarda y luego se marca pendiente en su mes (fase 11.2).
   const pendiente = frecuencia === 'puntual' && !$('gasto-pagado').checked;
-  const mes = pendiente ? mesesGasto.find((m) => m.inicio.slice(0, 7) === fecha.slice(0, 7)) : null;
+  // Su mes es el del periodo que contiene la fecha (desde la nómina), como en «Mes» (fase 13).
+  const mes = pendiente ? mesesGasto.find((m) => m.periodo_inicio <= fecha && fecha <= m.periodo_fin) : null;
   if (pendiente && !mes) return estadoGasto('Ese mes no está en la hoja: no se puede dejar como pendiente.', true);
 
   // La v1 da prioridad a una categoría nombrada en la frase: aquí solo se nombra la elegida,

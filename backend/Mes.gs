@@ -5,6 +5,9 @@
  *
  * Acoplamiento: depende de las posiciones de Resumen, Cálculo, Movimientos, Meses e Ingresos.
  * Si cambia el Resumen, hay que revisar este archivo.
+ *
+ * Fase 13: los gastos puntuales van al periodo del mes (Meses E:F), que empieza el día en que se cobra su nómina
+ * (nunca después del día 1) y acaba la víspera de la nómina siguiente. Los recurrentes siguen por mes natural (B2:B3).
  */
 
 const MES_CELDA_ = 'B1';            // Resumen: etiqueta del mes elegido
@@ -45,13 +48,14 @@ function ingresosDelMes_(libro, etiqueta, zona) {
     .map((i) => ({ id: i.id, fecha: i.fecha, concepto: i.concepto, tipo: i.tipo, importe: i.importe }));
 }
 
-/** Filas de Meses en orden: { inicio: 'yyyy-MM-dd', etiqueta }. */
+/** Filas de Meses en orden: { inicio, etiqueta, periodo_inicio, periodo_fin } (fechas 'yyyy-MM-dd'; E y F, fase 13). */
 function mesesDeLaHoja_(libro, zona) {
   const h = libro.getSheetByName('Meses');
   if (h.getLastRow() < 2) return [];
-  return h.getRange(2, 1, h.getLastRow() - 1, 2).getValues()
+  return h.getRange(2, 1, h.getLastRow() - 1, 6).getValues()
     .filter((f) => f[0] instanceof Date && String(f[1]).trim())
-    .map((f) => ({ inicio: textoFecha_(f[0], zona), etiqueta: String(f[1]) }));
+    .map((f) => ({ inicio: textoFecha_(f[0], zona), etiqueta: String(f[1]),
+                   periodo_inicio: textoFecha_(f[4], zona) || null, periodo_fin: textoFecha_(f[5], zona) || null }));
 }
 
 /**
@@ -96,6 +100,7 @@ function leerMesEnHoja_(libro, etiqueta) {
     const movs = libro.getSheetByName('Movimientos');
     return {
       cabecera: resumen.getRange('B2:B6').getValues().map((f) => f[0]),   // inicio, fin, ingreso, previsto, restante
+      periodo: resumen.getRange('E2:E3').getValues().map((f) => f[0]),    // periodo de los puntuales (fase 13)
       ingreso: resumen.getRange('E4:E6').getValues().map((f) => f[0]),    // previsto, cobrado, origen
       tabla: resumen.getRange(MES_PRIMERA_FILA_, 1, MES_ULTIMA_FILA_ - MES_PRIMERA_FILA_ + 1, 7).getValues(),
       calculo: calculo.getLastRow() < 2 ? []
@@ -118,8 +123,9 @@ function leerMesEnHoja_(libro, etiqueta) {
  */
 function construirMes_(h, zona, pagos) {
   pagos = pagos || {};
-  const desde = textoFecha_(h.cabecera[0], zona);
-  const hasta = textoFecha_(h.cabecera[1], zona);
+  // Los puntuales van por el periodo del mes (Resumen E2:E3), no por el mes natural (fase 13).
+  const desde = textoFecha_(h.periodo[0], zona);
+  const hasta = textoFecha_(h.periodo[1], zona);
 
   // Cálculo: A ID, B Concepto, C Categoría, D Tipo, N Fecha_cargo, O Veces_en_mes, P Importe_en_mes.
   // Las semanales no tienen Fecha_cargo en la hoja: van con null.
@@ -130,7 +136,7 @@ function construirMes_(h, zona, pagos) {
     pagado: estadoPago_(pagos, f[0], false), pagado_el: estadoPago_(pagos, f[0], false) ? pagos[String(f[0])].el : null
   })));
 
-  // Movimientos: A ID, B Fecha, C Concepto, D Importe, E Categoría; solo los del mes.
+  // Movimientos: A ID, B Fecha, C Concepto, D Importe, E Categoría; solo los del periodo.
   const movimientos = agrupar_(h.movimientos.filter((f) => f[0] && f[1] instanceof Date).map((f) => ({
     categoria: String(f[4]).trim(),
     id: String(f[0]), fecha: textoFecha_(f[1], zona), concepto: String(f[2]), importe: redondear2_(f[3]),
@@ -284,4 +290,70 @@ function logMes_(r) {
   });
   r.ingresos.forEach((i) => Logger.log('  Ingreso ' + i.id + ' ' + i.concepto + ' · ' + i.tipo + ' · ' + i.fecha + ' · ' + i.importe));
   Logger.log('Cuadra: ' + (r.cuadra ? '✅' : '❌') + ' (suma de categorías = total previsto)');
+}
+
+/**
+ * Fase 13, desde el editor: los periodos de Meses (E:F) encadenan sin huecos ni solapes, y un gasto puntual cae en
+ * el mes de la nómina. En el último mes con nómina apuntada, un gasto de prueba el primer día del periodo va a ese
+ * mes y otro de la víspera, al anterior. Los dos se borran en el finally (no tocan ULTIMO ni Pagos).
+ */
+function probarPeriodos() {
+  const libro = libro_();
+  const zona = libro.getSpreadsheetTimeZone();
+  const meses = mesesDeLaHoja_(libro, zona);
+
+  const fallos = [];
+  meses.forEach((m, i) => {
+    if (!m.periodo_inicio || !m.periodo_fin) return fallos.push(m.etiqueta + ': sin periodo (¿faltan E y F?)');
+    if (m.periodo_inicio > m.inicio) fallos.push(m.etiqueta + ': empieza después del día 1 (' + m.periodo_inicio + ')');
+    if (m.periodo_inicio > m.periodo_fin) fallos.push(m.etiqueta + ': periodo vacío o al revés (' + m.periodo_inicio + ' → ' + m.periodo_fin + ')');
+    const anterior = meses[i - 1];
+    if (anterior && anterior.periodo_fin && sumarDias_(anterior.periodo_fin, 1) !== m.periodo_inicio) {   // Ingresos.gs
+      fallos.push(m.etiqueta + ': no empieza justo después de ' + anterior.etiqueta + ' (' + anterior.periodo_fin + ')');
+    }
+  });
+  fallos.forEach((f) => Logger.log('❌ ' + f));
+  Logger.log((fallos.length ? '❌ ' : '✅ ') + 'Periodos: ' + (meses.length - fallos.length) + '/' + meses.length +
+             ' meses sin huecos ni solapes');
+
+  // El último mes con nómina apuntada (y con un mes anterior en la hoja).
+  const conNomina = {};
+  leerIngresos_(libro.getSheetByName(ING_HOJA_), zona)   // Ingresos.gs
+    .filter((x) => normalizar(x.tipo) === 'nomina').forEach((x) => { conNomina[x.mes] = x.fecha; });   // v1
+  const i = meses.map((m, k) => (conNomina[m.etiqueta] && k > 0 ? k : -1)).filter((k) => k >= 0).pop();
+  if (i == null) { Logger.log('⚠️ No hay ninguna nómina apuntada: no se puede probar el cambio de mes.'); return; }
+  const mes = meses[i];
+  const previo = meses[i - 1];
+  const dia = mes.periodo_inicio;
+  const vispera = sumarDias_(dia, -1);
+  Logger.log('== ' + mes.etiqueta + ': nómina el ' + conNomina[mes.etiqueta] + ' → periodo ' + mes.periodo_inicio +
+             ' a ' + mes.periodo_fin);
+
+  const movs = libro.getSheetByName('Movimientos');
+  const cat = nombresCategorias_(libro.getSheetByName('Categorías'));   // Categorias.gs
+  const categoria = cat.indexOf('Otros') >= 0 ? 'Otros' : cat[0];
+  const formatos = { 2: 'dd/mm/yyyy', 4: '#,##0.00 "€"', 7: 'dd/mm/yyyy hh:mm' };
+  const ids = [];
+  try {
+    [[dia, 1.11], [vispera, 2.22]].forEach(([fecha, importe]) => {
+      const id = siguienteId_(movs, 'M');   // v1
+      escribirFila_(movs, [id, fechaSerial_(fecha), 'Prueba 13', importe, categoria, 'probarPeriodos', ahoraSerial_()], formatos);
+      ids.push(id);
+    });
+    const enMes = (r) => [].concat(...r.categorias.map((k) => k.movimientos)).map((m) => m.id);
+    const a = mes_({ etiqueta: mes.etiqueta });
+    const b = mes_({ etiqueta: previo.etiqueta });
+    const bienA = enMes(a).indexOf(ids[0]) >= 0 && enMes(a).indexOf(ids[1]) < 0;
+    const bienB = enMes(b).indexOf(ids[1]) >= 0 && enMes(b).indexOf(ids[0]) < 0;
+    Logger.log((bienA ? '✅ ' : '❌ ') + ids[0] + ' del ' + dia + ' (día de la nómina) → en ' + mes.etiqueta +
+               ' · cuadra ' + (a.cuadra ? '✅' : '❌'));
+    Logger.log((bienB ? '✅ ' : '❌ ') + ids[1] + ' del ' + vispera + ' (víspera) → en ' + previo.etiqueta +
+               ' · cuadra ' + (b.cuadra ? '✅' : '❌'));
+  } finally {
+    ids.forEach((id) => {
+      let f;
+      while ((f = buscarFilaPorId_(movs, id)) > 0) movs.deleteRow(f);   // v1
+    });
+    Logger.log((ids.every((id) => buscarFilaPorId_(movs, id) < 0) ? '✅ ' : '❌ ') + 'Limpieza: Movimientos como estaba');
+  }
 }

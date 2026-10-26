@@ -6,6 +6,8 @@
  * Las filas de la 8.2 no tienen Estado y valen como «pagado». No cambia ninguna fórmula: es informativo.
  * La clave es mes + ID (no fecha_cargo, que las semanales no tienen). No usa ULTIMO: desmarcar es volver a tocar
  * la casilla, y así no se pisa el Deshacer de la última acción real.
+ * Fase 13: un gasto puntual puede cambiar de mes al apuntar una nómina (su periodo se mueve), así que su marca va
+ * con su ID, sea cual sea el mes de la fila; al volver a marcarlo, la fila pasa al mes actual.
  * Fase 11.3: tras borrar un gasto, sus filas se limpian (la v1 reutiliza los IDs: el siguiente gasto las heredaría).
  */
 
@@ -24,7 +26,7 @@ function pagar_(p) {
 
   return conBloqueo_(() => {   // v1: un acceso a la vez
     // Errores de negocio con un mensaje para el usuario: se devuelven, no se lanzan.
-    const normal = estadoNormal_(libro, id, mes.inicio, zona);
+    const normal = estadoNormal_(libro, id, mes, zona);
     if (normal.error) return { ok: false, error: 'rechazado', mensaje: normal.error };
 
     const hoja = hojaPagos_(libro);
@@ -33,6 +35,7 @@ function pagar_(p) {
     if (p.pagado !== normal.pagado) {
       // Se aparta de lo normal: se guarda (una sola fila, aunque se marque dos veces).
       if (filas.length) {
+        hoja.getRange(filas[0], 1).setValue(etiqueta);   // un puntual que cambió de mes: la fila pasa al actual
         marcadoEl = textoFechaHora_(hoja.getRange(filas[0], 3).getValue(), zona);
       } else {
         const ahora = new Date();
@@ -50,9 +53,9 @@ function pagar_(p) {
 /**
  * Estado normal de un gasto en un mes: { pagado } o { error }.
  * Cargo fijo de Recurrentes → pendiente (los presupuestos no se marcan). Gasto puntual de Movimientos → pagado, y
- * tiene que ser de ese mes (el mismo mes natural que lee «Mes»: de B2 a B3 del Resumen).
+ * tiene que ser de ese mes: su fecha, dentro del periodo del mes (Meses E:F, fase 13), como en «Mes».
  */
-function estadoNormal_(libro, id, inicioMes, zona) {
+function estadoNormal_(libro, id, mes, zona) {
   const rec = libro.getSheetByName('Recurrentes');
   const fr = buscarFilaPorId_(rec, id);   // v1
   if (fr > 0) {
@@ -65,7 +68,7 @@ function estadoNormal_(libro, id, inicioMes, zona) {
   const fm = buscarFilaPorId_(movs, id);
   if (fm > 0) {
     const fecha = textoFecha_(movs.getRange(fm, COLM.FECHA).getValue(), zona);   // Mes.gs; COLM es de la v1
-    if (fecha.slice(0, 7) !== inicioMes.slice(0, 7)) return { error: 'Ese gasto no es de este mes. Recarga el mes.' };
+    if (!(fecha >= mes.periodo_inicio && fecha <= mes.periodo_fin)) return { error: 'Ese gasto no es de este mes. Recarga el mes.' };
     return { pagado: true };
   }
   return { error: 'Ese gasto ya no existe (¿se borró a mano?). Recarga el mes.' };
@@ -73,14 +76,15 @@ function estadoNormal_(libro, id, inicioMes, zona) {
 
 /**
  * Lo que se aparta de lo normal en un mes: { id: { estado: 'pagado' | 'pendiente', el: 'yyyy-MM-ddTHH:mm' } }.
- * Lo usa mes_ (Mes.gs). Una fila sin Estado (de la 8.2) es «pagado».
+ * Lo usa mes_ (Mes.gs). Una fila sin Estado (de la 8.2) es «pagado». Las de los puntuales valen en cualquier mes
+ * (fase 13): mes_ solo pinta los movimientos del periodo, así que a cada mes le llegan los suyos.
  */
 function pagosDelMes_(libro, etiqueta, zona) {
   const hoja = libro.getSheetByName(PAG_HOJA_);
   const pagos = {};
   if (!hoja || hoja.getLastRow() < 2) return pagos;
   hoja.getRange(2, 1, hoja.getLastRow() - 1, 4).getValues().forEach((f) => {
-    if (String(f[0]) === etiqueta && f[1]) {
+    if (f[1] && (String(f[0]) === etiqueta || esPuntual_(f[1]))) {
       pagos[String(f[1])] = { estado: String(f[3]).trim() || 'pagado', el: textoFechaHora_(f[2], zona) };
     }
   });
@@ -139,14 +143,19 @@ function limpiarPagos() {
   Logger.log(borrados.length ? 'Filas huérfanas borradas: ' + borrados.join(', ') : 'No había filas huérfanas.');
 }
 
-/** Números de fila (de arriba abajo) con ese mes e ID. */
+/** Números de fila (de arriba abajo) con ese mes e ID; las de un gasto puntual, solo por su ID (fase 13). */
 function filasPago_(hoja, etiqueta, id) {
   if (hoja.getLastRow() < 2) return [];
   const filas = [];
   hoja.getRange(2, 1, hoja.getLastRow() - 1, 2).getValues().forEach((f, i) => {
-    if (String(f[0]) === etiqueta && String(f[1]) === id) filas.push(i + 2);
+    if (String(f[1]) === id && (esPuntual_(id) || String(f[0]) === etiqueta)) filas.push(i + 2);
   });
   return filas;
+}
+
+/** ¿Es un gasto puntual (Movimientos, M…)? Los cargos fijos son R…. */
+function esPuntual_(id) {
+  return /^M/.test(String(id));
 }
 
 function textoFechaHora_(d, zona) {
