@@ -5,10 +5,9 @@
  * aunque la hoja las enseñe con punto y coma.
  */
 
-const MIG_FILTRO_ = [   // fase 13: el filtro de fechas de Movimientos en el Resumen, antes → después
-  ['Movimientos!$B:$B,">="&$B$2', 'Movimientos!$B:$B,">="&$E$2'],
-  ['Movimientos!$B:$B,"<="&$B$3', 'Movimientos!$B:$B,"<="&$E$3']
-];
+// Fase 13: el filtro de fechas de Movimientos en el Resumen («>=» con B2 y «<=» con B3; después, con E2 y E3).
+// Tolera espacios y punto y coma: la fórmula que lee Apps Script no siempre se escribe igual que la del export.
+const MIG_FILTRO_ = (col) => new RegExp('Movimientos!\\$B:\\$B(\\s*[,;]\\s*)"(>=|<=)"(\\s*&\\s*)\\$' + col + '\\$([23])(?![0-9])', 'g');
 const MIG_APARICIONES_ = 37;   // B7 (1) + la D de los 12 bloques «cat» (12) + las 12 filas de detalle (2 cada una)
 
 /** Fase 13: periodo de cada mes en Meses (E:F), Resumen D2:E3, el filtro de Movimientos y la Guía. */
@@ -32,15 +31,19 @@ function aplicarFase13() {
     }
     const rango = resumen.getDataRange();
     const formulas = rango.getFormulas();
-    const veces = (texto) => formulas.reduce((s, fila) => s + fila.reduce((t, f) => t + f.split(texto).length - 1, 0), 0);
-    const cuenta = MIG_FILTRO_.map(([antes]) => veces(antes));
-    const hecho = MIG_FILTRO_.map(([, despues]) => veces(despues));
+    // Apariciones de «>=» y de «<=» con la columna dada (B = antes del cambio, E = ya cambiado).
+    const veces = (col) => [0, 0].map((_, k) => formulas.reduce((s, fila) => s + fila.reduce((t, f) =>
+      t + (f.match(MIG_FILTRO_(col)) || []).filter((m) => m.indexOf(k ? '"<="' : '">="') >= 0).length, 0), 0));
+    const cuenta = veces('B');
+    const hecho = veces('E');
     if (cuenta.some((n) => n !== 0 && n !== MIG_APARICIONES_)) {
       return Logger.log('❌ El filtro de Movimientos aparece ' + cuenta.join(' y ') + ' veces (se esperaban ' +
                         MIG_APARICIONES_ + '). No se ha cambiado nada: revisa el Resumen.');
     }
     if (cuenta[0] === 0 && hecho[0] === 0) {
-      return Logger.log('❌ No encuentro el filtro de Movimientos en el Resumen (ni con B2 ni con E2). No se ha cambiado nada.');
+      const muestra = formulas.map((fila) => fila[3]).filter((f) => f.indexOf('Movimientos') >= 0)[0] || '(ninguna fórmula de la columna D usa Movimientos)';
+      return Logger.log('❌ No encuentro el filtro de Movimientos en el Resumen (ni con B2 ni con E2). No se ha cambiado nada.\n' +
+                        'Así ve Apps Script una fórmula de la columna D: ' + muestra);
     }
 
     // 2. Meses: Inicio_periodo (E) y Fin_periodo (F), una fórmula por fila.
@@ -55,6 +58,14 @@ function aplicarFase13() {
         ]);
       }
       meses.getRange(2, 5, filas.length, 2).setFormulas(filas).setNumberFormat('dd/mm/yyyy');
+      SpreadsheetApp.flush();
+      // Si la hoja no acepta la fórmula (daría un error en vez de una fecha), se deshace y no se sigue.
+      const prueba = meses.getRange('E2:F2').getValues()[0];
+      if (!(prueba[0] instanceof Date && prueba[1] instanceof Date)) {
+        const visto = meses.getRange('E2:F2').getDisplayValues()[0].join(' · ');
+        meses.getRange(1, 5, ultima, 2).clearContent();
+        return Logger.log('❌ Las fórmulas de Meses E:F no dan una fecha (' + visto + '). Se han quitado: no se ha cambiado nada.');
+      }
       Logger.log('✅ Meses: E «Inicio_periodo» y F «Fin_periodo» en las filas 2–' + ultima);
     } else {
       Logger.log('· Meses: E y F ya estaban');
@@ -74,9 +85,9 @@ function aplicarFase13() {
     // 4. Resumen: el filtro de Movimientos pasa de B2:B3 (mes natural) a E2:E3 (periodo). Solo las celdas que lo usan.
     let celdas = 0;
     formulas.forEach((fila, i) => fila.forEach((f, j) => {
-      if (!MIG_FILTRO_.some(([antes]) => f.indexOf(antes) >= 0)) return;
-      const nueva = MIG_FILTRO_.reduce((t, [antes, despues]) => t.split(antes).join(despues), f);
-      resumen.getRange(i + 1, j + 1).setFormula(nueva);
+      const nueva = f.replace(MIG_FILTRO_('B'), (m, s1, op, s2, n) => 'Movimientos!$B:$B' + s1 + '"' + op + '"' + s2 + '$E$' + n);
+      if (nueva === f) return;
+      resumen.getRange(i + 1, j + 1).setFormula(nueva);   // el resto de la fórmula, tal cual la devolvió Apps Script
       celdas++;
     }));
     Logger.log(cuenta[0] ? '✅ Resumen: filtro de Movimientos cambiado (' + cuenta.join(' + ') + ' apariciones en ' +
@@ -101,8 +112,10 @@ function aplicarFase13() {
     const zona = libro.getSpreadsheetTimeZone();
     const control = resumen.getRange('B7').getValue();
     const periodo = resumen.getRange('E2:E3').getValues().map((f) => textoFecha_(f[0], zona));   // Mes.gs
-    Logger.log((control === 0 ? '✅ ' : '❌ ') + 'Resumen B7 (Control) = ' + control + ' · ' + resumen.getRange('B1').getValue() +
-               ': periodo ' + periodo.join(' → '));
+    Logger.log((control === 0 ? '✅ ' : '❌ ') + 'Resumen B7 (Control) = ' + control);
+    Logger.log((periodo.every((p) => p) ? '✅ ' : '❌ ') + resumen.getRange('B1').getValue() + ': periodo ' +
+               periodo.join(' → ') + (periodo.every((p) => p) ? '' : ' (E2:E3 no dan una fecha: ' +
+               resumen.getRange('E2:E3').getDisplayValues().map((f) => f[0]).join(' · ') + ')'));
     mesesDeLaHoja_(libro, zona).slice(0, 3).forEach((m) =>
       Logger.log('   ' + m.etiqueta + ': ' + m.periodo_inicio + ' → ' + m.periodo_fin));
   });
