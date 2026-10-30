@@ -1,8 +1,9 @@
 /**
  * Migraciones.gs — Cambios en la hoja que pide cada fase, para ejecutar UNA vez desde el editor (no los usa la app).
  * Archivo nuevo. Cada función comprueba antes de escribir: si algo no está como se espera, no toca nada y lo dice.
- * Si ya estaba aplicada, lo detecta y no la repite. Las fórmulas van en inglés y con comas (lo exige setFormula),
- * aunque la hoja las enseñe con punto y coma.
+ * Si ya estaba aplicada, lo detecta y no la repite. Las fórmulas nuevas usan el separador de la hoja, que se deduce
+ * de sus propias fórmulas: en la configuración regional de España es «;» (la coma es el decimal) y setFormula no
+ * acepta comas.
  */
 
 // Fase 13: el filtro de fechas de Movimientos en el Resumen («>=» con B2 y «<=» con B3; después, con E2 y E3).
@@ -40,6 +41,11 @@ function aplicarFase13() {
       return Logger.log('❌ El filtro de Movimientos aparece ' + cuenta.join(' y ') + ' veces (se esperaban ' +
                         MIG_APARICIONES_ + '). No se ha cambiado nada: revisa el Resumen.');
     }
+    // El separador de argumentos, tal como lo usan las fórmulas del Resumen (por defecto, la coma).
+    const ejemplo = formulas.reduce((a, fila) => a.concat(fila), []).map((f) => MIG_FILTRO_('B').exec(f) ||
+      MIG_FILTRO_('E').exec(f)).filter((m) => m)[0];
+    const sep = ejemplo ? ejemplo[1].trim() : ',';
+    const local = (formula) => formula.replace(/,/g, sep);   // las fórmulas de aquí no llevan comas dentro de textos
     if (cuenta[0] === 0 && hecho[0] === 0) {
       const muestra = formulas.map((fila) => fila[3]).filter((f) => f.indexOf('Movimientos') >= 0)[0] || '(ninguna fórmula de la columna D usa Movimientos)';
       return Logger.log('❌ No encuentro el filtro de Movimientos en el Resumen (ni con B2 ni con E2). No se ha cambiado nada.\n' +
@@ -59,16 +65,17 @@ function aplicarFase13() {
           '=IF(A' + (r + 1) + '="", EOMONTH(A' + r + ', 0), E' + (r + 1) + '-1)'
         ]);
       }
-      meses.getRange(2, 5, filas.length, 2).setFormulas(filas).setNumberFormat('dd/mm/yyyy');
+      meses.getRange(2, 5, filas.length, 2).setFormulas(filas.map((f) => f.map(local))).setNumberFormat('dd/mm/yyyy');
       SpreadsheetApp.flush();
       // Si la hoja no acepta la fórmula (daría un error en vez de una fecha), se deshace y no se sigue.
       const prueba = meses.getRange('E2:F2').getValues()[0];
       if (!(prueba[0] instanceof Date && prueba[1] instanceof Date)) {
         const visto = meses.getRange('E2:F2').getDisplayValues()[0].join(' · ');
         meses.getRange(1, 5, ultima, 2).clearContent();
-        return Logger.log('❌ Las fórmulas de Meses E:F no dan una fecha (' + visto + '). Se han quitado: no se ha cambiado nada.');
+        return Logger.log('❌ Las fórmulas de Meses E:F no dan una fecha (' + visto + '). Se han quitado: no se ha cambiado nada.\n' +
+                          'Separador usado: «' + sep + '». Fórmula de E2: ' + local(filas[0][0]));
       }
-      Logger.log('✅ Meses: E «Inicio_periodo» y F «Fin_periodo» en las filas 2–' + ultima);
+      Logger.log('✅ Meses: E «Inicio_periodo» y F «Fin_periodo» en las filas 2–' + ultima + ' (separador «' + sep + '»)');
     } else {
       Logger.log('· Meses: E y F ya estaban');
     }
@@ -76,8 +83,8 @@ function aplicarFase13() {
     // 3. Resumen D2:E3: el periodo del mes elegido.
     if (!yaResumen) {
       resumen.getRange('D2:D3').setValues([['Periodo desde'], ['Periodo hasta']]);
-      resumen.getRange('E2:E3').setFormulas([['=INDEX(Meses!$E:$E, MATCH($B$1, Meses!$B:$B, 0))'],
-                                             ['=INDEX(Meses!$F:$F, MATCH($B$1, Meses!$B:$B, 0))']])
+      resumen.getRange('E2:E3').setFormulas([[local('=INDEX(Meses!$E:$E, MATCH($B$1, Meses!$B:$B, 0))')],
+                                             [local('=INDEX(Meses!$F:$F, MATCH($B$1, Meses!$B:$B, 0))')]])
         .setNumberFormat('dd/mm/yyyy');
       Logger.log('✅ Resumen: D2:E3 «Periodo desde / hasta»');
     } else {

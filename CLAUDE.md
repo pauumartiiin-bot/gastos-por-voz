@@ -376,7 +376,10 @@ Decisiones (confirmadas por Pau):
   tolera ambas cosas y solo cambia `$B$2`/`$B$3` dentro de él (el resto de la fórmula, tal cual); si no lo encuentra,
   el registro enseña una fórmula de la columna D. Además, si las fórmulas de Meses no dan fecha, se quitan y se para.
   2.ª ejecución (30 oct): filtro encontrado, pero Meses E2 daba `#ERROR!` por el `LET(c, …)` → la función lo quitó sola
-  y no siguió. E2 pasa a `IF(COUNTIFS(…)>0, MIN(A2, MINIFS(…)), A2)`.
+  y no siguió. E2 pasa a `IF(COUNTIFS(…)>0, MIN(A2, MINIFS(…)), A2)`. 3.ª ejecución: `#ERROR!` igual → la causa era el
+  separador: la hoja está en configuración regional de España («;», la coma es el decimal) y en ella `setFormula` no
+  acepta comas (la suposición «setFormula siempre en inglés con comas» era falsa aquí). Ahora el separador se deduce de
+  las propias fórmulas del Resumen y las fórmulas nuevas se escriben con él.
 - Datos reales: M001–M003, M005 y M006 están con fecha 1/11 (puestos así a mano). La P1 del iPhone se adapta: cambiar
   la fecha de M006 a 26/10 y comprobar que sigue en noviembre.
 
