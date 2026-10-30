@@ -274,6 +274,7 @@ acabaría en «Aina»; por eso la frase solo nombra la categoría elegida.
 | Ingresos con formulario y mes propuesto por la regla del día 20 | Dictarlos, o elegir siempre el mes a mano | Son pocos datos y siempre iguales; el prompt de Haiku es de la v1 y la regla acierta en el caso habitual |
 | Corregir un ingreso borrándolo y volviéndolo a apuntar | Un editor de ingresos | Pasa pocas veces; menos código que mantener |
 | Dejar la latencia como está tras medirla tramo a tramo | Cachear el contexto de la hoja o calentar Apps Script | La caché ahorraba ~0,3 s tocando código de la v1 y calentar no cambiaba nada (frío ≈ caliente); el grueso (~2 s) es Apps Script |
+| Cambiar la hoja con una función que se ejecuta una vez (una *migración*) | Copiar fórmulas a mano | Comprueba el estado antes de escribir y después, deshace si algo falla y se puede repetir sin riesgo. En la hoja real falló tres veces (texto distinto al del export, un nombre no válido en `LET` y el separador «;» de la configuración española) sin tocar nada |
 | Los gastos puntuales van al mes de la nómina, con el periodo calculado en la pestaña Meses | Mes natural, o calcular el periodo en el código | El mes que se vive empieza con la nómina. Calculado en una sola columna, el Resumen, «Mes», los pagos y la app usan el mismo periodo |
 | Gasto con formulario que reutiliza el guardado de los dictados | Una acción nueva en el servidor, o pasar el texto por Haiku | Una sola validación para todo; sin LLM, lo escrito no se reinterpreta |
 
