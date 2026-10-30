@@ -233,6 +233,10 @@ se equivoca, así que aquí no hay modelo ([`backend/Ingresos.gs`](backend/Ingre
   falta cambiar la fórmula: basta con el aviso.
 - **Efecto en «Mes»:** al apuntar la nómina, el mes pasa de «previsto» a «cobrado» y, si es la del mes
   siguiente, ese pasa a ser el mes por defecto. Lo provoca un dato real, no una fecha fija.
+- **Cada tipo de ingreso, por separado.** Al principio había un solo previsto (la nómina) y, en cuanto entraba algo, todo
+  lo previsto desaparecía: con la nómina cobrada y las comisiones aún no, el mes perdía las comisiones. Ahora la hoja
+  reparte el ingreso por tipo y, de cada uno, cuenta lo cobrado si lo hay y si no lo previsto. Las comisiones previstas
+  se ponen desde «Mes», al tocar el ingreso, viendo el mes al que van; el restante se actualiza con la misma respuesta.
 - **De dónde sale el «cobrado».** La cabecera de «Mes» lista los ingresos del mes (concepto · fecha · importe)
   debajo de las cifras. Una prueba exige que sumen justo lo que la hoja cuenta como cobrado, y la ejecuto con
   ingresos de prueba que crea y borra ella misma: con la pestaña vacía, la comprobación solo diría 0 = 0.
@@ -275,6 +279,7 @@ acabaría en «Aina»; por eso la frase solo nombra la categoría elegida.
 | Corregir un ingreso borrándolo y volviéndolo a apuntar | Un editor de ingresos | Pasa pocas veces; menos código que mantener |
 | Dejar la latencia como está tras medirla tramo a tramo | Cachear el contexto de la hoja o calentar Apps Script | La caché ahorraba ~0,3 s tocando código de la v1 y calentar no cambiaba nada (frío ≈ caliente); el grueso (~2 s) es Apps Script |
 | Cambiar la hoja con una función que se ejecuta una vez (una *migración*) | Copiar fórmulas a mano | Comprueba el estado antes de escribir y después, deshace si algo falla y se puede repetir sin riesgo. En la hoja real falló tres veces (texto distinto al del export, un nombre no válido en `LET` y el separador «;» de la configuración española) sin tocar nada |
+| Previsto de comisiones puesto desde «Mes», sin Deshacer, y la respuesta trae el mes recalculado | Ponerlo en la hoja a mano, o en el formulario de ingresos | Se pone viendo el mes y su restante; corregir es volver a cambiarlo (así no pisa el Deshacer de la última acción real). Devolver el mes en la misma respuesta ahorra un viaje de ~2 s a Apps Script |
 | Los gastos puntuales van al mes de la nómina, con el periodo calculado en la pestaña Meses | Mes natural, o calcular el periodo en el código | El mes que se vive empieza con la nómina. Calculado en una sola columna, el Resumen, «Mes», los pagos y la app usan el mismo periodo |
 | Gasto con formulario que reutiliza el guardado de los dictados | Una acción nueva en el servidor, o pasar el texto por Haiku | Una sola validación para todo; sin LLM, lo escrito no se reinterpreta |
 

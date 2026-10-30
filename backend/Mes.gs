@@ -8,7 +8,12 @@
  *
  * Fase 13: los gastos puntuales van al periodo del mes (Meses E:F), que empieza el día en que se cobra su nómina
  * (nunca después del día 1) y acaba la víspera de la nómina siguiente. Los recurrentes siguen por mes natural (B2:B3).
+ * Fase 14: el ingreso se reparte por tipo en Resumen H2:K4 (previsto · cobrado · cuenta): lo cobrado de un tipo
+ * sustituye a su previsto. B4 suma «cuenta» y E6 dice previsto, parcial o cobrado.
  */
+
+const MES_REPARTO_ = 'H2:K4';                           // Resumen: una fila por tipo, de I a K previsto · cobrado · cuenta
+const MES_TIPOS_ = ['nómina', 'comisiones', 'extra'];   // el orden de esas filas
 
 const MES_CELDA_ = 'B1';            // Resumen: etiqueta del mes elegido
 const MES_PRIMERA_FILA_ = 10;       // Resumen: tabla por categoría, filas 10–129
@@ -102,6 +107,7 @@ function leerMesEnHoja_(libro, etiqueta) {
       cabecera: resumen.getRange('B2:B6').getValues().map((f) => f[0]),   // inicio, fin, ingreso, previsto, restante
       periodo: resumen.getRange('E2:E3').getValues().map((f) => f[0]),    // periodo de los puntuales (fase 13)
       ingreso: resumen.getRange('E4:E6').getValues().map((f) => f[0]),    // previsto, cobrado, origen
+      reparto: resumen.getRange(MES_REPARTO_).getValues(),                // fase 14: el ingreso por tipo
       tabla: resumen.getRange(MES_PRIMERA_FILA_, 1, MES_ULTIMA_FILA_ - MES_PRIMERA_FILA_ + 1, 7).getValues(),
       calculo: calculo.getLastRow() < 2 ? []
         : calculo.getRange(2, 1, calculo.getLastRow() - 1, MES_COLS_CALCULO_).getValues(),
@@ -165,6 +171,8 @@ function construirMes_(h, zona, pagos) {
     cabecera: {
       ingreso: redondear2_(h.cabecera[2]), previsto_ingreso: redondear2_(h.ingreso[0]),
       cobrado: redondear2_(h.ingreso[1]), origen: String(h.ingreso[2]),
+      desglose: MES_TIPOS_.map((tipo, i) => ({ tipo: tipo, previsto: redondear2_(h.reparto[i][1]),
+                                              cobrado: redondear2_(h.reparto[i][2]), cuenta: redondear2_(h.reparto[i][3]) })),
       total_previsto: totalPrevisto, restante: redondear2_(h.cabecera[4]), pendiente: redondear2_(pendiente)
     },
     categorias: categorias,
@@ -201,7 +209,8 @@ function redondear2_(x) {
 
 /**
  * Evaluación 7.3: tres meses elegidos a propósito, con las reglas que deben estar o no (por ID, que no cambia
- * aunque se renombre el concepto). Fallo = no cuadra, falta/sobra una regla o los ingresos no suman el «cobrado».
+ * aunque se renombre el concepto). Fallo = no cuadra, falta/sobra una regla, los ingresos no suman el «cobrado» o el
+ * reparto por tipo no suma el ingreso (fase 14).
  * El total es solo una referencia:
  * cambia cada vez que se apunta un gasto real, así que si no coincide es ⚠️, no ❌.
  */
@@ -264,6 +273,9 @@ function comprobarCasoMes_(caso, r) {
   // Invariante: la lista de ingresos es justo lo que suma el Resumen como «cobrado» (con Ingresos vacío, 0 = 0).
   const ingresos = redondear2_(r.ingresos.reduce((s, i) => s + i.importe, 0));
   if (ingresos !== r.cabecera.cobrado) fallos.push('ingresos ' + ingresos + ' ≠ cobrado ' + r.cabecera.cobrado);
+  // Fase 14: el ingreso del mes es justo la suma de lo que cuenta de cada tipo (cobrado si hay, si no previsto).
+  const cuenta = redondear2_(r.cabecera.desglose.reduce((s, d) => s + d.cuenta, 0));
+  if (cuenta !== r.cabecera.ingreso) fallos.push('reparto ' + cuenta + ' ≠ ingreso ' + r.cabecera.ingreso);
   // El total depende de los datos reales (reglas nuevas, gastos puntuales): avisa, pero no es un fallo.
   const aviso = r.cabecera.total_previsto === caso.total ? ''
     : ' ⚠️ total ' + r.cabecera.total_previsto + ' (referencia ' + caso.total + ' sin gastos puntuales; este mes tiene ' +
@@ -289,6 +301,7 @@ function logMes_(r) {
                                             (m.pagado ? '' : ' · pendiente')));
   });
   r.ingresos.forEach((i) => Logger.log('  Ingreso ' + i.id + ' ' + i.concepto + ' · ' + i.tipo + ' · ' + i.fecha + ' · ' + i.importe));
+  c.desglose.forEach((d) => Logger.log('  Reparto ' + d.tipo + ': previsto ' + d.previsto + ' · cobrado ' + d.cobrado + ' · cuenta ' + d.cuenta));
   Logger.log('Cuadra: ' + (r.cuadra ? '✅' : '❌') + ' (suma de categorías = total previsto)');
 }
 

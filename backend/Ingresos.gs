@@ -28,6 +28,7 @@ function ingresos_() {
   const meses = h.getLastRow() < 2 ? [] : h.getRange(2, 1, h.getLastRow() - 1, 6).getValues()
     .filter((f) => f[0] instanceof Date && String(f[1]).trim())
     .map((f) => ({ etiqueta: String(f[1]), inicio: textoFecha_(f[0], zona), previsto: redondear2_(f[2]),
+                   previsto_comisiones: redondear2_(f[3]),   // fase 14: Meses D, vacía = 0
                    nomina: !!conNomina[String(f[1])],
                    periodo_inicio: textoFecha_(f[4], zona) || null, periodo_fin: textoFecha_(f[5], zona) || null }));   // Mes.gs
 
@@ -136,6 +137,9 @@ function sumarDias_(iso, dias) {
  *  2. Apunta una nómina de prueba en el último mes de Meses, comprueba la fila, que «Mes» la cuenta como cobrada y
  *     que no deja apuntar otra; añade unas comisiones y comprueba que «Mes» devuelve los dos ingresos y que suman el
  *     cobrado (fase 12); borra la nómina y prueba el Deshacer. Deja Ingresos y ULTIMO como estaban.
+ *  3. Fase 14, cada tipo por separado (con 300 € de comisiones previstas en ese mes): (a) nada cobrado → nómina y
+ *     comisiones previstas, «previsto»; (b) solo la nómina → nómina cobrada + comisiones previstas, «parcial»;
+ *     (c) las dos → lo cobrado, «cobrado»; (d) un extra → se suma aparte. Meses D queda como estaba.
  */
 function probarIngresos() {
   const libro = libro_();
@@ -186,7 +190,19 @@ function probarIngresos() {
   const fecha = hoy;
   let id = null;
   let idComisiones = null;
+  let idExtra = null;
+  const celdaComisiones = libro.getSheetByName('Meses').getRange(filaDeMes_(libro.getSheetByName('Meses'), mes), PREV_COLUMNAS_.comisiones);   // Previstos.gs
+  const comisionesAntes = celdaComisiones.getValue();
+  const reparto = (r, tipo) => r.cabecera.desglose.filter((x) => x.tipo === tipo)[0];
   try {
+    // (a) Nada cobrado: cuentan la nómina prevista y las comisiones previstas.
+    celdaComisiones.setValue(300);
+    const m0 = mes_({ etiqueta: mes });
+    const nominaPrevista = reparto(m0, 'nómina').previsto;
+    const a = m0.cabecera.ingreso === redondear2_(nominaPrevista + 300) && m0.cabecera.origen === 'previsto';
+    Logger.log((a ? '✅ ' : '❌ ') + '(a) nada cobrado → ingreso ' + m0.cabecera.ingreso + ' = nómina prevista ' + nominaPrevista +
+               ' + comisiones previstas 300 (' + m0.cabecera.origen + ')');
+
     const r = apuntarIngreso_({ tipo: 'nómina', importe: 1234.56, fecha: fecha, mes: mes });
     if (r.ok === false) { Logger.log('❌ Apuntar → ' + (r.mensaje || r.error)); return; }
     id = r.id;
@@ -195,10 +211,11 @@ function probarIngresos() {
                    f[7] instanceof Date;
     Logger.log((filaOk ? '✅ ' : '❌ ') + 'Apuntado ' + id + ' «' + f[3] + '» · ' + textoFecha_(f[1], zona) + ' · ' + f[5] + ' € en ' + mes);
 
+    // (b) Solo la nómina cobrada: sustituye a la nómina prevista; las comisiones previstas siguen contando.
     const m = mes_({ etiqueta: mes });
-    const cobrado = m.cabecera.cobrado === 1234.56 && m.cabecera.origen === 'cobrado';
-    Logger.log((cobrado ? '✅ ' : '❌ ') + '«Mes» lo cuenta: cobrado ' + m.cabecera.cobrado + ' (' + m.cabecera.origen + ') · ingreso ' +
-               m.cabecera.ingreso + ' · restante ' + m.cabecera.restante);
+    const cobrado = m.cabecera.cobrado === 1234.56 && m.cabecera.origen === 'parcial' && m.cabecera.ingreso === redondear2_(1234.56 + 300);
+    Logger.log((cobrado ? '✅ ' : '❌ ') + '(b) solo la nómina → cobrado ' + m.cabecera.cobrado + ' · ingreso ' + m.cabecera.ingreso +
+               ' = 1234.56 + 300 previstas (' + m.cabecera.origen + ') · restante ' + m.cabecera.restante);
 
     const lista = ingresos_();
     const enLista = lista.ingresos.some((i) => i.id === id) && lista.meses.filter((x) => x.etiqueta === mes)[0].nomina;
@@ -217,6 +234,18 @@ function probarIngresos() {
                      suma === 1484.56 && suma === m2.cabecera.cobrado;
     Logger.log((listaMes ? '✅ ' : '❌ ') + '«Mes» lista los ingresos del mes: ' +
                m2.ingresos.map((i) => i.concepto + ' ' + i.importe).join(' + ') + ' = ' + suma + ' · cobrado ' + m2.cabecera.cobrado);
+    // (c) Las dos cobradas: las comisiones cobradas (250) sustituyen a las previstas (300).
+    const c = m2.cabecera.ingreso === 1484.56 && m2.cabecera.origen === 'cobrado';
+    Logger.log((c ? '✅ ' : '❌ ') + '(c) nómina y comisiones cobradas → ingreso ' + m2.cabecera.ingreso + ' (' + m2.cabecera.origen + ')');
+
+    // (d) Un extra: no tiene previsto, se suma aparte.
+    const ext = apuntarIngreso_({ tipo: 'extra', importe: 50, fecha: fecha, mes: mes });
+    idExtra = ext.id || null;
+    const m3 = mes_({ etiqueta: mes });
+    const d4 = m3.cabecera.ingreso === 1534.56 && m3.cabecera.cobrado === 1534.56 && reparto(m3, 'extra').cuenta === 50 &&
+               m3.cabecera.origen === 'cobrado';
+    Logger.log((d4 ? '✅ ' : '❌ ') + '(d) extra de 50 → ingreso ' + m3.cabecera.ingreso + ' · reparto ' +
+               m3.cabecera.desglose.map((x) => x.tipo + ' ' + x.cuenta).join(' + ') + ' (' + m3.cabecera.origen + ')');
 
     const b = borrarIngreso_({ id: id });
     const borrada = b.ok !== false && buscarFilaPorId_(hoja, id) < 0;
@@ -230,13 +259,16 @@ function probarIngresos() {
     const recuperada = vuelta > 0 && textoFecha_(g[1], zona) === fecha && Number(g[5]) === 1234.56;
     Logger.log((recuperada ? '✅ ' : '❌ ') + 'Deshacer → ' + d.desc + ' · fecha ' + textoFecha_(g[1], zona) + ' · ' + g[5] + ' €');
   } finally {
-    [id, idComisiones].filter((x) => x).forEach((x) => {
+    [id, idComisiones, idExtra].filter((x) => x).forEach((x) => {
       let f;
       while ((f = buscarFilaPorId_(hoja, x)) > 0) hoja.deleteRow(f);
     });
+    if (comisionesAntes === '') celdaComisiones.clearContent();
+    else celdaComisiones.setValue(comisionesAntes);
     if (ultimo === null) props.deleteProperty('ULTIMO');
     else props.setProperty('ULTIMO', ultimo);
-    const igual = hoja.getLastRow() === filasAntes && props.getProperty('ULTIMO') === ultimo;
-    Logger.log((igual ? '✅ ' : '❌ ') + 'Limpieza: Ingresos y el Deshacer pendiente como estaban');
+    const igual = hoja.getLastRow() === filasAntes && props.getProperty('ULTIMO') === ultimo &&
+                  celdaComisiones.getValue() === comisionesAntes;
+    Logger.log((igual ? '✅ ' : '❌ ') + 'Limpieza: Ingresos, Meses D y el Deshacer pendiente como estaban');
   }
 }
