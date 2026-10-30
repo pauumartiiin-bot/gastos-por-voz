@@ -30,7 +30,7 @@ iPhone (esta app, GitHub Pages, instalada en pantalla de inicio)
   `redirect: 'follow'` (Apps Script responde con una redirección).
 - Interfaz en español. Comentarios del código en español, breves.
 
-## Contrato de la API (fases 6.1–13)
+## Contrato de la API (fases 6.1–14)
 Petición: un único `doPost` (en `backend/Api.gs`) que enruta por `accion`. Cuerpo JSON enviado como texto plano:
 ```json
 { "t": "<token>", "accion": "dictar", ...parámetros }
@@ -46,13 +46,14 @@ Petición: un único `doPost` (en `backend/Api.gs`) que enruta por `accion`. Cue
 | `editar` | `hoja`, `id`, `cambios` | `editarRegistro` | `desc` |
 | `baja` | `id`, `fecha_fin` | `darDeBaja` | `desc` |
 | `eliminar` | `hoja`, `id` | `eliminarRegistro` | `desc` |
-| `mes` | `etiqueta?` (sin ella, el mes por defecto) | `mes_` (nuevo, `backend/Mes.gs`) con `libro_` y `conBloqueo_` | `etiqueta`, `mes_inicio`, `por_defecto`, `meses`, `cabecera`, `categorias`, `cuadra`, `ingresos`, `ms` (detalle en «Fase 7» y «Fase 12») |
+| `mes` | `etiqueta?` (sin ella, el mes por defecto) | `mes_` (nuevo, `backend/Mes.gs`) con `libro_` y `conBloqueo_` | `etiqueta`, `mes_inicio`, `por_defecto`, `meses`, `cabecera` (con `desglose`, fase 14), `categorias`, `cuadra`, `ingresos`, `ms` (detalle en «Fase 7», «Fase 12» y «Fase 14») |
 | `categoria` | `nombre`, `descripcion` | `crearCategoria_` (nuevo, `backend/Categorias.gs`) con `libro_`, `conBloqueo_`, `normalizar` y `apuntarDeshacer_` | `nombre`, `desc`, `huecos_libres` (detalle en «Fase 7b») |
 | `renombrar` | `hoja` (`Recurrentes` \| `Movimientos`), `id`, `concepto` | `renombrar_` (nuevo, `backend/Renombrar.gs`) con `libro_`, `conBloqueo_`, `buscarFilaPorId_`, `COL`/`COLM` y `apuntarDeshacer_` | `id`, `concepto`, `desc` (detalle en «Fase 8») |
 | `pagar` | `etiqueta`, `id` (regla R… o gasto puntual M…), `pagado` (`true` \| `false`) | `pagar_` (nuevo, `backend/Pagos.gs`) con `libro_`, `conBloqueo_`, `buscarFilaPorId_`, `COL` y `COLM` | `etiqueta`, `id`, `pagado`, `pagado_el` (detalle en «Fase 8» y «Fase 11») |
-| `ingresos` | — | `ingresos_` (nuevo, `backend/Ingresos.gs`) con `libro_` y `normalizar` | `hoy`, `meses` (`etiqueta`, `inicio`, `previsto`, `nomina`, `periodo_inicio`, `periodo_fin`), `ingresos` (últimos 20) (detalle en «Fase 9» y «Fase 13») |
+| `ingresos` | — | `ingresos_` (nuevo, `backend/Ingresos.gs`) con `libro_` y `normalizar` | `hoy`, `meses` (`etiqueta`, `inicio`, `previsto`, `previsto_comisiones`, `nomina`, `periodo_inicio`, `periodo_fin`), `ingresos` (últimos 20) (detalle en «Fase 9», «Fase 13» y «Fase 14») |
 | `ingreso` | `tipo`, `importe`, `fecha`, `mes`, `concepto?` | `apuntarIngreso_` (nuevo) con `conBloqueo_`, `siguienteId_`, `escribirFila_`, `fechaSerial_`, `ahoraSerial_` y `apuntarDeshacer_` | `id`, `desc`, `ingreso` |
 | `borrar_ingreso` | `id` | `borrarIngreso_` (nuevo) con `conBloqueo_`, `buscarFilaPorId_`, `aJSON_` y `apuntarDeshacer_` | `id`, `desc` |
+| `previsto` | `etiqueta`, `tipo` (`comisiones`), `importe` (≥ 0; 0 lo quita) | `previsto_` (nuevo, `backend/Previstos.gs`) con `libro_`, `conBloqueo_` y `mes_` | `etiqueta`, `tipo`, `anterior`, `importe`, `mes` (el mes ya recalculado; detalle en «Fase 14») |
 
 - En `dictar` con `corrige`, lo dictado es el cambio pedido y `frase` es la frase original (así lo espera `interpretar`).
 - `ms_interpretar` incluye leer el contexto de la hoja + Haiku + validación.
@@ -105,7 +106,8 @@ backend/Renombrar.gs    acción renombrar (fase 8.1): cambia el concepto de un g
 backend/Pagos.gs        acción pagar (fases 8.2 y 11.1): marca cargos fijos y gastos puntuales en la pestaña Pagos; se copia a mano
 backend/Ingresos.gs     acciones ingresos, ingreso y borrar_ingreso (fase 9.1); se copia a mano
 backend/Latencia.gs     medirLatencia() (fase B.1): cronometra libro_, leerContexto_ e interpretar; se copia a mano
-backend/Migraciones.gs  cambios en la hoja de cada fase (aplicarFase13…), se ejecutan una vez desde el editor; se copia a mano
+backend/Migraciones.gs  cambios en la hoja de cada fase (aplicarFase13, aplicarFase14), se ejecutan una vez desde el editor; se copia a mano
+backend/Previstos.gs    acción previsto (fase 14): comisiones previstas de un mes (Meses D); se copia a mano
 docs/                   capturas del README (generadas con datos inventados)
 CLAUDE.md               este archivo
 README.md               README de portfolio (fase 6.5)
@@ -341,6 +343,47 @@ publicada): `probarPeriodos()` 27/27 y los dos gastos de prueba en su mes con `c
 gasto de hoy (30/10) en noviembre, uno del 20/10 en octubre, un puntual pendiente nuevo en noviembre, Resumen y «Mes»
 con el mismo total y `cuadra` ✅, y las marcas reales (M002–M004 pendientes) intactas. README: párrafo en «Pestaña Mes»
 y dos filas en Decisiones.
+
+**Fase 14 — Comisiones previstas y reparto del ingreso por tipo (v2.9) — en pruebas.** Detalle en la sección «Fase 14».
+`?v=` 7.13.0. Probado en local: `aplicarFase14()` con las fórmulas reales (comas y «;»; segunda vez sin cambios; si el
+reparto no da números, lo deshace todo y la hoja queda igual) y la interfaz en el iPhone 13 simulado (claro y oscuro).
+Falta: copiar Api.gs, Mes.gs, Ingresos.gs, Previstos.gs y Migraciones.gs, `aplicarFase14()`, Nueva versión, pruebas en el
+editor y en el iPhone.
+
+## Fase 14 — Comisiones previstas y reparto del ingreso por tipo (v2.9)
+Hasta ahora había un solo previsto por mes (Meses C, la nómina) y `B4 = IF(E5>0, E5, E4)`: en cuanto se cobraba algo, todo
+lo previsto desaparecía (con la nómina cobrada y las comisiones aún no, se perdían las comisiones previstas; y apuntar solo
+las comisiones dejaba fuera la nómina prevista, el aviso de la fase 9). Decisiones (confirmadas por Pau):
+- **Regla por tipo:** nómina cuenta = cobrada si hay, si no prevista; comisiones igual; extras = solo cobrados. **Origen:**
+  «previsto» (nada cobrado), «cobrado» (todo lo previsto ya cobrado) o «parcial».
+- **Comisiones previstas en Meses D** (vacía = 0), **puestas desde la app** con la acción `previsto`, sin Deshacer de la v1
+  (como `pagar`): para corregir se vuelve a cambiar; la notificación dice el antes y el después. La nómina prevista sigue en
+  Meses C, a mano. La app no calcula: el reparto es de la hoja.
+- **Hoja (`aplicarFase14()`, Migraciones.gs):** Meses D1 `Comisiones_previstas`; Resumen H1:K4 `Ingreso · Previsto ·
+  Cobrado · Cuenta` con filas Nómina (I = Meses C), Comisiones (I = `N(Meses D)`) y Extras (I = 0); J = `SUMIFS` de Ingresos
+  por `Mes = B1` y tipo; K = `IF(J>0, J, I)`. B4 = `SUM(K2:K4)`, E4 = `SUM(I2:I4)`, E5 = `SUM(J2:J4)`, E6 =
+  `IF(E5=0, "previsto", IF(AND(OR(I2=0, J2>0), OR(I3=0, J3>0)), "cobrado", "parcial"))`. Guía: 2 filas y la descripción de B4.
+  Comprueba antes (Meses D vacía, H1:K4 vacía, las 4 fórmulas de la cabecera son las de antes) y después (números en
+  I2:K4, B4 = suma de K, E6 válido); si algo falla, restaura las 4 fórmulas y deja la hoja como estaba. Separador
+  deducido de la hoja (`separadorDeHoja_`), por lo aprendido en la 13.
+- **Acción `previsto`** (`backend/Previstos.gs`, archivo nuevo): `{ etiqueta, tipo: "comisiones", importe }`. Mes que no
+  está o tipo distinto (la lista `PREV_COLUMNAS_` queda lista para «nómina») → `entrada`. Importe ≥ 0 y ≤ 100.000, número o
+  texto numérico («250,5»), si no → `rechazado`. 0 vacía la celda. **Devuelve también el mes ya recalculado** (`mes_` fuera
+  del bloqueo): un viaje en vez de dos (~2 s menos, lo medido en la fase B).
+- `Mes.gs`: `leerMesEnHoja_` lee Resumen H2:K4 y la cabecera trae `desglose: [{ tipo, previsto, cobrado, cuenta }]` (nómina,
+  comisiones, extra). `comprobarCasoMes_`: suma de `cuenta` = `ingreso` (además de suma de `ingresos` = `cobrado`).
+- `Ingresos.gs`: `meses` trae `previsto_comisiones`. En «+ Nuevo ingreso», con Comisiones el importe propone las comisiones
+  previstas del mes (como la nómina). **Fuera el aviso «comisiones en un mes sin nómina»**: con la regla por tipo ya no pasa
+  nada; queda el de nómina repetida.
+- **Interfaz:** la cifra de Ingreso es un botón (▾) que abre el «Reparto del ingreso» (cerrado por defecto; sustituye a la
+  lista de la fase 12): una línea por tipo («Nómina · prevista 1.370 € · cobrada 1.370 € ✓»; Comisiones siempre; Extras
+  solo si hay cobrados) y debajo las líneas de cada ingreso. En Comisiones, «Cambiar previsto» abre un campo (16 px,
+  teclado decimal) con Guardar y Cancelar; el rechazo sale junto al campo sin borrar lo escrito. Mientras se escribe no se
+  repinta el reparto (una actualización de la caché borraría el campo). Guardar cuenta como un cambio del mes en
+  `pagosMes` (como marcar un pago, 8.4): una respuesta de «mes» pedida antes se descarta y no pisa el previsto nuevo.
+- Pruebas: `probarPrevistos()` (validaciones 7/7, poner 250 y leerlo en el reparto, poner 0 y celda vacía; la celda queda
+  como estaba) y `probarIngresos()` con los casos (a)–(d) con 300 € de comisiones previstas en el último mes (nada cobrado →
+  previsto; solo nómina → parcial; las dos → cobrado; extra de 50 → se suma). Meses D queda como estaba.
 
 ## Fase 13 — Los gastos puntuales van al mes de la nómina (v2.8)
 Fallo visto en uso real (26 oct): con la nómina de octubre apuntada («Mes» ya abría en noviembre), un gasto del 26/10

@@ -573,18 +573,16 @@ function actualizarIngreso() {
   const tipo = tipoIngreso();
   const mes = datosIngresos.meses.find((m) => m.etiqueta === $('ingreso-mes').value);
   const importe = $('ingreso-importe');
-  if (importeAuto) importe.value = tipo === 'nómina' && mes ? String(mes.previsto).replace('.', ',') : '';
+  // El importe propuesto es el previsto de ese tipo (fase 14: también las comisiones); los extras no tienen previsto.
+  const previsto = !mes ? 0 : tipo === 'nómina' ? mes.previsto : tipo === 'comisiones' ? mes.previsto_comisiones : 0;
+  if (importeAuto) importe.value = previsto ? String(previsto).replace('.', ',') : '';
 
   const f = $('ingreso-fecha').value;
   const nombre = tipo.charAt(0).toUpperCase() + tipo.slice(1);
   $('ingreso-concepto').placeholder = f ? nombre + ' ' + NOMBRES_MES[Number(f.slice(5, 7)) - 1] : nombre;
 
-  // El Resumen usa lo cobrado en cuanto un mes tiene algún ingreso: sin la nómina, el previsto deja de contar.
-  let aviso = '';
-  if (mes && tipo === 'nómina' && mes.nomina) aviso = 'Este mes ya tiene una nómina apuntada.';
-  if (mes && tipo !== 'nómina' && !mes.nomina) {
-    aviso = 'Este mes aún no tiene la nómina: hasta que la apuntes, el ingreso del mes será solo este importe.';
-  }
+  // Con la regla por tipo (fase 14), unas comisiones sin nómina ya no dejan fuera la nómina prevista: solo queda este aviso.
+  const aviso = mes && tipo === 'nómina' && mes.nomina ? 'Este mes ya tiene una nómina apuntada.' : '';
   $('aviso-ingreso').textContent = aviso;
   mostrar('aviso-ingreso', !!aviso);
 }
@@ -752,7 +750,7 @@ function pintarMes(origen) {
   $('mes-pendiente').textContent = euros(c.pendiente);
   $('mes-restante').textContent = euros(c.restante);
   $('mes-restante').classList.toggle('negativo', c.restante < 0);
-  pintarIngresosMes(r.ingresos || []);   // sin «ingresos», un backend anterior a la fase A
+  pintarReparto(r);
 
   $('mes-categorias').replaceChildren(...(r.categorias.length
     ? r.categorias.map(tarjetaCategoria)
@@ -763,12 +761,112 @@ function pintarMes(origen) {
   mostrar('mes-pruebas', modoPruebas());
 }
 
-// Lo que forma el «cobrado»: una línea por ingreso del mes; sin ingresos, no se ve.
-function pintarIngresosMes(ingresos) {
-  const caja = $('mes-ingresos');
-  caja.replaceChildren(caja.querySelector('dt'), ...ingresos.map((i) =>
-    lineaMes(i.concepto || i.tipo, i.fecha ? fechaCorta(i.fecha) : '', i.importe, '', 'dd')));
-  mostrar('mes-ingresos', ingresos.length > 0);
+/* ---------- Reparto del ingreso y comisiones previstas (fase 14) ---------- */
+
+// Cerrado por defecto: se abre al tocar la cifra de Ingreso. Dentro, cada tipo (lo que cuenta: cobrado si hay, si no,
+// previsto) y debajo cada ingreso apuntado (fase 12). La app no calcula: el reparto viene de la hoja (Resumen H2:K4).
+const NOMBRES_TIPO = { 'nómina': ['Nómina', 'prevista', 'cobrada'], comisiones: ['Comisiones', 'previstas', 'cobradas'],
+  extra: ['Extras', 'previstos', 'cobrados'] };
+let repartoAbierto = false;
+let editandoPrevisto = null;   // etiqueta del mes cuyo previsto se está cambiando
+
+function pintarReparto(r) {
+  const c = r.cabecera;
+  $('mes-ingreso').setAttribute('aria-expanded', String(repartoAbierto));
+  mostrar('mes-reparto', repartoAbierto && !!c.desglose);
+  if (!c.desglose) return;   // backend anterior a la fase 14
+  // Mientras se escribe un previsto no se repinta: una actualización de la caché borraría lo escrito.
+  if (editandoPrevisto !== r.etiqueta) {
+    $('reparto-tipos').replaceChildren(...c.desglose
+      .filter((d) => d.tipo !== 'extra' || d.cobrado > 0)   // los extras no tienen previsto: solo si hay
+      .map((d) => lineaTipo(d, r.etiqueta)));
+  }
+  $('reparto-lineas').replaceChildren(...(r.ingresos || []).map((i) =>
+    lineaMes(i.concepto || i.tipo, i.fecha ? fechaCorta(i.fecha) : '', i.importe, '')));
+}
+
+// «Nómina · prevista 1.370 € · cobrada 1.370 € ✓». Las comisiones salen siempre: desde aquí se pone su previsto.
+function lineaTipo(d, etiqueta) {
+  const [nombre, prevista, cobrada] = NOMBRES_TIPO[d.tipo] || [d.tipo, 'previsto', 'cobrado'];
+  const linea = crear('div', 'reparto-tipo');
+  const detalle = [];
+  if (d.tipo !== 'extra') detalle.push(prevista + ' ' + euros(d.previsto));
+  detalle.push(d.cobrado > 0 ? cobrada + ' ' + euros(d.cobrado) : 'sin cobrar');
+  linea.append(crear('span', 'reparto-nombre', nombre),
+    crear('span', 'reparto-cuenta', euros(d.cuenta) + (d.cobrado > 0 ? ' ✓' : '')),
+    crear('span', 'reparto-detalle', detalle.join(' · ')));
+  if (d.tipo === 'comisiones') {
+    const cambiar = crear('button', 'reparto-cambiar', 'Cambiar previsto');
+    cambiar.type = 'button';
+    cambiar.addEventListener('click', () => linea.append(formPrevisto(d, etiqueta, cambiar)));
+    linea.append(cambiar);
+  }
+  return linea;
+}
+
+// Campo de importe con Guardar y Cancelar. 0 quita el previsto. Si el servidor rechaza, el mensaje sale aquí mismo.
+function formPrevisto(d, etiqueta, boton) {
+  editandoPrevisto = etiqueta;
+  boton.disabled = true;
+  const form = crear('form', 'reparto-editar');
+  const campo = crear('input', 'campo-importe');
+  campo.inputMode = 'decimal';
+  campo.autocomplete = 'off';
+  campo.value = d.previsto ? String(d.previsto).replace('.', ',') : '';
+  campo.placeholder = '0';
+  campo.setAttribute('aria-label', 'Comisiones previstas');
+  const guardar = crear('button', 'btn-suave', 'Guardar');
+  guardar.type = 'submit';
+  const cancelar = crear('button', 'btn-suave', 'Cancelar');
+  cancelar.type = 'button';
+  const mensaje = crear('p', 'estado error');
+  form.append(campo, guardar, cancelar, mensaje);
+  const cerrar = () => {
+    editandoPrevisto = null;
+    form.remove();
+    boton.disabled = false;
+  };
+  cancelar.addEventListener('click', cerrar);
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const texto = campo.value.trim();
+    if (!texto) return (mensaje.textContent = 'Escribe un importe (0 para quitarlo).');
+    guardar.disabled = true;
+    guardar.textContent = 'Guardando…';
+    mensaje.textContent = '';
+    // Cuenta como un cambio del mes: una respuesta de «mes» pedida antes ya no vale (como al marcar un pago, 8.4).
+    const cambios = pagosDe(etiqueta);
+    cambios.cambios++;
+    cambios.enVuelo++;
+    try {
+      const r = await api('previsto', { etiqueta, tipo: 'comisiones', importe: texto });
+      cerrar();
+      const mes = partirEtiqueta(etiqueta)[0].split(' ')[0].toLowerCase();
+      notificar('Comisiones previstas de ' + mes + ': ' + euros(r.anterior) + ' → ' + euros(r.importe), false);
+      if (r.mes) {
+        cacheMes.set(etiqueta, r.mes);   // el mes ya recalculado, en la misma respuesta
+        if (mesDestino === etiqueta) {
+          mesDatos = r.mes;
+          pintarMes('servidor');
+        }
+      } else if (mesDestino === etiqueta) {
+        cargarMes(etiqueta);
+      }
+    } catch (err) {
+      mensaje.textContent = err.message;   // lo escrito se conserva para corregirlo
+      guardar.disabled = false;
+      guardar.textContent = 'Guardar';
+    } finally {
+      cambios.enVuelo--;
+    }
+  });
+  setTimeout(() => campo.focus(), 0);
+  return form;
+}
+
+function alternarReparto() {
+  repartoAbierto = !repartoAbierto;
+  if (mesDatos) pintarReparto(mesDatos);
 }
 
 function tarjetaCategoria(k) {
@@ -1195,6 +1293,7 @@ $('form-ingreso').addEventListener('change', (e) => {
 $('ingreso-importe').addEventListener('input', () => { importeAuto = $('ingreso-importe').value === ''; });
 
 $('mes-anterior').addEventListener('click', () => moverMes(-1));
+$('mes-ingreso').addEventListener('click', alternarReparto);
 $('mes-siguiente').addEventListener('click', () => moverMes(1));
 $('mes-hoy').addEventListener('click', () => irAMes(mesDatos.por_defecto));
 

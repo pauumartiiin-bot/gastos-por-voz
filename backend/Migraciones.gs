@@ -129,3 +129,126 @@ function aplicarFase13() {
       Logger.log('   ' + m.etiqueta + ': ' + m.periodo_inicio + ' → ' + m.periodo_fin));
   });
 }
+
+/** El separador de argumentos de la hoja, deducido de sus fórmulas: «;» en la configuración de España, «,» en inglés. */
+function separadorDeHoja_(formulas) {
+  return formulas.some((fila) => fila.some((f) => f.indexOf(';') >= 0)) ? ';' : ',';
+}
+
+/**
+ * Fase 14: comisiones previstas (Meses D) y reparto del ingreso por tipo (Resumen H1:K4). B4 pasa a sumar lo que cuenta
+ * de cada tipo (cobrado si hay; si no, previsto), E4 y E5 suman el reparto y E6 dice previsto, parcial o cobrado.
+ * Si algo no da un número al escribirlo, se deshace todo (también las cuatro fórmulas de la cabecera) y se para.
+ */
+function aplicarFase14() {
+  const libro = libro_();   // v1
+  conBloqueo_(() => {       // v1
+    const meses = libro.getSheetByName('Meses');
+    const resumen = libro.getSheetByName('Resumen');
+    const guia = libro.getSheetByName('Guía');
+    const ultima = meses.getLastRow();
+    const sep = separadorDeHoja_(resumen.getDataRange().getFormulas());
+    const local = (formula) => formula.replace(/,/g, sep);   // estas fórmulas no llevan comas dentro de textos
+    const sinEspacios = (f) => f.replace(/\s/g, '');
+
+    // 1. Comprobaciones: nada se escribe si algo no cuadra.
+    const columnaD = meses.getRange(1, 4, ultima, 1).getValues().map((f) => f[0]);
+    const yaMeses = columnaD[0] === 'Comisiones_previstas';
+    if (!yaMeses && columnaD.some((v) => v !== '')) {
+      return Logger.log('❌ Meses D no está vacía (D1: «' + columnaD[0] + '»). No se ha cambiado nada.');
+    }
+    const reparto = resumen.getRange('H1:K4');
+    const yaReparto = reparto.getValues()[0][0] === 'Ingreso';
+    if (!yaReparto && reparto.getValues().some((f) => f.some((v) => v !== ''))) {
+      return Logger.log('❌ Resumen H1:K4 no está vacía. No se ha cambiado nada.');
+    }
+    const cabecera = ['B4', 'E4', 'E5', 'E6'].map((a) => resumen.getRange(a));
+    const antes = cabecera.map((c) => c.getFormula());
+    const yaCabecera = sinEspacios(antes[0]).indexOf('K2:K4') >= 0;
+    const esperado = [/E5>0/, /Meses!\$C:\$C/, /Ingresos!\$F:\$F/, /"cobrado"/];
+    if (!yaCabecera && antes.some((f, i) => !esperado[i].test(sinEspacios(f)))) {
+      return Logger.log('❌ Las fórmulas de la cabecera no son las esperadas. No se ha cambiado nada.\n' +
+                        ['B4', 'E4', 'E5', 'E6'].map((a, i) => a + ': ' + antes[i]).join('\n'));
+    }
+
+    const deshacer = (motivo) => {
+      if (!yaCabecera) cabecera.forEach((c, i) => c.setFormula(antes[i]));
+      if (!yaReparto) reparto.clearContent();
+      if (!yaMeses) meses.getRange('D1').clearContent();
+      Logger.log('❌ ' + motivo + ' Se ha deshecho: no se ha cambiado nada (separador «' + sep + '»).');
+    };
+
+    // 2. Meses D: Comisiones_previstas (vacía = 0; se pone desde la app).
+    if (!yaMeses) {
+      meses.getRange('D1').setValue('Comisiones_previstas');
+      meses.getRange(2, 4, ultima - 1, 1).setNumberFormat('#,##0.00 "€"');
+      Logger.log('✅ Meses: D «Comisiones_previstas»');
+    } else {
+      Logger.log('· Meses: D ya estaba');
+    }
+
+    // 3. Resumen H1:K4: el reparto del mes elegido (B1), una fila por tipo.
+    if (!yaReparto) {
+      const sumar = (tipo) => local('=SUMIFS(Ingresos!$F:$F, Ingresos!$C:$C, $B$1, Ingresos!$E:$E, "' + tipo + '")');
+      const cuenta = (r) => local('=IF(J' + r + '>0, J' + r + ', I' + r + ')');
+      reparto.setValues([['Ingreso', 'Previsto', 'Cobrado', 'Cuenta'], ['Nómina', '', '', ''], ['Comisiones', '', '', ''],
+                         ['Extras', 0, '', '']]);
+      resumen.getRange('I2').setFormula(local('=IFERROR(INDEX(Meses!$C:$C, MATCH($B$1, Meses!$B:$B, 0)), 0)'));
+      resumen.getRange('I3').setFormula(local('=IFERROR(N(INDEX(Meses!$D:$D, MATCH($B$1, Meses!$B:$B, 0))), 0)'));
+      resumen.getRange('J2:K4').setFormulas([[sumar('nómina'), cuenta(2)], [sumar('comisiones'), cuenta(3)],
+                                             [sumar('extra'), cuenta(4)]]);
+      resumen.getRange('I2:K4').setNumberFormat('#,##0.00 "€"');
+      SpreadsheetApp.flush();
+      const valores = resumen.getRange('I2:K4').getValues();
+      if (!valores.every((f) => f.every((v) => typeof v === 'number'))) {
+        return deshacer('El reparto H2:K4 no da números (' + resumen.getRange('I2:K4').getDisplayValues().map((f) => f.join(' · ')).join(' | ') + ').');
+      }
+      Logger.log('✅ Resumen: reparto H1:K4');
+    } else {
+      Logger.log('· Resumen: el reparto ya estaba');
+    }
+
+    // 4. Cabecera: el ingreso, el previsto y el cobrado salen del reparto; el origen puede ser «parcial».
+    if (!yaCabecera) {
+      cabecera[0].setFormula(local('=SUM(K2:K4)'));
+      cabecera[1].setFormula(local('=SUM(I2:I4)'));
+      cabecera[2].setFormula(local('=SUM(J2:J4)'));
+      cabecera[3].setFormula(local('=IF(E5=0, "previsto", IF(AND(OR(I2=0, J2>0), OR(I3=0, J3>0)), "cobrado", "parcial"))'));
+      SpreadsheetApp.flush();
+      const b4 = cabecera[0].getValue();
+      const k = resumen.getRange('K2:K4').getValues().reduce((s, f) => s + f[0], 0);
+      if (typeof b4 !== 'number' || Math.round(b4 * 100) !== Math.round(k * 100) ||
+          ['previsto', 'parcial', 'cobrado'].indexOf(cabecera[3].getValue()) < 0) {
+        return deshacer('La cabecera no da lo esperado (B4 «' + cabecera[0].getDisplayValue() + '», E6 «' +
+                        cabecera[3].getDisplayValue() + '»).');
+      }
+      Logger.log('✅ Resumen: B4, E4, E5 y E6 calculan por tipo');
+    } else {
+      Logger.log('· Resumen: la cabecera ya calculaba por tipo');
+    }
+
+    // 5. Guía: filas nuevas y la descripción de B4.
+    const filasGuia = guia.getRange(1, 1, guia.getLastRow(), 3).getValues();
+    if (!filasGuia.some((f) => f[1] === 'Comisiones_previstas')) {
+      const nuevas = [
+        ['Meses', 'Comisiones_previstas', 'Comisiones que esperas cobrar ese mes. Se ponen desde la app («Mes» → toca el Ingreso → Cambiar previsto). Vacía = 0.', 'Número o vacío', '250'],
+        ['Resumen', 'H1:K4 Reparto', 'El ingreso del mes elegido por tipo: previsto, cobrado y lo que cuenta (de cada tipo, lo cobrado si hay; si no, lo previsto). Los extras solo cuentan cobrados.', 'Solo fórmulas: no editar', '']
+      ];
+      guia.getRange(guia.getLastRow() + 1, 1, nuevas.length, 5).setValues(nuevas);
+      const fb4 = filasGuia.map((f) => f[1]).indexOf('B4 Ingreso del mes');
+      if (fb4 >= 0) {
+        guia.getRange(fb4 + 1, 3).setValue('Suma de lo que cuenta de cada tipo (H2:K4): lo cobrado de un tipo sustituye a su previsto.');
+      }
+      Logger.log('✅ Guía: 2 filas nuevas' + (fb4 >= 0 ? ' y la descripción de B4 actualizada' : ''));
+    } else {
+      Logger.log('· Guía: las filas ya estaban');
+    }
+
+    // 6. Cómo queda el mes que tiene el Resumen.
+    SpreadsheetApp.flush();
+    const tabla = resumen.getRange('H2:K4').getValues();
+    Logger.log('✅ ' + resumen.getRange('B1').getValue() + ': ingreso ' + resumen.getRange('B4').getValue() + ' (' +
+               resumen.getRange('E6').getValue() + ') · B7 (Control) = ' + resumen.getRange('B7').getValue());
+    tabla.forEach((f) => Logger.log('   ' + f[0] + ': previsto ' + f[1] + ' · cobrado ' + f[2] + ' · cuenta ' + f[3]));
+  });
+}

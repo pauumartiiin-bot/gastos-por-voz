@@ -459,8 +459,28 @@ input[type="checkbox"]:checked, input[type="radio"]:checked {
 .mes-origen { margin-left: 4px; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 600;
   background: var(--primario-suave); color: var(--primario-tinta); }
 .mes-origen:empty { display: none; }
-.mes-ingresos { grid-column: 1 / -1; gap: 6px; }
-.mes-ingresos dd.linea-mes { margin: 0; font-size: 14px; font-weight: 400; }
+/* Fase 14: la cifra de Ingreso abre el reparto por tipo. */
+.cifra-boton { padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer;
+  -webkit-tap-highlight-color: transparent; }
+.cifra-boton::after { content: ' ▾'; font-size: 12px; color: var(--secundario); }
+.cifra-boton[aria-expanded="true"]::after { content: ' ▴'; }
+.mes-reparto { grid-column: 1 / -1; gap: 8px; }
+.mes-cifras .mes-reparto dd { margin: 0; font-size: 14px; font-weight: 400; display: flex; flex-direction: column; gap: 8px; }
+.reparto-tipo { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: baseline; }
+.reparto-nombre { font-weight: 700; }
+.reparto-cuenta { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.reparto-detalle { grid-column: 1 / -1; font-size: 12px; color: var(--secundario); }
+.reparto-cambiar { grid-column: 1 / -1; justify-self: start; padding: 0; border: 0; background: none; font: inherit;
+  font-size: 13px; font-weight: 600; color: var(--primario-tinta); cursor: pointer; }
+.reparto-cambiar:disabled { opacity: 0.5; }
+.reparto-editar { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 4px; }
+.reparto-editar .campo-importe { flex: 1 1 110px; min-width: 0; height: 40px; padding: 0 12px; border: 1px solid var(--borde);
+  border-radius: 12px; background: var(--fondo); color: var(--texto); }
+.reparto-editar .btn-suave { height: 40px; padding: 0 14px; border-radius: 12px; }
+.reparto-editar .estado { flex-basis: 100%; margin: 0; }
+.reparto-editar .estado:empty { display: none; }
+.reparto-lineas:empty { display: none !important; }
+.reparto-lineas { padding-top: 8px; border-top: 1px dashed var(--borde); }
 .mes-restante { grid-column: 1 / -1; padding-top: 14px; border-top: 1px solid var(--borde); }
 .mes-restante dd {
   font-size: 34px;

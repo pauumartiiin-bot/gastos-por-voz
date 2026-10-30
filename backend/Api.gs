@@ -24,7 +24,8 @@ const ACCIONES_ = {
   pagar: (p) => pagar_(p),   // Fase 8.2: Pagos.gs
   ingresos: () => ingresos_(),   // Fase 9.1: Ingresos.gs
   ingreso: (p) => apuntarIngreso_(p),
-  borrar_ingreso: (p) => borrarIngreso_(p)
+  borrar_ingreso: (p) => borrarIngreso_(p),
+  previsto: (p) => previsto_(p)   // Fase 14: Previstos.gs
 };
 
 function doPost(e) {
