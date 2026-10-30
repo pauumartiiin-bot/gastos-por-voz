@@ -337,8 +337,8 @@ bien en oscuro, y al borrarlas en «Mis registros» el bloque desaparece. README
 **Fase 13 — Los gastos puntuales van al mes de la nómina (v2.8) — en pruebas.** Detalle en la sección «Fase 13».
 `?v=` 7.12.0. Probado en local (hoja simulada con la nómina del 26/10): periodos 27/27, gasto del 26/10 en noviembre
 y del 25/10 en octubre con `cuadra` ✅, marca «pendiente» guardada con la etiqueta de octubre que sigue al gasto y
-`probarPagos()` todo ✅. Falta: la hoja (Pau), copiar Mes.gs, Pagos.gs e Ingresos.gs, Nueva versión, pruebas en el
-editor y en el iPhone.
+`probarPagos()` todo ✅. Hoja cambiada con `aplicarFase13()` (30 oct, a la cuarta: ver «Fase 13»). Falta: Nueva versión,
+`probarPeriodos()`/`probarMes()`/`probarPagos()` en el editor y pruebas en el iPhone.
 
 ## Fase 13 — Los gastos puntuales van al mes de la nómina (v2.8)
 Fallo visto en uso real (26 oct): con la nómina de octubre apuntada («Mes» ya abría en noviembre), un gasto del 26/10
@@ -379,7 +379,9 @@ Decisiones (confirmadas por Pau):
   y no siguió. E2 pasa a `IF(COUNTIFS(…)>0, MIN(A2, MINIFS(…)), A2)`. 3.ª ejecución: `#ERROR!` igual → la causa era el
   separador: la hoja está en configuración regional de España («;», la coma es el decimal) y en ella `setFormula` no
   acepta comas (la suposición «setFormula siempre en inglés con comas» era falsa aquí). Ahora el separador se deduce de
-  las propias fórmulas del Resumen y las fórmulas nuevas se escriben con él.
+  las propias fórmulas del Resumen y las fórmulas nuevas se escriben con él. **4.ª ejecución (30 oct): aplicada** — Meses
+  E:F en las filas 2–28 (separador «;»), D2:E3, filtro 37 + 37 en 25 celdas, Guía, B7 = 0; octubre 01/10→25/10,
+  noviembre 26/10→30/11, diciembre 01/12→31/12.
 - Datos reales: M001–M003, M005 y M006 están con fecha 1/11 (puestos así a mano). La P1 del iPhone se adapta: cambiar
   la fecha de M006 a 26/10 y comprobar que sigue en noviembre.
 
