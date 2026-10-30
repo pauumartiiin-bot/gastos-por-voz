@@ -52,8 +52,10 @@ function aplicarFase13() {
       meses.getRange('E1:F1').setValues([['Inicio_periodo', 'Fin_periodo']]);
       const filas = [];
       for (let r = 2; r <= ultima; r++) {
+        // Sin LET: Sheets no acepta nombres como «c» (se confunden con una columna) y así no depende de ella.
+        const nomina = 'Ingresos!$C:$C, B' + r + ', Ingresos!$E:$E, "nómina"';
         filas.push([
-          '=LET(c, MINIFS(Ingresos!$B:$B, Ingresos!$C:$C, B' + r + ', Ingresos!$E:$E, "nómina"), IF(c>0, MIN(A' + r + ', c), A' + r + '))',
+          '=IF(COUNTIFS(' + nomina + ')>0, MIN(A' + r + ', MINIFS(Ingresos!$B:$B, ' + nomina + ')), A' + r + ')',
           '=IF(A' + (r + 1) + '="", EOMONTH(A' + r + ', 0), E' + (r + 1) + '-1)'
         ]);
       }

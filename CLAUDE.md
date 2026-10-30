@@ -350,7 +350,9 @@ Decisiones (confirmadas por Pau):
 - **Solo los gastos puntuales.** Los recurrentes siguen por mes natural: `Cálculo!N` usa `YEAR/MONTH(B2)` y
   `DAY(B3)`, así que B2 y B3 no se tocan.
 - **Una sola fuente de verdad:** Meses E `Inicio_periodo` y F `Fin_periodo` (D queda libre para la fase 14):
-  E2 `=LET(c; MINIFS(Ingresos!$B:$B; Ingresos!$C:$C; B2; Ingresos!$E:$E; "nómina"); IF(c>0; MIN(A2; c); A2))` y
+  E2 `=IF(COUNTIFS(Ingresos!$C:$C; B2; Ingresos!$E:$E; "nómina")>0; MIN(A2; MINIFS(Ingresos!$B:$B; Ingresos!$C:$C; B2;
+  Ingresos!$E:$E; "nómina")); A2)` (la primera versión, con `LET(c; …)`, daba `#ERROR!`: Sheets no acepta «c» como
+  nombre en LET porque se confunde con una columna) y
   F2 `=IF(A3=""; EOMONTH(A2; 0); E3-1)`. Resumen: D2/E2 «Periodo desde» y D3/E3 «Periodo hasta» con `INDEX`/`MATCH`
   sobre Meses E y F; las 37 + 37 apariciones del filtro de Movimientos (B7, la D de los 12 bloques «cat» y las 12
   filas de detalle, dos veces cada una) pasan de `$B$2`/`$B$3` a `$E$2`/`$E$3`.
@@ -373,6 +375,8 @@ Decisiones (confirmadas por Pau):
   pero Apps Script puede leerlas con espacios o punto y coma. Ahora el filtro se busca con una expresión regular que
   tolera ambas cosas y solo cambia `$B$2`/`$B$3` dentro de él (el resto de la fórmula, tal cual); si no lo encuentra,
   el registro enseña una fórmula de la columna D. Además, si las fórmulas de Meses no dan fecha, se quitan y se para.
+  2.ª ejecución (30 oct): filtro encontrado, pero Meses E2 daba `#ERROR!` por el `LET(c, …)` → la función lo quitó sola
+  y no siguió. E2 pasa a `IF(COUNTIFS(…)>0, MIN(A2, MINIFS(…)), A2)`.
 - Datos reales: M001–M003, M005 y M006 están con fecha 1/11 (puestos así a mano). La P1 del iPhone se adapta: cambiar
   la fecha de M006 a 26/10 y comprobar que sigue en noviembre.
 
