@@ -367,8 +367,12 @@ Decisiones (confirmadas por Pau):
 - **Cambios de la hoja por código:** `aplicarFase13()` (`backend/Migraciones.gs`, una vez desde el editor) hace todo lo
   anterior en vez de Pau a mano. Antes de escribir comprueba que Meses E1:F1 y Resumen D2:E3 están vacías y que el
   filtro aparece 37 + 37 veces; si no, no toca nada. Si ya estaba aplicada, no repite nada. Reescribe solo las 25
-  celdas con el filtro (`getFormulas`/`setFormula`, fórmulas en inglés y con comas). Probada contra las fórmulas
+  celdas con el filtro (`getFormulas`/`setFormula`; las fórmulas nuevas, en inglés y con comas). Probada contra las fórmulas
   reales de la hoja (export del 26 oct): 29 celdas del Resumen cambiadas, 0 filtros con B2/B3, segunda vez sin cambios.
+  1.ª ejecución real (30 oct): «No encuentro el filtro» → el export a Excel normaliza las fórmulas (comas, sin espacios),
+  pero Apps Script puede leerlas con espacios o punto y coma. Ahora el filtro se busca con una expresión regular que
+  tolera ambas cosas y solo cambia `$B$2`/`$B$3` dentro de él (el resto de la fórmula, tal cual); si no lo encuentra,
+  el registro enseña una fórmula de la columna D. Además, si las fórmulas de Meses no dan fecha, se quitan y se para.
 - Datos reales: M001–M003, M005 y M006 están con fecha 1/11 (puestos así a mano). La P1 del iPhone se adapta: cambiar
   la fecha de M006 a 26/10 y comprobar que sigue en noviembre.
 
