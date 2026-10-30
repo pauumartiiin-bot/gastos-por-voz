@@ -334,11 +334,13 @@ bien en oscuro, y al borrarlas en «Mis registros» el bloque desaparece. README
   La latencia ya es menor que en la 6.1 (5,7–7,6 s).
 - B.2 decidida: cerrar sin optimizar (sección «Fase B»).
 
-**Fase 13 — Los gastos puntuales van al mes de la nómina (v2.8) — en pruebas.** Detalle en la sección «Fase 13».
-`?v=` 7.12.0. Probado en local (hoja simulada con la nómina del 26/10): periodos 27/27, gasto del 26/10 en noviembre
-y del 25/10 en octubre con `cuadra` ✅, marca «pendiente» guardada con la etiqueta de octubre que sigue al gasto y
-`probarPagos()` todo ✅. Hoja cambiada con `aplicarFase13()` (30 oct, a la cuarta: ver «Fase 13»). Falta: Nueva versión,
-`probarPeriodos()`/`probarMes()`/`probarPagos()` en el editor y pruebas en el iPhone.
+**Fase 13 — Los gastos puntuales van al mes de la nómina (v2.8) — hecha.** Detalle en la sección «Fase 13».
+`?v=` 7.12.0. Hoja cambiada con `aplicarFase13()` (30 oct, a la cuarta: ver «Fase 13»). En Apps Script (Nueva versión
+publicada): `probarPeriodos()` 27/27 y los dos gastos de prueba en su mes con `cuadra` ✅, `probarMes()` 3/3 ✅ y
+`probarPagos()` todo ✅. En el iPhone P1–P6 OK: «Comida» (M006) con fecha 26/10 sale en noviembre y no en octubre, un
+gasto de hoy (30/10) en noviembre, uno del 20/10 en octubre, un puntual pendiente nuevo en noviembre, Resumen y «Mes»
+con el mismo total y `cuadra` ✅, y las marcas reales (M002–M004 pendientes) intactas. README: párrafo en «Pestaña Mes»
+y dos filas en Decisiones.
 
 ## Fase 13 — Los gastos puntuales van al mes de la nómina (v2.8)
 Fallo visto en uso real (26 oct): con la nómina de octubre apuntada («Mes» ya abría en noviembre), un gasto del 26/10
