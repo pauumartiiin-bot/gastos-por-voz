@@ -378,13 +378,19 @@ con «+X € del restante de febrero» y Deshacer que quita las dos filas, líne
 25 € en febrero → Recalcular baja justo 25, borrar la nómina de marzo se lleva su arrastre, y bien en oscuro.
 **Primer uso real:** al apuntar la nómina de noviembre (finales de noviembre) sale el arrastre de noviembre a diciembre.
 
-**Fase 16 — Ahorro: cuenta conjunta, saldo inicial y objetivo (v2.11) — en pruebas.** Detalle en la sección «Fase 16».
+**Fase 16 — Ahorro: cuenta conjunta, saldo inicial y objetivo (v2.11) — hecha.** Detalle en la sección «Fase 16».
 `?v=` 7.16.0. Probado en local: `aplicarFase16()` con «,» y «;» (segunda vez sin cambios; si los totales o E8 no dan número,
 deshace el Resumen y borra las pestañas creadas; se para si D8:E8 está ocupada o falta la fase 15) y, con el simulador de la
 15 ampliado (Ahorros, Objetivos y E8 calculados), `probarAhorros()` todo ✅ con la hoja vacía y con un saldo inicial y un
 objetivo reales, `probarArrastre()`, `probarIngresos()` y `probarPrevistos()` en verde, y el caso real: aportación de
-200 € el 15/11 → noviembre baja 200 y el arrastre a diciembre no la incluye (1.335,48 − 300 − 200 = 835,48). Interfaz en el
-iPhone 13 simulado (claro y oscuro). Falta: `aplicarFase16()` en la hoja real, Nueva versión, pruebas del editor y S1–S8.
+200 € el 15/11 → noviembre baja 200 y el arrastre a diciembre no la incluye (1.335,48 − 300 − 200 = 835,48).
+En la hoja real (31 oct): `aplicarFase16()` **a la primera** (Ahorros, Objetivos, D8:E8, B6 y E7, Guía; ahorro 0).
+Nueva versión publicada. En Apps Script K4–K7 OK: `probarAhorros()` 13/13 y todo ✅ con limpieza, `probarMes()` 3/3 (ya
+con el invariante del restante), `probarIngresos()`, `probarArrastre()`, `probarPagos()` y `probarPrevistos()` ✅, y la hoja
+con sus cabeceras, desplegables y D8 = 0. En el iPhone S1–S9 OK: saldo inicial real sin tocar «Mes», aportación mía de
+10 € → «cuenta en Noviembre 2026» y «Apartado a ahorro −10,00 €» con el restante 10 € menos, la de la pareja sin tocar el
+mes, retirada de 5 € → −5,00 € y el restante sube 5, objetivo con fecha (barra, «faltan» y cuota al mes), cambiarlo con el
+antes y el después, eliminar y Deshacer, y bien en oscuro. Pau dejó su saldo inicial y su objetivo reales.
 
 ## Fase 16 — Ahorro: cuenta conjunta, saldo inicial y objetivo (v2.11)
 Saber siempre cuánto hay ahorrado de verdad y cuánto falta para un objetivo. La cuenta es conjunta con la pareja.
