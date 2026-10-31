@@ -344,14 +344,19 @@ gasto de hoy (30/10) en noviembre, uno del 20/10 en octubre, un puntual pendient
 con el mismo total y `cuadra` ✅, y las marcas reales (M002–M004 pendientes) intactas. README: párrafo en «Pestaña Mes»
 y dos filas en Decisiones.
 
-**Fase 14 — Comisiones previstas y reparto del ingreso por tipo (v2.9) — en pruebas.** Detalle en la sección «Fase 14».
-`?v=` 7.13.0. Probado en local: `aplicarFase14()` con las fórmulas reales (comas y «;»; segunda vez sin cambios; si el
+**Fase 14 — Comisiones previstas y reparto del ingreso por tipo (v2.9) — hecha.** Detalle en la sección «Fase 14».
+`?v=` 7.14.0. Probado en local: `aplicarFase14()` con las fórmulas reales (comas y «;»; segunda vez sin cambios; si el
 reparto no da números, lo deshace todo y la hoja queda igual) y la interfaz en el iPhone 13 simulado (claro y oscuro).
 `aplicarFase14()` en la hoja real (31 oct): **a la primera**, todo ✅ (Meses D, reparto H1:K4, cabecera por tipo, Guía);
 noviembre: nómina cobrada 1.335,48 + comisiones cobradas 202,21 = ingreso 1.537,69 (cobrado), B7 = 0. En el iPhone
-Q1–Q8 OK (Q3: el campo solo abre teclado numérico; Q7 no propuso el previsto porque la Q6 lo dejaba a 0: se repite).
-**14.2 (nómina prevista desde la app)** — `?v=` 7.14.0, probada en local. Falta: Previstos.gs y Nueva versión,
-`probarPrevistos()`/`probarIngresos()`/`probarMes()` y pruebas en el iPhone.
+Q1–Q8 OK (Q3: el campo solo abre teclado numérico, así que no se pueden escribir letras).
+**14.2 (nómina prevista desde la app):** en Apps Script (Nueva versión publicada) `probarPrevistos()` 8/8 y todo ✅
+(comisiones 250 → 0 con la celda vacía, nómina del penúltimo mes «y siguientes» → 2 meses, solo del último sin tocar el
+anterior, limpieza), `probarIngresos()` todo ✅ con (a) previsto, (b) parcial, (c) cobrado y (d) extra, y `probarMes()`
+3/3 ✅. En el iPhone H5–H10 OK: un «Cambiar previsto» a la vez, nómina de diciembre sin la casilla (enero sigue en 1.370)
+y con ella (enero y febrero a 1.450), comisiones sin casilla, y «+ Nuevo ingreso» propone las comisiones previstas
+(la Q7 no lo hacía porque la Q6 las dejó a 0). Limpieza: nómina 1.370 desde diciembre y comisiones a 0. README:
+viñetas en «Ingresos» y fila en Decisiones.
 
 ## Fase 14 — Comisiones previstas y reparto del ingreso por tipo (v2.9)
 Hasta ahora había un solo previsto por mes (Meses C, la nómina) y `B4 = IF(E5>0, E5, E4)`: en cuanto se cobraba algo, todo
