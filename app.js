@@ -606,7 +606,10 @@ async function apuntarIngreso(e) {
     importeAuto = true;
     mesAMano = false;
     $('nuevo-ingreso').open = false;
-    notificar('✓ ' + r.desc, true);
+    // Fase 15: al apuntar la nómina, el restante del mes anterior pasa a este (o el motivo de que no).
+    const arrastre = r.arrastre ? ' · ' + conSigno(r.arrastre.importe) + ' del ' + r.arrastre.concepto.toLowerCase()
+      : r.motivo_arrastre ? ' · sin arrastre: ' + r.motivo_arrastre : '';
+    notificar('✓ ' + r.desc + arrastre, true);
   } catch (err) {
     estadoIngreso(err.message, true); // lo escrito se conserva para corregirlo
   } finally {
@@ -766,7 +769,7 @@ function pintarMes(origen) {
 // Cerrado por defecto: se abre al tocar la cifra de Ingreso. Dentro, cada tipo (lo que cuenta: cobrado si hay, si no,
 // previsto) y debajo cada ingreso apuntado (fase 12). La app no calcula: el reparto viene de la hoja (Resumen H2:K4).
 const NOMBRES_TIPO = { 'nómina': ['Nómina', 'prevista', 'cobrada'], comisiones: ['Comisiones', 'previstas', 'cobradas'],
-  extra: ['Extras', 'previstos', 'cobrados'] };
+  extra: ['Extras', 'previstos', 'cobrados'], arrastre: ['Arrastre', '', ''] };
 let repartoAbierto = false;
 let editandoPrevisto = null;   // etiqueta del mes cuyo previsto se está cambiando
 
@@ -778,8 +781,9 @@ function pintarReparto(r) {
   // Mientras se escribe un previsto no se repinta: una actualización de la caché borraría lo escrito.
   if (editandoPrevisto !== r.etiqueta) {
     $('reparto-tipos').replaceChildren(...c.desglose
-      .filter((d) => d.tipo !== 'extra' || d.cobrado > 0)   // los extras no tienen previsto: solo si hay
-      .map((d) => lineaTipo(d, r.etiqueta)));
+      .filter((d) => d.tipo !== 'extra' || d.cobrado > 0)      // los extras no tienen previsto: solo si hay
+      .filter((d) => d.tipo !== 'arrastre' || d.cobrado !== 0)  // el arrastre (fase 15), solo si hay; puede ser negativo
+      .map((d) => d.tipo === 'arrastre' ? lineaArrastre(d, r) : lineaTipo(d, r.etiqueta)));
   }
   $('reparto-lineas').replaceChildren(...(r.ingresos || []).map((i) =>
     lineaMes(i.concepto || i.tipo, i.fecha ? fechaCorta(i.fecha) : '', i.importe, '')));
@@ -861,15 +865,7 @@ function formPrevisto(d, etiqueta, boton) {
         (otros ? ' (y ' + (otros === 1 ? 'el mes siguiente' : 'los ' + otros + ' meses siguientes') + ')' : ''), false);
       // Los meses siguientes guardados en la caché ya no valen: se vuelven a pedir al visitarlos.
       if (otros && r.mes) r.mes.meses.slice(r.mes.meses.indexOf(etiqueta) + 1).forEach((m) => cacheMes.delete(m));
-      if (r.mes) {
-        cacheMes.set(etiqueta, r.mes);   // el mes ya recalculado, en la misma respuesta
-        if (mesDestino === etiqueta) {
-          mesDatos = r.mes;
-          pintarMes('servidor');
-        }
-      } else if (mesDestino === etiqueta) {
-        cargarMes(etiqueta);
-      }
+      ponerMesRecalculado(etiqueta, r.mes);
     } catch (err) {
       mensaje.textContent = err.message;   // lo escrito se conserva para corregirlo
       guardar.disabled = false;
@@ -880,6 +876,59 @@ function formPrevisto(d, etiqueta, boton) {
   });
   setTimeout(() => campo.focus(), 0);
   return form;
+}
+
+// El mes ya recalculado que trae la respuesta (previsto y arrastre): a la caché y, si es el que se ve, a la pantalla.
+function ponerMesRecalculado(etiqueta, mes) {
+  if (mes) {
+    cacheMes.set(etiqueta, mes);
+    if (mesDestino === etiqueta) {
+      mesDatos = mes;
+      pintarMes('servidor');
+    }
+  } else if (mesDestino === etiqueta) {
+    cargarMes(etiqueta);
+  }
+}
+
+// «Arrastre · Restante de octubre · +86,00 €» con «Recalcular» (fase 15). El importe lo calcula la hoja, no la app:
+// es una foto del restante real del mes anterior al apuntar la nómina; si luego cambia un gasto de ese mes, se recalcula.
+function lineaArrastre(d, r) {
+  const fila = (r.ingresos || []).filter((i) => i.tipo === 'arrastre')[0];
+  const linea = crear('div', 'reparto-tipo');
+  linea.append(crear('span', 'reparto-nombre', 'Arrastre'),
+    crear('span', 'reparto-cuenta' + (d.cuenta < 0 ? ' negativo' : ''), conSigno(d.cuenta)),
+    crear('span', 'reparto-detalle', fila ? fila.concepto : 'del mes anterior'));
+  const boton = crear('button', 'reparto-cambiar', 'Recalcular');
+  boton.type = 'button';
+  const mensaje = crear('p', 'estado error reparto-mensaje');
+  boton.addEventListener('click', async () => {
+    boton.disabled = true;
+    boton.textContent = 'Recalculando…';
+    mensaje.textContent = '';
+    const cambios = pagosDe(r.etiqueta);   // cuenta como un cambio del mes, como guardar un previsto
+    cambios.cambios++;
+    cambios.enVuelo++;
+    try {
+      const x = await api('arrastre', { etiqueta: r.etiqueta });
+      notificar(x.concepto + ': ' + (x.anterior === x.importe ? euros(x.importe) + ' (sin cambios)'
+        : conSigno(x.anterior) + ' → ' + conSigno(x.importe)), false);
+      ponerMesRecalculado(r.etiqueta, x.mes);
+    } catch (err) {
+      mensaje.textContent = err.message;
+      boton.disabled = false;
+      boton.textContent = 'Recalcular';
+    } finally {
+      cambios.enVuelo--;
+    }
+  });
+  linea.append(boton, mensaje);
+  return linea;
+}
+
+// 86 → «+86,00 €»; −50 → «-50,00 €» (el arrastre puede ser de los dos signos).
+function conSigno(n) {
+  return (n > 0 ? '+' : '') + euros(n);
 }
 
 function alternarReparto() {

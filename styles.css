@@ -481,6 +481,10 @@ input[type="checkbox"]:checked, input[type="radio"]:checked {
 .reparto-siguientes { flex-basis: 100%; display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--secundario); }
 .reparto-editar .estado:empty { display: none; }
 .reparto-lineas:empty { display: none !important; }
+/* Fase 15: el arrastre puede ser negativo; el rechazo de «Recalcular» sale en su línea. */
+.reparto-cuenta.negativo { color: var(--acento-tinta); }
+.reparto-mensaje { grid-column: 1 / -1; margin: 0; text-align: left; }
+.reparto-mensaje:empty { display: none; }
 .reparto-lineas { padding-top: 8px; border-top: 1px dashed var(--borde); }
 .mes-restante { grid-column: 1 / -1; padding-top: 14px; border-top: 1px solid var(--borde); }
 .mes-restante dd {
