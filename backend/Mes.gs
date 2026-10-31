@@ -10,10 +10,13 @@
  * (nunca después del día 1) y acaba la víspera de la nómina siguiente. Los recurrentes siguen por mes natural (B2:B3).
  * Fase 14: el ingreso se reparte por tipo en Resumen H2:K4 (previsto · cobrado · cuenta): lo cobrado de un tipo
  * sustituye a su previsto. B4 suma «cuenta» y E6 dice previsto, parcial o cobrado.
+ * Fase 15: fila 5 del reparto, el arrastre del mes anterior (solo cobrado, puede ser negativo), y E7 «Restante real»
+ * (cobrado − fijos − gastos puntuales): lo que pasa al mes siguiente al apuntar su nómina (Ingresos.gs).
  */
 
-const MES_REPARTO_ = 'H2:K4';                           // Resumen: una fila por tipo, de I a K previsto · cobrado · cuenta
-const MES_TIPOS_ = ['nómina', 'comisiones', 'extra'];   // el orden de esas filas
+const MES_REPARTO_ = 'H2:K5';                                       // Resumen: una fila por tipo, de I a K previsto · cobrado · cuenta
+const MES_TIPOS_ = ['nómina', 'comisiones', 'extra', 'arrastre'];   // el orden de esas filas
+const MES_RESTANTE_REAL_ = 'E7';                                    // fase 15
 
 const MES_CELDA_ = 'B1';            // Resumen: etiqueta del mes elegido
 const MES_PRIMERA_FILA_ = 10;       // Resumen: tabla por categoría, filas 10–129
@@ -90,36 +93,44 @@ function nominaApuntada_(libro, etiqueta) {
     .some((f) => String(f[0]) === etiqueta && normalizar(f[2]) === 'nomina');   // normalizar es de la v1
 }
 
-/** Pone el mes en B1, lee lo que calculan las fórmulas y deja B1 como estaba (también si algo falla). */
-function leerMesEnHoja_(libro, etiqueta) {
+/**
+ * Patrón A+: pone el mes en B1, ejecuta leer(resumen) con las fórmulas ya recalculadas y deja B1 como estaba (también
+ * si algo falla). No toma el bloqueo: quien lo llama ya lo tiene (mes_, o apuntarIngreso_ al calcular el arrastre).
+ */
+function enMes_(libro, etiqueta, leer) {
   const resumen = libro.getSheetByName('Resumen');
   const celda = resumen.getRange(MES_CELDA_);
   const original = celda.getValue();
   const cambia = original !== etiqueta;   // si ya es ese mes, no hace falta recalcular
   try {
-    if (cambia) {
-      celda.setValue(etiqueta);
-      SpreadsheetApp.flush();
-    }
-    const calculo = libro.getSheetByName('Cálculo');
-    const movs = libro.getSheetByName('Movimientos');
-    return {
-      cabecera: resumen.getRange('B2:B6').getValues().map((f) => f[0]),   // inicio, fin, ingreso, previsto, restante
-      periodo: resumen.getRange('E2:E3').getValues().map((f) => f[0]),    // periodo de los puntuales (fase 13)
-      ingreso: resumen.getRange('E4:E6').getValues().map((f) => f[0]),    // previsto, cobrado, origen
-      reparto: resumen.getRange(MES_REPARTO_).getValues(),                // fase 14: el ingreso por tipo
-      tabla: resumen.getRange(MES_PRIMERA_FILA_, 1, MES_ULTIMA_FILA_ - MES_PRIMERA_FILA_ + 1, 7).getValues(),
-      calculo: calculo.getLastRow() < 2 ? []
-        : calculo.getRange(2, 1, calculo.getLastRow() - 1, MES_COLS_CALCULO_).getValues(),
-      movimientos: movs.getLastRow() < 2 ? []
-        : movs.getRange(2, 1, movs.getLastRow() - 1, 5).getValues()
-    };
+    if (cambia) celda.setValue(etiqueta);
+    SpreadsheetApp.flush();   // también si no cambia: puede haber una escritura reciente (la nómina del arrastre)
+    return leer(resumen);
   } finally {
     if (cambia) {
       celda.setValue(original);
       SpreadsheetApp.flush();
     }
   }
+}
+
+/** Lee lo que calculan las fórmulas para ese mes (con enMes_). */
+function leerMesEnHoja_(libro, etiqueta) {
+  return enMes_(libro, etiqueta, (resumen) => {
+    const calculo = libro.getSheetByName('Cálculo');
+    const movs = libro.getSheetByName('Movimientos');
+    return {
+      cabecera: resumen.getRange('B2:B6').getValues().map((f) => f[0]),   // inicio, fin, ingreso, previsto, restante
+      periodo: resumen.getRange('E2:E3').getValues().map((f) => f[0]),    // periodo de los puntuales (fase 13)
+      ingreso: resumen.getRange('E4:E6').getValues().map((f) => f[0]),    // previsto, cobrado, origen
+      reparto: resumen.getRange(MES_REPARTO_).getValues(),                // fases 14 y 15: el ingreso por tipo
+      tabla: resumen.getRange(MES_PRIMERA_FILA_, 1, MES_ULTIMA_FILA_ - MES_PRIMERA_FILA_ + 1, 7).getValues(),
+      calculo: calculo.getLastRow() < 2 ? []
+        : calculo.getRange(2, 1, calculo.getLastRow() - 1, MES_COLS_CALCULO_).getValues(),
+      movimientos: movs.getLastRow() < 2 ? []
+        : movs.getRange(2, 1, movs.getLastRow() - 1, 5).getValues()
+    };
+  });
 }
 
 /**

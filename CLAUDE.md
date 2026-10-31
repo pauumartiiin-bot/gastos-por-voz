@@ -30,7 +30,7 @@ iPhone (esta app, GitHub Pages, instalada en pantalla de inicio)
   `redirect: 'follow'` (Apps Script responde con una redirección).
 - Interfaz en español. Comentarios del código en español, breves.
 
-## Contrato de la API (fases 6.1–14)
+## Contrato de la API (fases 6.1–15)
 Petición: un único `doPost` (en `backend/Api.gs`) que enruta por `accion`. Cuerpo JSON enviado como texto plano:
 ```json
 { "t": "<token>", "accion": "dictar", ...parámetros }
@@ -51,9 +51,10 @@ Petición: un único `doPost` (en `backend/Api.gs`) que enruta por `accion`. Cue
 | `renombrar` | `hoja` (`Recurrentes` \| `Movimientos`), `id`, `concepto` | `renombrar_` (nuevo, `backend/Renombrar.gs`) con `libro_`, `conBloqueo_`, `buscarFilaPorId_`, `COL`/`COLM` y `apuntarDeshacer_` | `id`, `concepto`, `desc` (detalle en «Fase 8») |
 | `pagar` | `etiqueta`, `id` (regla R… o gasto puntual M…), `pagado` (`true` \| `false`) | `pagar_` (nuevo, `backend/Pagos.gs`) con `libro_`, `conBloqueo_`, `buscarFilaPorId_`, `COL` y `COLM` | `etiqueta`, `id`, `pagado`, `pagado_el` (detalle en «Fase 8» y «Fase 11») |
 | `ingresos` | — | `ingresos_` (nuevo, `backend/Ingresos.gs`) con `libro_` y `normalizar` | `hoy`, `meses` (`etiqueta`, `inicio`, `previsto`, `previsto_comisiones`, `nomina`, `periodo_inicio`, `periodo_fin`), `ingresos` (últimos 20) (detalle en «Fase 9», «Fase 13» y «Fase 14») |
-| `ingreso` | `tipo`, `importe`, `fecha`, `mes`, `concepto?` | `apuntarIngreso_` (nuevo) con `conBloqueo_`, `siguienteId_`, `escribirFila_`, `fechaSerial_`, `ahoraSerial_` y `apuntarDeshacer_` | `id`, `desc`, `ingreso` |
-| `borrar_ingreso` | `id` | `borrarIngreso_` (nuevo) con `conBloqueo_`, `buscarFilaPorId_`, `aJSON_` y `apuntarDeshacer_` | `id`, `desc` |
+| `ingreso` | `tipo` (no `arrastre`), `importe`, `fecha`, `mes`, `concepto?` | `apuntarIngreso_` (nuevo) con `conBloqueo_`, `siguienteId_`, `escribirFila_`, `fechaSerial_`, `ahoraSerial_` y `apuntarDeshacer_` | `id`, `desc`, `ingreso`, `arrastre` (`{ id, importe, desde, concepto }` o `null`), `motivo_arrastre` (fase 15) |
+| `borrar_ingreso` | `id` | `borrarIngreso_` (nuevo) con `conBloqueo_`, `buscarFilaPorId_`, `aJSON_` y `apuntarDeshacer_` | `id`, `desc`, `arrastre_borrado` (fase 15) |
 | `previsto` | `etiqueta`, `tipo` (`nómina` \| `comisiones`), `importe` (≥ 0; 0 lo quita), `siguientes?` (solo nómina: también los meses de después) | `previsto_` (nuevo, `backend/Previstos.gs`) con `libro_`, `conBloqueo_` y `mes_` | `etiqueta`, `tipo`, `anterior`, `importe`, `meses_cambiados`, `mes` (el mes ya recalculado; detalle en «Fase 14») |
+| `arrastre` | `etiqueta` (el mes que recibe el arrastre) | `arrastre_` (nuevo, `backend/Ingresos.gs`) con `libro_`, `conBloqueo_`, `enMes_`, `siguienteId_`, `escribirFila_` y `mes_` | `etiqueta`, `id` (o `null` si da 0), `desde`, `concepto`, `anterior`, `importe`, `mes` (detalle en «Fase 15») |
 
 - En `dictar` con `corrige`, lo dictado es el cambio pedido y `frase` es la frase original (así lo espera `interpretar`).
 - `ms_interpretar` incluye leer el contexto de la hoja + Haiku + validación.
@@ -104,9 +105,9 @@ backend/Mes.gs          acción mes (fase 7): lee el mes de la hoja y restaura R
 backend/Categorias.gs   acción categoria (fase 7b): crea una categoría antes de «Otros»; se copia a mano
 backend/Renombrar.gs    acción renombrar (fase 8.1): cambia el concepto de un gasto; se copia a mano
 backend/Pagos.gs        acción pagar (fases 8.2 y 11.1): marca cargos fijos y gastos puntuales en la pestaña Pagos; se copia a mano
-backend/Ingresos.gs     acciones ingresos, ingreso y borrar_ingreso (fase 9.1); se copia a mano
+backend/Ingresos.gs     acciones ingresos, ingreso y borrar_ingreso (fase 9.1) y arrastre (fase 15); se copia a mano
 backend/Latencia.gs     medirLatencia() (fase B.1): cronometra libro_, leerContexto_ e interpretar; se copia a mano
-backend/Migraciones.gs  cambios en la hoja de cada fase (aplicarFase13, aplicarFase14), se ejecutan una vez desde el editor; se copia a mano
+backend/Migraciones.gs  cambios en la hoja de cada fase (aplicarFase13, aplicarFase14, aplicarFase15), se ejecutan una vez desde el editor; se copia a mano
 backend/Previstos.gs    acción previsto (fase 14): comisiones previstas de un mes (Meses D); se copia a mano
 docs/                   capturas del README (generadas con datos inventados)
 CLAUDE.md               este archivo
@@ -357,6 +358,67 @@ anterior, limpieza), `probarIngresos()` todo ✅ con (a) previsto, (b) parcial, 
 y con ella (enero y febrero a 1.450), comisiones sin casilla, y «+ Nuevo ingreso» propone las comisiones previstas
 (la Q7 no lo hacía porque la Q6 las dejó a 0). Limpieza: nómina 1.370 desde diciembre y comisiones a 0. README:
 viñetas en «Ingresos» y fila en Decisiones.
+
+**Fase 15 — Arrastre del restante al mes siguiente (v2.10) — en pruebas.** Detalle en la sección «Fase 15». `?v=` 7.15.0.
+Probado en local: `aplicarFase15()` con «,» y «;» (segunda vez sin cambios; si algo no da número, lo deshace todo; se para
+si D7:E7 está ocupada o falta la fase 14) y, con un simulador que calcula periodo, reparto y restante real,
+`probarArrastre()` todo ✅, `probarIngresos()` y `probarPrevistos()` en verde, y el caso real (nómina de diciembre el 27/11 →
+arrastre 1.209,69 = 1.335,48 + 202,21 − 300 − 28; el gasto del 28/11 ya es de diciembre). Interfaz en el iPhone 13
+simulado (claro y oscuro). Falta: `aplicarFase15()` en la hoja real, Nueva versión, pruebas del editor y A1–A5.
+
+## Fase 15 — Arrastre del restante al mes siguiente (v2.10)
+Si me queda dinero de un mes, sigo teniéndolo: al cerrar el mes (al apuntar la nómina del siguiente), lo que quedó se suma
+solo al mes nuevo; si me pasé, se resta. **No es una fórmula**: la hoja calcula un solo mes a la vez (`Resumen!B1`) y no
+puede encadenar el restante de octubre dentro de noviembre. Se guarda como un dato (una fila en Ingresos) en el momento
+de cerrar el mes: una foto, que se recalcula con un botón. Decisiones (confirmadas por Pau, con las recomendaciones):
+- **Cuándo:** al apuntar con éxito una nómina en el mes N+1 (acción `ingreso`), se calcula el arrastre del mes N. Primero
+  se escribe la nómina: el periodo de N (fase 13) acaba la víspera de esa nómina.
+- **Qué:** el «Restante real» de N = lo cobrado (todas sus filas de Ingresos, también su propio arrastre) − cargos fijos
+  (B130) − gastos puntuales del periodo (D130). Los presupuestos no reservan nada. Puede ser negativo.
+- **Solo lo cobrado de verdad:** sin nómina en N, no hay arrastre (octubre de 2026: Pau apunta lo que le quedaba como
+  «extra»). `Recalcular` sin fila la crea solo si N y N+1 tienen nómina (N+1 cierra N).
+- **Dónde:** fila de Ingresos con tipo «arrastre»: `Mes` = N+1, `Fecha` = la de la nómina, concepto «Restante de
+  noviembre» (el mes natural de N), importe con signo. 0,00 → no se apunta (y `Recalcular` que da 0 borra la fila). Solo
+  la crea el servidor: `ingreso` con tipo «arrastre» → `entrada` (`ING_TIPOS_` no lo incluye). Una por mes: si ya
+  existe al apuntar la nómina (solo tras tocar la hoja a mano), no se toca y el motivo dice «usa Recalcular».
+- **Deshacer:** el de la nómina quita también su arrastre (un `apuntarDeshacer_` con dos pasos `borrar`; el `deshacer` de
+  la v1 recorre todos los pasos). Borrar una nómina en «Mis registros» borra también el arrastre de su mes (N vuelve a
+  estar abierto) y su Deshacer recupera las dos filas (dos pasos `fila`). Borrar el arrastre solo se puede, como
+  cualquier ingreso.
+- **Recalcular** (acción `arrastre { etiqueta }`): sustituye el importe; sin Deshacer (como `pagar`), la notificación dice
+  el antes y el después y la respuesta trae el mes recalculado. Es una foto también hacia delante: recalcular noviembre no
+  cambia un arrastre de diciembre que ya exista.
+- **Reparto (fase 14):** fila 5 «Arrastre» (solo cobrado). Cuenta en el ingreso y en el cobrado, no en el origen.
+- **Coste:** apuntar una nómina tarda ~1,5 s más (otro mes en B1 y recalcular).
+- **Propuesta sin implementar:** enseñar el «Restante real» en la cabecera de «Mes».
+
+Hoja (`aplicarFase15()`, Migraciones.gs; mismas garantías que la 14): Resumen H5:K5 «Arrastre» con I5 = 0, J5 = `SUMIFS`
+de Ingresos con tipo «arrastre» y **K5 = `J5`** (con `IF(J>0, J, I)` un arrastre negativo contaría 0); B4 = `SUM(K2:K5)`,
+E4 = `SUM(I2:I5)`, E5 = `SUM(J2:J5)`; E6 cambia `E5=0` por `SUM(J2:J4)=0` (el arrastre no cambia el origen); D7:E7
+«Restante real» = `E5-B130-D130`. Ingresos: el Tipo admite «arrastre» (se copia la regla y se añade) y el Importe pasa de
+«mayor que 0» a la fórmula `OR(F2>0, E2="arrastre")` (sigue protegiendo lo escrito a mano). Guía: filas «Tipo
+«arrastre»» y «E7 Restante real», y las descripciones de Tipo, Importe y Reparto (H1:K5). Comprueba antes (H5:K5 y D7:E7
+vacías, cabecera de la fase 14, lista de tipos en E2) y después (K2:K5 y E7 con número, B4 = suma de K, E7 = E5 − B130 −
+D130, E6 válido); si algo falla, deshace el Resumen antes de tocar Ingresos y la Guía.
+
+Código:
+- `Mes.gs`: el patrón A+ sale a `enMes_(libro, etiqueta, leer)` (B1, `flush`, leer, restaurar en `finally`; sin bloqueo
+  propio para poder usarlo dentro del de `apuntarIngreso_`). `MES_REPARTO_` = `H2:K5` y `desglose` trae `arrastre`.
+- `Ingresos.gs`: `apuntarArrastre_`, `calcularArrastre_` (motivos: sin mes anterior, N sin nómina, N sin cerrar, falta
+  la migración), `filaArrastre_`, `arrastre_` y `probarArrastre()`. `probarIngresos()` quita el arrastre si llegara a
+  crearse (sus cuentas son fijas).
+- App: notificación «✓ «Nómina noviembre» apuntado en … · +86,00 € del restante de noviembre» (o «· sin arrastre:
+  motivo»); en el reparto, línea «Arrastre · Restante de noviembre · +86,00 €» (acento si es negativo) con «Recalcular»
+  (cuenta como un cambio del mes en `pagosMes`, como un previsto; el rechazo sale en la línea); en «Mis registros», el
+  chip de tipo ya dice «arrastre».
+
+Pruebas: `probarArrastre()` en los dos últimos meses (sin ingresos; si no, no prueba): (a) nómina en N, gasto de 40 € en
+N y nómina en N+1 → arrastre = cobrado − fijos − puntuales = E7, y «Mes» de N+1 lo enseña en el reparto; (e) otro gasto
+de 10 € y Recalcular dos veces → baja 10, una fila; (b) gasto de 5.000 → negativo; (d) `apuntarIngreso_` y Deshacer →
+sin las dos filas; borrar la nómina → también su arrastre, y Deshacer las recupera; (c) N sin nómina → Recalcular
+rechazado y una nómina nueva en N+1 sin arrastre; (f) tipo «arrastre» en `ingreso` → `entrada`. Las nóminas de (a)/(b)/(e)
+se escriben con el día 1 de su mes (`apuntarIngreso_` no acepta fechas a más de 60 días) para que el periodo de N sea el
+mes natural. Limpieza en `finally`.
 
 ## Fase 14 — Comisiones previstas y reparto del ingreso por tipo (v2.9)
 Hasta ahora había un solo previsto por mes (Meses C, la nómina) y `B4 = IF(E5>0, E5, E4)`: en cuanto se cobraba algo, todo
