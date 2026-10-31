@@ -395,3 +395,163 @@ function aplicarFase15() {
                resumen.getRange('B7').getValue());
   });
 }
+
+/**
+ * Fase 16: ahorro. Pestañas nuevas «Ahorros» (los movimientos; sin fórmulas, porque la v1 escribe tras getLastRow()) y
+ * «Objetivos» (A:E los objetivos; H:I filas 1–10 los totales que calcula la hoja). Resumen D8:E8 «Ahorro del mes» = lo que
+ * aparto yo − lo que retiro yo, con fecha dentro del periodo (E2:E3); B6 (Restante) y E7 (Restante real) lo restan.
+ * Si algo no da lo esperado, se deshace todo (fórmulas del Resumen y pestañas creadas) y se para.
+ */
+function aplicarFase16() {
+  const libro = libro_();   // v1
+  conBloqueo_(() => {       // v1
+    const resumen = libro.getSheetByName('Resumen');
+    const guia = libro.getSheetByName('Guía');
+    const sep = separadorDeHoja_(resumen.getDataRange().getFormulas());
+    const local = (formula) => formula.replace(/,/g, sep);   // estas fórmulas no llevan comas dentro de textos
+    const sinEspacios = (f) => f.replace(/\s/g, '');
+    const CAB_AHORROS = ['ID', 'Fecha', 'Tipo', 'Quién', 'Concepto', 'Importe', 'Notas', 'Registrado'];
+    const CAB_OBJETIVOS = ['Nombre', 'Importe', 'Fecha_objetivo', 'Activo', 'Creado'];
+
+    // 1. Comprobaciones: nada se escribe si algo no cuadra.
+    const existente = (nombre, cab) => {
+      const h = libro.getSheetByName(nombre);
+      if (!h) return { hoja: null, ya: false };
+      const fila = h.getRange(1, 1, 1, cab.length).getValues()[0];
+      return { hoja: h, ya: fila.join('|') === cab.join('|') };
+    };
+    const ah = existente('Ahorros', CAB_AHORROS);
+    const ob = existente('Objetivos', CAB_OBJETIVOS);
+    if (ah.hoja && !ah.ya) return Logger.log('❌ Ya hay una pestaña «Ahorros» con otra cabecera. No se ha cambiado nada.');
+    if (ob.hoja && !ob.ya) return Logger.log('❌ Ya hay una pestaña «Objetivos» con otra cabecera. No se ha cambiado nada.');
+    const d8e8 = resumen.getRange('D8:E8');
+    const yaE8 = d8e8.getValues()[0][0] === 'Ahorro del mes';
+    if (!yaE8 && d8e8.getValues()[0].some((v) => v !== '')) return Logger.log('❌ Resumen D8:E8 no está vacía. No se ha cambiado nada.');
+    const b6 = resumen.getRange('B6');
+    const e7 = resumen.getRange('E7');
+    const antes = [b6.getFormula(), e7.getFormula()];
+    const yaFormulas = sinEspacios(antes[0]).indexOf('E8') >= 0;
+    if (!yaFormulas && (sinEspacios(antes[0]) !== '=B4-B5' || sinEspacios(antes[1]) !== '=E5-B130-D130')) {
+      return Logger.log('❌ B6 o E7 no son las de antes (¿falta aplicarFase15?). No se ha cambiado nada.\nB6: ' + antes[0] + '\nE7: ' + antes[1]);
+    }
+
+    const deshacer = (motivo) => {
+      if (!yaFormulas) { b6.setFormula(antes[0]); e7.setFormula(antes[1]); }
+      if (!yaE8) d8e8.clearContent();
+      if (!ah.hoja && libro.getSheetByName('Ahorros')) libro.deleteSheet(libro.getSheetByName('Ahorros'));
+      if (!ob.hoja && libro.getSheetByName('Objetivos')) libro.deleteSheet(libro.getSheetByName('Objetivos'));
+      Logger.log('❌ ' + motivo + ' Se ha deshecho: no se ha cambiado nada (separador «' + sep + '»).');
+    };
+    const lista = (valores) => SpreadsheetApp.newDataValidation().requireValueInList(valores, true).setAllowInvalid(false).build();
+    const positivo = () => SpreadsheetApp.newDataValidation().requireNumberGreaterThan(0).setAllowInvalid(false).build();
+
+    // 2. Ahorros: cabecera, formatos y validaciones. Ni una fórmula (la v1 escribe tras getLastRow()).
+    if (!ah.hoja) {
+      const h = libro.insertSheet('Ahorros');
+      h.getRange(1, 1, 1, CAB_AHORROS.length).setValues([CAB_AHORROS]).setFontWeight('bold');
+      h.setFrozenRows(1);
+      const n = h.getMaxRows() - 1;
+      h.getRange(2, 2, n, 1).setNumberFormat('dd/mm/yyyy');
+      h.getRange(2, 6, n, 1).setNumberFormat('#,##0.00 "€"');
+      h.getRange(2, 8, n, 1).setNumberFormat('dd/mm/yyyy hh:mm');
+      h.getRange(2, 3, n, 1).setDataValidation(lista(['inicial', 'aportación', 'retirada']));
+      h.getRange(2, 4, n, 1).setDataValidation(lista(['yo', 'pareja']));
+      h.getRange(2, 6, n, 1).setDataValidation(positivo());
+      Logger.log('✅ Pestaña «Ahorros» creada (cabecera, formatos y validaciones de Tipo, Quién e Importe)');
+    } else {
+      Logger.log('· La pestaña «Ahorros» ya estaba');
+    }
+
+    // 3. Objetivos: A:E los objetivos (uno activo) y H:I los totales que calcula la hoja.
+    if (!ob.hoja) {
+      const h = libro.insertSheet('Objetivos');
+      h.getRange(1, 1, 1, CAB_OBJETIVOS.length).setValues([CAB_OBJETIVOS]).setFontWeight('bold');
+      h.setFrozenRows(1);
+      const n = h.getMaxRows() - 1;
+      h.getRange(2, 2, n, 1).setNumberFormat('#,##0.00 "€"').setDataValidation(positivo());
+      h.getRange(2, 3, n, 1).setNumberFormat('dd/mm/yyyy');
+      h.getRange(2, 4, n, 1).setDataValidation(lista(['Sí', 'No']));
+      h.getRange(2, 5, n, 1).setNumberFormat('dd/mm/yyyy hh:mm');
+      const suma = (tipo, quien) => 'SUMIFS(Ahorros!$F:$F, Ahorros!$C:$C, "' + tipo + '"' + (quien ? ', Ahorros!$D:$D, "' + quien + '"' : '') + ')';
+      const activo = (col) => 'INDEX($' + col + ':$' + col + ', MATCH("Sí", $D:$D, 0))';
+      const totales = [
+        ['Total ahorrado', '=' + suma('inicial') + '+' + suma('aportación') + '-' + suma('retirada')],
+        ['Inicial', '=' + suma('inicial')],
+        ['Mío (neto)', '=' + suma('aportación', 'yo') + '-' + suma('retirada', 'yo')],
+        ['Pareja (neto)', '=' + suma('aportación', 'pareja') + '-' + suma('retirada', 'pareja')],
+        ['Objetivo activo', '=IFERROR(' + activo('A') + ', "")'],
+        ['Importe del objetivo', '=IFERROR(' + activo('B') + ', 0)'],
+        ['Fecha del objetivo', '=IFERROR(IF(' + activo('C') + '="", "", ' + activo('C') + '), "")'],
+        ['Progreso', '=IF(I6>0, MAX(0, I1)/I6, "")'],
+        ['Falta', '=IF(I6>0, MAX(0, I6-I1), "")'],
+        ['Al mes hasta la fecha', '=IF(OR(I7="", I6=0), "", IF(I7<TODAY(), "", I9/MAX(1, (YEAR(I7)-YEAR(TODAY()))*12+MONTH(I7)-MONTH(TODAY()))))']
+      ];
+      h.getRange(1, 8, totales.length, 1).setValues(totales.map((f) => [f[0]])).setFontWeight('bold');
+      h.getRange(1, 9, totales.length, 1).setFormulas(totales.map((f) => [local(f[1])]));
+      h.getRange('I1:I4').setNumberFormat('#,##0.00 "€"');
+      h.getRange('I6').setNumberFormat('#,##0.00 "€"');
+      h.getRange('I7').setNumberFormat('dd/mm/yyyy');
+      h.getRange('I8').setNumberFormat('0.0%');
+      h.getRange('I9:I10').setNumberFormat('#,##0.00 "€"');
+      SpreadsheetApp.flush();
+      const v = h.getRange('I1:I10').getValues().map((f) => f[0]);
+      if (![0, 1, 2, 3, 5].every((i) => typeof v[i] === 'number')) {
+        return deshacer('Los totales de Objetivos no dan números (' + h.getRange('I1:I10').getDisplayValues().map((f) => f[0]).join(' · ') + ').');
+      }
+      Logger.log('✅ Pestaña «Objetivos» creada (A:E objetivos, H1:I10 totales)');
+    } else {
+      Logger.log('· La pestaña «Objetivos» ya estaba');
+    }
+
+    // 4. Resumen: «Ahorro del mes» y el restante que lo resta.
+    if (!yaE8) {
+      const ahorro = (tipo) => 'SUMIFS(Ahorros!$F:$F, Ahorros!$C:$C, "' + tipo + '", Ahorros!$D:$D, "yo", Ahorros!$B:$B, ">="&$E$2, Ahorros!$B:$B, "<="&$E$3)';
+      resumen.getRange('D8').setValue('Ahorro del mes');
+      resumen.getRange('E8').setFormula(local('=' + ahorro('aportación') + '-' + ahorro('retirada'))).setNumberFormat('#,##0.00 "€"');
+      Logger.log('✅ Resumen: D8:E8 «Ahorro del mes»');
+    } else {
+      Logger.log('· Resumen: el ahorro del mes ya estaba');
+    }
+    if (!yaFormulas) {
+      b6.setFormula('=B4-B5-E8');
+      e7.setFormula('=E5-B130-D130-E8');
+      Logger.log('✅ Resumen: B6 (Restante) y E7 (Restante real) restan el ahorro del mes');
+    } else {
+      Logger.log('· Resumen: B6 y E7 ya restaban el ahorro');
+    }
+
+    // 5. Comprobación con la hoja recalculada.
+    SpreadsheetApp.flush();
+    const [b4, b5, vb6, e5, b130, d130, vE7, vE8] = ['B4', 'B5', 'B6', 'E5', 'B130', 'D130', 'E7', 'E8'].map((a) => resumen.getRange(a).getValue());
+    const igual = (x, y) => typeof x === 'number' && Math.round(x * 100) === Math.round(y * 100);
+    if (typeof vE8 !== 'number' || !igual(vb6, b4 - b5 - vE8) || !igual(vE7, e5 - b130 - d130 - vE8)) {
+      return deshacer('El Resumen no da lo esperado (E8 «' + resumen.getRange('E8').getDisplayValue() + '», B6 «' +
+                      resumen.getRange('B6').getDisplayValue() + '», E7 «' + resumen.getRange('E7').getDisplayValue() + '»).');
+    }
+
+    // 6. Guía: filas nuevas y la descripción de B6.
+    const filasGuia = guia.getRange(1, 1, guia.getLastRow(), 3).getValues();
+    if (!filasGuia.some((f) => f[0] === 'Ahorros')) {
+      const nuevas = [
+        ['Ahorros', 'ID', 'Identificador único. Lo genera la app.', 'S + número', 'S001'],
+        ['Ahorros', 'Tipo', 'inicial = lo que ya había en la cuenta (uno solo; no afecta a ningún mes). aportación = suma. retirada = resta.', 'inicial | aportación | retirada', 'aportación'],
+        ['Ahorros', 'Quién', 'La cuenta es conjunta. Lo tuyo (yo) sale de tu mes: lo apartado baja el Restante y no se arrastra; lo retirado lo sube. Lo de la pareja solo suma al total. Vacío en «inicial».', 'yo | pareja', 'yo'],
+        ['Ahorros', 'Importe', 'Euros, siempre positivo: la retirada resta por su tipo. Una retirada no puede dejar el total en negativo.', 'Número > 0', '100'],
+        ['Ahorros', '(regla)', 'Sin fórmulas en esta pestaña: la app escribe tras la última fila y una fórmula más abajo la desplazaría.', '', ''],
+        ['Objetivos', 'A:E', 'Un objetivo por fila (Nombre, Importe, Fecha_objetivo opcional, Activo, Creado). Uno solo activo: al cambiarlo desde la app, el anterior queda con Activo = No.', 'Activo: Sí | No', ''],
+        ['Objetivos', 'H1:I10', 'Totales: total ahorrado, inicial, lo tuyo neto, lo de la pareja neto y, del objetivo activo, progreso, lo que falta y cuánto ahorrar al mes hasta su fecha.', 'Solo fórmulas: no editar', ''],
+        ['Resumen', 'E8 Ahorro del mes', 'Lo que apartas tú − lo que retiras tú, con fecha dentro del periodo del mes (E2:E3). B6 y E7 lo restan.', 'Solo fórmulas: no editar', '']
+      ];
+      guia.getRange(guia.getLastRow() + 1, 1, nuevas.length, 5).setValues(nuevas);
+      Logger.log('✅ Guía: ' + nuevas.length + ' filas nuevas');
+    } else {
+      Logger.log('· Guía: las filas ya estaban');
+    }
+
+    // 7. Cómo queda el mes que tiene el Resumen.
+    const r2 = (x) => Math.round(x * 100) / 100;
+    Logger.log('✅ ' + resumen.getRange('B1').getValue() + ': restante ' + r2(vb6) + ' (= ' + r2(b4) + ' − ' + r2(b5) + ' − ahorro ' +
+               r2(vE8) + ') · restante real ' + r2(vE7) + ' · total ahorrado ' + libro.getSheetByName('Objetivos').getRange('I1').getValue());
+  });
+}
+

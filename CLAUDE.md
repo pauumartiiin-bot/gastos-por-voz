@@ -30,7 +30,7 @@ iPhone (esta app, GitHub Pages, instalada en pantalla de inicio)
   `redirect: 'follow'` (Apps Script responde con una redirección).
 - Interfaz en español. Comentarios del código en español, breves.
 
-## Contrato de la API (fases 6.1–15)
+## Contrato de la API (fases 6.1–16)
 Petición: un único `doPost` (en `backend/Api.gs`) que enruta por `accion`. Cuerpo JSON enviado como texto plano:
 ```json
 { "t": "<token>", "accion": "dictar", ...parámetros }
@@ -46,7 +46,7 @@ Petición: un único `doPost` (en `backend/Api.gs`) que enruta por `accion`. Cue
 | `editar` | `hoja`, `id`, `cambios` | `editarRegistro` | `desc` |
 | `baja` | `id`, `fecha_fin` | `darDeBaja` | `desc` |
 | `eliminar` | `hoja`, `id` | `eliminarRegistro` | `desc` |
-| `mes` | `etiqueta?` (sin ella, el mes por defecto) | `mes_` (nuevo, `backend/Mes.gs`) con `libro_` y `conBloqueo_` | `etiqueta`, `mes_inicio`, `por_defecto`, `meses`, `cabecera` (con `desglose`, fase 14), `categorias`, `cuadra`, `ingresos`, `ms` (detalle en «Fase 7», «Fase 12» y «Fase 14») |
+| `mes` | `etiqueta?` (sin ella, el mes por defecto) | `mes_` (nuevo, `backend/Mes.gs`) con `libro_` y `conBloqueo_` | `etiqueta`, `mes_inicio`, `por_defecto`, `meses`, `cabecera` (con `desglose`, fase 14, y `ahorro_mes`, fase 16), `categorias`, `cuadra`, `ingresos`, `ms` (detalle en «Fase 7», «Fase 12» y «Fase 14») |
 | `categoria` | `nombre`, `descripcion` | `crearCategoria_` (nuevo, `backend/Categorias.gs`) con `libro_`, `conBloqueo_`, `normalizar` y `apuntarDeshacer_` | `nombre`, `desc`, `huecos_libres` (detalle en «Fase 7b») |
 | `renombrar` | `hoja` (`Recurrentes` \| `Movimientos`), `id`, `concepto` | `renombrar_` (nuevo, `backend/Renombrar.gs`) con `libro_`, `conBloqueo_`, `buscarFilaPorId_`, `COL`/`COLM` y `apuntarDeshacer_` | `id`, `concepto`, `desc` (detalle en «Fase 8») |
 | `pagar` | `etiqueta`, `id` (regla R… o gasto puntual M…), `pagado` (`true` \| `false`) | `pagar_` (nuevo, `backend/Pagos.gs`) con `libro_`, `conBloqueo_`, `buscarFilaPorId_`, `COL` y `COLM` | `etiqueta`, `id`, `pagado`, `pagado_el` (detalle en «Fase 8» y «Fase 11») |
@@ -54,6 +54,10 @@ Petición: un único `doPost` (en `backend/Api.gs`) que enruta por `accion`. Cue
 | `ingreso` | `tipo` (no `arrastre`), `importe`, `fecha`, `mes`, `concepto?` | `apuntarIngreso_` (nuevo) con `conBloqueo_`, `siguienteId_`, `escribirFila_`, `fechaSerial_`, `ahoraSerial_` y `apuntarDeshacer_` | `id`, `desc`, `ingreso`, `arrastre` (`{ id, importe, desde, concepto }` o `null`), `motivo_arrastre` (fase 15) |
 | `borrar_ingreso` | `id` | `borrarIngreso_` (nuevo) con `conBloqueo_`, `buscarFilaPorId_`, `aJSON_` y `apuntarDeshacer_` | `id`, `desc`, `arrastre_borrado` (fase 15) |
 | `previsto` | `etiqueta`, `tipo` (`nómina` \| `comisiones`), `importe` (≥ 0; 0 lo quita), `siguientes?` (solo nómina: también los meses de después) | `previsto_` (nuevo, `backend/Previstos.gs`) con `libro_`, `conBloqueo_` y `mes_` | `etiqueta`, `tipo`, `anterior`, `importe`, `meses_cambiados`, `mes` (el mes ya recalculado; detalle en «Fase 14») |
+| `ahorros` | — | `ahorros_` (nuevo, `backend/Ahorros.gs`) con `libro_` | `hoy`, `total`, `inicial`, `yo`, `pareja`, `objetivo` (`nombre`, `importe`, `fecha`, `progreso` en %, `falta`, `al_mes`) o `null`, `hay_inicial`, `movimientos` (últimos 20) (detalle en «Fase 16») |
+| `ahorro` | `tipo` (`inicial` \| `aportación` \| `retirada`), `quien` (`yo` \| `pareja`; no en `inicial`), `importe`, `fecha`, `concepto?` | `apuntarAhorro_` (nuevo) con `conBloqueo_`, `siguienteId_`, `escribirFila_`, `fechaSerial_`, `ahoraSerial_` y `apuntarDeshacer_` | `id`, `desc`, `movimiento`, `mes` (el mes que cambia, o `null`), `ahorros` |
+| `borrar_ahorro` | `id` | `borrarAhorro_` (nuevo) con `conBloqueo_`, `buscarFilaPorId_`, `aJSON_` y `apuntarDeshacer_` | `id`, `desc`, `mes`, `ahorros` |
+| `objetivo` | `nombre`, `importe`, `fecha?` | `objetivo_` (nuevo) con `conBloqueo_` y `fechaSerial_` | `anterior` (o `null`), `objetivo`, `ahorros` |
 | `arrastre` | `etiqueta` (el mes que recibe el arrastre) | `arrastre_` (nuevo, `backend/Ingresos.gs`) con `libro_`, `conBloqueo_`, `enMes_`, `siguienteId_`, `escribirFila_` y `mes_` | `etiqueta`, `id` (o `null` si da 0), `desde`, `concepto`, `anterior`, `importe`, `mes` (detalle en «Fase 15») |
 
 - En `dictar` con `corrige`, lo dictado es el cambio pedido y `frase` es la frase original (así lo espera `interpretar`).
@@ -91,7 +95,7 @@ Reglas:
 
 ## Estructura del repo
 ```
-index.html              página: token, crear (dictar → vista previa → guardar / corregir / deshacer, y nuevo gasto, ingreso o categoría), mes, mis registros, ajustes
+index.html              página: token, crear (dictar → vista previa → guardar / corregir / deshacer, y nuevo gasto, ingreso o categoría), mes, ahorro, mis registros, ajustes
 styles.css              estilos; colores como variables CSS para tema claro y oscuro
 app.js                  lógica del cliente (tema, vistas, detección de silencio, llamadas a la API)
 config.js               URL del endpoint de Apps Script (no secreta)
@@ -107,7 +111,8 @@ backend/Renombrar.gs    acción renombrar (fase 8.1): cambia el concepto de un g
 backend/Pagos.gs        acción pagar (fases 8.2 y 11.1): marca cargos fijos y gastos puntuales en la pestaña Pagos; se copia a mano
 backend/Ingresos.gs     acciones ingresos, ingreso y borrar_ingreso (fase 9.1) y arrastre (fase 15); se copia a mano
 backend/Latencia.gs     medirLatencia() (fase B.1): cronometra libro_, leerContexto_ e interpretar; se copia a mano
-backend/Migraciones.gs  cambios en la hoja de cada fase (aplicarFase13, aplicarFase14, aplicarFase15), se ejecutan una vez desde el editor; se copia a mano
+backend/Migraciones.gs  cambios en la hoja de cada fase (aplicarFase13 a aplicarFase16), se ejecutan una vez desde el editor; se copia a mano
+backend/Ahorros.gs      acciones ahorros, ahorro, borrar_ahorro y objetivo (fase 16); se copia a mano
 backend/Previstos.gs    acción previsto (fase 14): comisiones previstas de un mes (Meses D); se copia a mano
 docs/                   capturas del README (generadas con datos inventados)
 CLAUDE.md               este archivo
@@ -373,6 +378,62 @@ con «+X € del restante de febrero» y Deshacer que quita las dos filas, líne
 25 € en febrero → Recalcular baja justo 25, borrar la nómina de marzo se lleva su arrastre, y bien en oscuro.
 **Primer uso real:** al apuntar la nómina de noviembre (finales de noviembre) sale el arrastre de noviembre a diciembre.
 
+**Fase 16 — Ahorro: cuenta conjunta, saldo inicial y objetivo (v2.11) — en pruebas.** Detalle en la sección «Fase 16».
+`?v=` 7.16.0. Probado en local: `aplicarFase16()` con «,» y «;» (segunda vez sin cambios; si los totales o E8 no dan número,
+deshace el Resumen y borra las pestañas creadas; se para si D8:E8 está ocupada o falta la fase 15) y, con el simulador de la
+15 ampliado (Ahorros, Objetivos y E8 calculados), `probarAhorros()` todo ✅ con la hoja vacía y con un saldo inicial y un
+objetivo reales, `probarArrastre()`, `probarIngresos()` y `probarPrevistos()` en verde, y el caso real: aportación de
+200 € el 15/11 → noviembre baja 200 y el arrastre a diciembre no la incluye (1.335,48 − 300 − 200 = 835,48). Interfaz en el
+iPhone 13 simulado (claro y oscuro). Falta: `aplicarFase16()` en la hoja real, Nueva versión, pruebas del editor y S1–S8.
+
+## Fase 16 — Ahorro: cuenta conjunta, saldo inicial y objetivo (v2.11)
+Saber siempre cuánto hay ahorrado de verdad y cuánto falta para un objetivo. La cuenta es conjunta con la pareja.
+Decisiones (confirmadas por Pau, con las recomendaciones):
+- **Pestañas propias, no una categoría de gastos:** «Ahorros» (`ID (S001) · Fecha · Tipo · Quién · Concepto · Importe ·
+  Notas · Registrado`; Tipo ∈ inicial | aportación | retirada; Quién ∈ yo | pareja, vacío en «inicial»; importe siempre
+  positivo) y «Objetivos» (`Nombre · Importe · Fecha_objetivo · Activo · Creado` en A:E). No ocupa huecos del Resumen.
+- **Regla del mes:** solo cuenta lo mío (`Quién = yo`) que no sea «inicial», por su fecha y el periodo de la fase 13: la
+  aportación resta del mes y la retirada suma. Lo de la pareja y el inicial solo cuentan en el total.
+- **Un solo saldo inicial** (para corregirlo, se borra y se vuelve a apuntar). **El total nunca queda en negativo:** ni al
+  retirar ni al borrar un movimiento que sumaba (`rechazado`, «Borra antes alguna retirada»).
+- **Objetivo:** uno activo. Cambiarlo añade una fila y el anterior queda con Activo = «No» (historial; el modelo ya admite
+  varios). Sin Deshacer: la notificación dice el antes y el después. Nombre 1–40, importe > 0 y ≤ 1.000.000, fecha opcional
+  y no pasada. El progreso no se corta en 100 %; lo que falta nunca baja de 0; la cuota al mes = lo que falta / meses desde
+  el actual hasta el de la fecha (mín. 1; con la fecha pasada, sin cuota).
+- **Concepto por defecto:** «Aportación noviembre», «Retirada noviembre» (el mes de la fecha) o «Saldo inicial», con
+  « (pareja)» si es suyo.
+- **Nada de fórmulas en «Ahorros»** (la v1 escribe tras `getLastRow()`): los totales van en Objetivos H1:I10. Como ocupan
+  las filas 1–10, un objetivo nuevo se escribe en la primera celda vacía de la columna A (`filasObjetivos_`).
+
+Hoja (`aplicarFase16()`, Migraciones.gs; mismas garantías que la 14 y la 15): crea «Ahorros» (cabecera, formatos de B, F y H
+en toda la columna, validaciones de Tipo, Quién e Importe > 0; sin fórmulas) y «Objetivos» (validaciones de Importe > 0 y
+Activo Sí/No; H1:I10: total = inicial + aportaciones − retiradas, inicial, mío neto, pareja neto, nombre, importe y fecha
+del activo con `INDEX`/`MATCH("Sí", D:D, 0)`, progreso = `MAX(0, I1)/I6`, falta = `MAX(0, I6-I1)` y al mes =
+`I9/MAX(1, meses hasta la fecha)` con `TODAY()`). Resumen D8:E8 «Ahorro del mes» = `SUMIFS` de aportaciones mías −
+retiradas mías con fecha entre E2 y E3; **B6 = `B4-B5-E8`** y **E7 = `E5-B130-D130-E8`** (lo apartado no se arrastra). Nada
+más lee B6 (comprobado en todas las pestañas): solo `Mes.gs` como `restante`. Guía: 8 filas. Comprueba antes (pestañas
+nuevas o con su cabecera, D8:E8 vacías, B6 y E7 las de la fase 15) y después (totales con número; B6 = B4 − B5 − E8 y E7 =
+E5 − B130 − D130 − E8); si algo falla, restaura B6/E7, vacía D8:E8 y borra las pestañas que haya creado.
+
+Código:
+- `backend/Ahorros.gs`: `ahorros_`, `apuntarAhorro_` (la retirada se compara con Objetivos!I1 tras `flush`, la fuente de
+  verdad; la respuesta trae el `mes` afectado, por periodo, y los totales recalculados), `borrarAhorro_` (Deshacer con un
+  paso `fila`), `objetivo_` y `probarAhorros()`. `Api.gs`: cuatro líneas.
+- `Mes.gs`: lee E8 → `cabecera.ahorro_mes`. `probarMes()`: invariante nuevo `restante = ingreso − total_previsto − ahorro_mes`.
+- App: pestaña «Ahorro» (Crear · Mes · Ahorro · Mis registros; icono de hucha): total grande y desglose Inicial · Tú ·
+  Pareja; tarjeta del objetivo (barra, «66 % · faltan 1.700 €», «566,67 €/mes hasta el 31/01/2027»; sin objetivo, «Ponte
+  un objetivo») con su formulario en la propia tarjeta; «+ Movimiento» (Aportación/Retirada, Yo/Pareja y una línea que dice
+  qué le pasa a tu mes); «+ Saldo inicial» solo mientras no haya uno; lista con Eliminar (dos toques + Deshacer;
+  `tarjetaLista` acepta su propia función de repintado). En «Mes», «Apartado a ahorro −200 €» (o «Sacado del ahorro +30 €»)
+  entre las cifras y el Restante. Tras apuntar o borrar, el mes afectado sale de la caché de la 8.4.
+
+Pruebas: `probarAhorros()` (mes de hoy; diferencias, así que vale con datos reales): validaciones 13/13; saldo inicial de
+500 (si no hay uno real) sin tocar el mes y un segundo rechazado; aportación mía de 100 → ahorro del mes +100 y restante −100;
+de la pareja 50 → total +50 y el mes igual; retirada mía de 30 → restante +30; retirar más que el total → rechazado; objetivo
+de 1.000 con fecha a 90 días (progreso, falta y cuota) y cambiarlo por otro de 2.000 (antes y después, un solo activo);
+Deshacer la retirada; borrar la aportación y Deshacer; retirar casi todo y borrar la aportación → rechazado. Limpieza en
+`finally` (Ahorros, Objetivos y `ULTIMO`).
+
 ## Fase 15 — Arrastre del restante al mes siguiente (v2.10)
 Si me queda dinero de un mes, sigo teniéndolo: al cerrar el mes (al apuntar la nómina del siguiente), lo que quedó se suma
 solo al mes nuevo; si me pasé, se resta. **No es una fórmula**: la hoja calcula un solo mes a la vez (`Resumen!B1`) y no
@@ -398,6 +459,7 @@ de cerrar el mes: una foto, que se recalcula con un botón. Decisiones (confirma
 - **Reparto (fase 14):** fila 5 «Arrastre» (solo cobrado). Cuenta en el ingreso y en el cobrado, no en el origen.
 - **Coste:** apuntar una nómina tarda ~1,5 s más (otro mes en B1 y recalcular).
 - **Propuesta sin implementar:** enseñar el «Restante real» en la cabecera de «Mes».
+- Desde la fase 16, el «Restante real» también resta el ahorro del mes (E8): lo apartado no se arrastra.
 
 Hoja (`aplicarFase15()`, Migraciones.gs; mismas garantías que la 14): Resumen H5:K5 «Arrastre» con I5 = 0, J5 = `SUMIFS`
 de Ingresos con tipo «arrastre» y **K5 = `J5`** (con `IF(J>0, J, I)` un arrastre negativo contaría 0); B4 = `SUM(K2:K5)`,

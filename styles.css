@@ -521,3 +521,37 @@ input[type="checkbox"]:checked, input[type="radio"]:checked {
 .presupuesto-texto { font-size: 13px; color: var(--secundario); }
 .presupuesto.pasado .presupuesto-barra span { background: var(--acento); }
 .presupuesto.pasado .presupuesto-texto { color: var(--acento-tinta); font-weight: 600; }
+
+/* ---------- Ahorro (fase 16) ---------- */
+
+.segmentado-2 { grid-template-columns: repeat(2, 1fr); }
+.ahorro-cabecera { display: flex; flex-direction: column; gap: 4px; }
+.ahorro-etiqueta { margin: 0; font-size: 13px; color: var(--secundario); }
+.ahorro-total {
+  margin: 0;
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  background: var(--degradado);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.ahorro-desglose { margin: 10px 0 0; padding-top: 12px; border-top: 1px solid var(--borde);
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.ahorro-desglose > div { min-width: 0; }
+.ahorro-desglose dt { font-size: 13px; color: var(--secundario); }
+.ahorro-desglose dd { margin: 2px 0 0; font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.ahorro-objetivo { display: flex; flex-direction: column; gap: 10px; }
+.ahorro-objetivo h3 { margin: 0; }
+.ahorro-objetivo .form-categoria { margin-top: 0; }
+.ahorro-explica { margin: 0; font-size: 13px; line-height: 1.4; color: var(--secundario); }
+.objetivo-botones { display: flex; gap: 10px; }
+.objetivo-botones > * { flex: 1; }
+#estado-ahorro:empty, #estado-movimiento:empty, #estado-inicial:empty { display: none; }
+/* En «Mes»: lo apartado a ahorro, entre las cifras y el Restante. */
+.mes-cifras .mes-ahorro { grid-column: 1 / -1; flex-direction: row; justify-content: space-between; align-items: baseline; }
+.mes-ahorro dd { font-size: 15px; }
+#estado-movimiento, #estado-inicial { text-align: left; }
+.ahorro-objetivo .reparto-cambiar { align-self: flex-start; }

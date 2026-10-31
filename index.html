@@ -30,7 +30,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800&display=swap">
   <!-- ?v= obliga al navegador a descargar los archivos nuevos en cada versión -->
-  <link rel="stylesheet" href="styles.css?v=7.15.0">
+  <link rel="stylesheet" href="styles.css?v=7.16.0">
 </head>
 <body>
   <div class="halo halo-a" aria-hidden="true"></div>
@@ -219,12 +219,72 @@
             <dd id="reparto-tipos" class="reparto-tipos"></dd>
             <dd id="reparto-lineas" class="reparto-lineas"></dd>
           </div>
+          <div id="mes-ahorro" class="mes-ahorro oculto"><dt id="mes-ahorro-texto">Apartado a ahorro</dt><dd id="mes-ahorro-importe"></dd></div>
           <div class="mes-restante"><dt>Restante</dt><dd id="mes-restante">—</dd></div>
         </dl>
       </div>
       <p id="estado-mes" class="estado" role="status" aria-live="polite"></p>
       <div id="mes-categorias" class="lista"></div>
       <p id="mes-pruebas" class="estado oculto"></p>
+    </section>
+
+    <!-- Ahorro (fase 16): cuenta conjunta. Los totales y el progreso los calcula la hoja (pestaña Objetivos) -->
+    <section id="vista-ahorro" class="oculto" style="display: flex; flex-direction: column; gap: 16px">
+      <div class="tarjeta tarjeta-degradado ahorro-cabecera" aria-label="Total ahorrado">
+        <p class="ahorro-etiqueta">Ahorrado</p>
+        <p id="ahorro-total" class="ahorro-total">—</p>
+        <dl class="ahorro-desglose">
+          <div><dt>Inicial</dt><dd id="ahorro-inicial">—</dd></div>
+          <div><dt>Tú</dt><dd id="ahorro-yo">—</dd></div>
+          <div><dt>Pareja</dt><dd id="ahorro-pareja">—</dd></div>
+        </dl>
+      </div>
+      <p id="estado-ahorro" class="estado" role="status" aria-live="polite"></p>
+      <div id="ahorro-objetivo" class="tarjeta ahorro-objetivo" aria-label="Objetivo"></div>
+
+      <details id="nuevo-movimiento" class="tarjeta plegable">
+        <summary>+ Movimiento</summary>
+        <form id="form-ahorro" class="form-categoria" novalidate>
+          <fieldset class="segmentado segmentado-2" aria-label="Tipo de movimiento">
+            <label><input type="radio" name="ahorro-tipo" value="aportación" checked><span>Aportación</span></label>
+            <label><input type="radio" name="ahorro-tipo" value="retirada"><span>Retirada</span></label>
+          </fieldset>
+          <fieldset class="segmentado segmentado-2" aria-label="Quién">
+            <label><input type="radio" name="ahorro-quien" value="yo" checked><span>Yo</span></label>
+            <label><input type="radio" name="ahorro-quien" value="pareja"><span>Pareja</span></label>
+          </fieldset>
+          <p id="ahorro-explica" class="ahorro-explica"></p>
+          <label class="campo" for="ahorro-importe">Importe (€)
+            <input id="ahorro-importe" type="text" inputmode="decimal" autocomplete="off">
+          </label>
+          <label class="campo" for="ahorro-fecha">Fecha
+            <input id="ahorro-fecha" type="date">
+          </label>
+          <label class="campo" for="ahorro-concepto">Concepto (opcional)
+            <input id="ahorro-concepto" type="text" maxlength="60" autocomplete="off" autocapitalize="sentences">
+          </label>
+          <p id="estado-movimiento" class="estado" role="status" aria-live="polite"></p>
+          <button id="apuntar-ahorro" class="btn-primario" type="submit">Apuntar</button>
+        </form>
+      </details>
+
+      <!-- Saldo inicial: lo que ya hay en la cuenta. Solo se ve mientras no haya uno -->
+      <details id="saldo-inicial" class="tarjeta plegable oculto">
+        <summary>+ Saldo inicial</summary>
+        <form id="form-inicial" class="form-categoria" novalidate>
+          <p class="ahorro-explica">Lo que ya hay en la cuenta. Se apunta una vez y no afecta a ningún mes.</p>
+          <label class="campo" for="inicial-importe">Importe (€)
+            <input id="inicial-importe" type="text" inputmode="decimal" autocomplete="off">
+          </label>
+          <p id="estado-inicial" class="estado" role="status" aria-live="polite"></p>
+          <button id="apuntar-inicial" class="btn-primario" type="submit">Apuntar saldo inicial</button>
+        </form>
+      </details>
+
+      <section class="seccion" aria-labelledby="titulo-ahorros">
+        <h2 id="titulo-ahorros" class="titulo-seccion">Últimos movimientos</h2>
+        <div id="lista-ahorros" class="lista"></div>
+      </section>
     </section>
 
     <!-- Mis registros + ajustes -->
@@ -269,13 +329,17 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
       Mes
     </button>
+    <button type="button" data-vista="ahorro">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 5c-1.5 0-2.8 1.4-3 2-3.5-1.5-11-.3-11 5 0 1.8 0 3 2 4.5V20h4v-2h3v2h4v-4c1-.5 1.7-1 2-2h2v-4h-2c0-1-.5-1.5-1-2V5z"/><path d="M2 9v1c0 1.1.9 2 2 2h1"/><path d="M16 11h.01"/></svg>
+      Ahorro
+    </button>
     <button type="button" data-vista="registros">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
       Mis registros
     </button>
   </nav>
 
-  <script src="config.js?v=7.15.0"></script>
-  <script src="app.js?v=7.15.0"></script>
+  <script src="config.js?v=7.16.0"></script>
+  <script src="app.js?v=7.16.0"></script>
 </body>
 </html>
