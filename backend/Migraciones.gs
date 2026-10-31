@@ -252,3 +252,146 @@ function aplicarFase14() {
     tabla.forEach((f) => Logger.log('   ' + f[0] + ': previsto ' + f[1] + ' · cobrado ' + f[2] + ' · cuenta ' + f[3]));
   });
 }
+
+/**
+ * Fase 15: arrastre del restante al mes siguiente. Resumen H5:K5 «Arrastre» (previsto 0; cuenta = cobrado, también si es
+ * negativo: no vale IF(J>0, J, I)), B4/E4/E5 suman la fila 5, E6 no la mira (el arrastre no cambia el origen) y D7:E7
+ * «Restante real» = cobrado − fijos − gastos puntuales (los presupuestos no reservan nada). En Ingresos, el Tipo admite
+ * «arrastre» y el Importe puede ser negativo solo en él. Si algo no da lo esperado, se deshace y se para.
+ */
+function aplicarFase15() {
+  const libro = libro_();   // v1
+  conBloqueo_(() => {       // v1
+    const resumen = libro.getSheetByName('Resumen');
+    const ingresos = libro.getSheetByName('Ingresos');
+    const guia = libro.getSheetByName('Guía');
+    const sep = separadorDeHoja_(resumen.getDataRange().getFormulas());
+    const local = (formula) => formula.replace(/,/g, sep);   // estas fórmulas no llevan comas dentro de textos
+    const sinEspacios = (f) => f.replace(/\s/g, '');
+
+    // 1. Comprobaciones: nada se escribe si algo no cuadra.
+    const fila5 = resumen.getRange('H5:K5');
+    const yaFila5 = fila5.getValues()[0][0] === 'Arrastre';
+    if (!yaFila5 && fila5.getValues()[0].some((v) => v !== '')) {
+      return Logger.log('❌ Resumen H5:K5 no está vacía. No se ha cambiado nada.');
+    }
+    const d7e7 = resumen.getRange('D7:E7');
+    const yaReal = d7e7.getValues()[0][0] === 'Restante real';
+    if (!yaReal && d7e7.getValues()[0].some((v) => v !== '')) {
+      return Logger.log('❌ Resumen D7:E7 no está vacía. No se ha cambiado nada.');
+    }
+    const cabecera = ['B4', 'E4', 'E5', 'E6'].map((a) => resumen.getRange(a));
+    const antes = cabecera.map((c) => c.getFormula());
+    const yaCabecera = sinEspacios(antes[0]).indexOf('K2:K5') >= 0;
+    const esperado = [/^=SUM\(K2:K4\)$/i, /^=SUM\(I2:I4\)$/i, /^=SUM\(J2:J4\)$/i, /^=IF\(E5=0[,;]"previsto"/i];
+    if (!yaCabecera && antes.some((f, i) => !esperado[i].test(sinEspacios(f)))) {
+      return Logger.log('❌ Las fórmulas de la cabecera no son las de la fase 14 (¿falta aplicarFase14?). No se ha cambiado nada.\n' +
+                        ['B4', 'E4', 'E5', 'E6'].map((a, i) => a + ': ' + antes[i]).join('\n'));
+    }
+    const reglaTipo = ingresos.getRange('E2').getDataValidation();
+    const reglaImporte = ingresos.getRange('F2').getDataValidation();
+    if (!reglaTipo || reglaTipo.getCriteriaType() !== SpreadsheetApp.DataValidationCriteria.VALUE_IN_LIST) {
+      return Logger.log('❌ Ingresos E2 no tiene la lista de tipos. No se ha cambiado nada.');
+    }
+
+    const deshacer = (motivo) => {
+      if (!yaCabecera) cabecera.forEach((c, i) => c.setFormula(antes[i]));
+      if (!yaFila5) fila5.clearContent();
+      if (!yaReal) d7e7.clearContent();
+      Logger.log('❌ ' + motivo + ' Se ha deshecho: no se ha cambiado nada (separador «' + sep + '»).');
+    };
+
+    // 2. Reparto, fila 5: el arrastre solo se cobra (lo apunta la app al cerrar el mes anterior).
+    if (!yaFila5) {
+      fila5.setValues([['Arrastre', 0, '', '']]);
+      resumen.getRange('J5').setFormula(local('=SUMIFS(Ingresos!$F:$F, Ingresos!$C:$C, $B$1, Ingresos!$E:$E, "arrastre")'));
+      resumen.getRange('K5').setFormula('=J5');   // con signo: un arrastre negativo resta
+      resumen.getRange('I5:K5').setNumberFormat('#,##0.00 "€"');
+      Logger.log('✅ Resumen: fila 5 del reparto, «Arrastre»');
+    } else {
+      Logger.log('· Resumen: la fila del arrastre ya estaba');
+    }
+
+    // 3. Cabecera: el arrastre suma al ingreso y al cobrado, pero no cambia el origen (E6 mira J2:J4).
+    if (!yaCabecera) {
+      cabecera[0].setFormula(local('=SUM(K2:K5)'));
+      cabecera[1].setFormula(local('=SUM(I2:I5)'));
+      cabecera[2].setFormula(local('=SUM(J2:J5)'));
+      cabecera[3].setFormula(local('=IF(SUM(J2:J4)=0, "previsto", IF(AND(OR(I2=0, J2>0), OR(I3=0, J3>0)), "cobrado", "parcial"))'));
+      Logger.log('✅ Resumen: B4, E4 y E5 suman el arrastre; E6 no lo mira');
+    } else {
+      Logger.log('· Resumen: la cabecera ya sumaba el arrastre');
+    }
+
+    // 4. Restante real: lo cobrado (con el arrastre) menos lo gastado de verdad. Es lo que pasa al mes siguiente.
+    if (!yaReal) {
+      resumen.getRange('D7').setValue('Restante real');
+      resumen.getRange('E7').setFormula(local('=E5-B130-D130')).setNumberFormat('#,##0.00 "€"');
+      Logger.log('✅ Resumen: D7:E7 «Restante real»');
+    } else {
+      Logger.log('· Resumen: el restante real ya estaba');
+    }
+
+    // 5. Comprobación con la hoja recalculada (antes de tocar Ingresos y la Guía).
+    SpreadsheetApp.flush();
+    const k = resumen.getRange('K2:K5').getValues().map((f) => f[0]);
+    const b4 = resumen.getRange('B4').getValue();
+    const real = resumen.getRange('E7').getValue();
+    const [e5, b130, d130] = ['E5', 'B130', 'D130'].map((a) => resumen.getRange(a).getValue());
+    if (!k.every((v) => typeof v === 'number') || typeof b4 !== 'number' ||
+        Math.round(b4 * 100) !== Math.round(k.reduce((s, v) => s + v, 0) * 100) ||
+        typeof real !== 'number' || Math.round(real * 100) !== Math.round((e5 - b130 - d130) * 100) ||
+        ['previsto', 'parcial', 'cobrado'].indexOf(resumen.getRange('E6').getValue()) < 0) {
+      return deshacer('La hoja no da lo esperado (K2:K5 «' + resumen.getRange('K2:K5').getDisplayValues().map((f) => f[0]).join(' · ') +
+                      '», B4 «' + resumen.getRange('B4').getDisplayValue() + '», E7 «' + resumen.getRange('E7').getDisplayValue() +
+                      '», E6 «' + resumen.getRange('E6').getDisplayValue() + '»).');
+    }
+
+    // 6. Ingresos: el Tipo admite «arrastre» y el Importe solo puede ser negativo en un arrastre.
+    const columna = (c) => ingresos.getRange(2, c, ingresos.getMaxRows() - 1, 1);
+    const tipos = reglaTipo.getCriteriaValues()[0];
+    if (tipos.indexOf('arrastre') < 0) {
+      columna(5).setDataValidation(reglaTipo.copy().requireValueInList(tipos.concat('arrastre'), true).build());
+      Logger.log('✅ Ingresos: el Tipo admite «arrastre»');
+    } else {
+      Logger.log('· Ingresos: el Tipo ya admitía «arrastre»');
+    }
+    const formulaImporte = local('=OR(F2>0, E2="arrastre")');
+    if (!reglaImporte || reglaImporte.getCriteriaType() !== SpreadsheetApp.DataValidationCriteria.CUSTOM_FORMULA) {
+      const base = reglaImporte ? reglaImporte.copy() : SpreadsheetApp.newDataValidation().setAllowInvalid(false);
+      columna(6).setDataValidation(base.requireFormulaSatisfied(formulaImporte)
+        .setHelpText('Mayor que 0 (solo el arrastre puede ser negativo).').build());
+      Logger.log('✅ Ingresos: el Importe puede ser negativo solo en un arrastre');
+    } else {
+      Logger.log('· Ingresos: la validación del Importe ya estaba');
+    }
+
+    // 7. Guía: dos filas nuevas y las descripciones que cambian.
+    const filasGuia = guia.getRange(1, 1, guia.getLastRow(), 4).getValues();
+    if (!filasGuia.some((f) => f[1] === 'E7 Restante real')) {
+      const nuevas = [
+        ['Ingresos', 'Tipo «arrastre»', 'Lo que quedó (o faltó, en negativo) del mes anterior. Lo apunta la app al apuntar la nómina de este mes, con la fecha de la nómina; se recalcula desde «Mes» (toca el Ingreso → Recalcular). No lo escribas a mano.', 'Solo la app', '86'],
+        ['Resumen', 'E7 Restante real', 'Lo cobrado (E5, con el arrastre) − fijos (B130) − gastos puntuales (D130). Los presupuestos no reservan nada: lo no gastado también pasa. Es lo que se arrastra al mes siguiente.', 'Solo fórmulas: no editar', '']
+      ];
+      guia.getRange(guia.getLastRow() + 1, 1, nuevas.length, 5).setValues(nuevas);
+      const cambiar = (pestana, columnaGuia, col, valor) => {
+        const i = filasGuia.findIndex((f) => f[0] === pestana && f[1] === columnaGuia);
+        if (i >= 0) guia.getRange(i + 1, col).setValue(valor);
+      };
+      cambiar('Ingresos', 'Tipo', 4, 'nómina | comisiones | extra | arrastre (solo la app)');
+      cambiar('Ingresos', 'Importe', 3, 'Euros, positivo. Una fila por transferencia: la nómina y las comisiones van separadas. Solo el arrastre puede ser negativo.');
+      cambiar('Resumen', 'H1:K4 Reparto', 3, 'El ingreso del mes elegido por tipo: previsto, cobrado y lo que cuenta (de cada tipo, lo cobrado si hay; si no, lo previsto). Los extras solo cuentan cobrados. Fila 5: el arrastre del mes anterior (puede ser negativo).');
+      cambiar('Resumen', 'H1:K4 Reparto', 2, 'H1:K5 Reparto');
+      Logger.log('✅ Guía: 2 filas nuevas y las descripciones de Tipo, Importe y Reparto');
+    } else {
+      Logger.log('· Guía: las filas ya estaban');
+    }
+
+    // 8. Cómo queda el mes que tiene el Resumen.
+    SpreadsheetApp.flush();
+    Logger.log('✅ ' + resumen.getRange('B1').getValue() + ': ingreso ' + resumen.getRange('B4').getValue() + ' (' +
+               resumen.getRange('E6').getValue() + ') · restante ' + resumen.getRange('B6').getValue() + ' · restante real ' +
+               resumen.getRange('E7').getValue() + ' (cobrado ' + e5 + ' − fijos ' + b130 + ' − puntuales ' + d130 + ') · B7 = ' +
+               resumen.getRange('B7').getValue());
+  });
+}
