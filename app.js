@@ -38,10 +38,12 @@ function mostrar(id, visible) {
 function irA(vista) {
   mostrar('vista-dictar', vista === 'dictar');
   mostrar('vista-mes', vista === 'mes');
+  mostrar('vista-ahorro', vista === 'ahorro');
   mostrar('vista-registros', vista === 'registros');
   // Siempre datos frescos: la hoja puede haber cambiado. «Mes» vuelve al mes que estabas mirando
   // (memoria solo mientras la app sigue abierta; al abrirla, el mes por defecto).
   if (vista === 'mes') cargarMes(mesDestino);
+  if (vista === 'ahorro') cargarAhorro();
   if (vista === 'registros') cargarRegistros();
   document.querySelectorAll('.barra button').forEach((b) => {
     if (b.dataset.vista === vista) b.setAttribute('aria-current', 'page');
@@ -58,6 +60,7 @@ function pantallaInicial() {
   else {
     mostrar('vista-dictar', false);
     mostrar('vista-mes', false);
+    mostrar('vista-ahorro', false);
     mostrar('vista-registros', false);
   }
 }
@@ -751,6 +754,11 @@ function pintarMes(origen) {
   $('mes-origen').textContent = c.origen;
   $('mes-previsto').textContent = euros(c.total_previsto);
   $('mes-pendiente').textContent = euros(c.pendiente);
+  // Fase 16: lo que apartas a ahorro sale de tu mes (o vuelve, si retiras más de lo que apartas). Ya viene restado.
+  const ahorro = c.ahorro_mes || 0;
+  mostrar('mes-ahorro', ahorro !== 0);
+  $('mes-ahorro-texto').textContent = ahorro > 0 ? 'Apartado a ahorro' : 'Sacado del ahorro';
+  $('mes-ahorro-importe').textContent = (ahorro > 0 ? '−' : '+') + euros(Math.abs(ahorro));
   $('mes-restante').textContent = euros(c.restante);
   $('mes-restante').classList.toggle('negativo', c.restante < 0);
   pintarReparto(r);
@@ -1039,6 +1047,227 @@ function barraPresupuesto(k) {
   return caja;
 }
 
+/* ---------- Ahorro (fase 16) ---------- */
+
+// La cuenta es conjunta: lo mío sale de mi mes (Resumen E8) y lo de la pareja solo suma al total. La app no calcula:
+// totales, progreso y cuota al mes vienen de la hoja (pestaña Objetivos, H1:I10).
+let datosAhorro = null;     // respuesta de "ahorros"
+let editandoObjetivo = false;
+
+function estadoAhorro(id, mensaje, esError = false) {
+  $(id).textContent = mensaje;
+  $(id).classList.toggle('error', esError);
+}
+
+async function cargarAhorro() {
+  if (!datosAhorro) estadoAhorro('estado-ahorro', 'Cargando…');
+  try {
+    datosAhorro = await api('ahorros');
+    estadoAhorro('estado-ahorro', '');
+    pintarAhorro();
+  } catch (err) {
+    estadoAhorro('estado-ahorro', err.message, true);
+  }
+}
+
+// Respuesta de ahorro, borrar_ahorro u objetivo: trae los totales ya recalculados y, si cambia, el mes afectado,
+// que se quita de la caché de «Mes» para que no se vea con el restante de antes.
+function aplicarAhorro(r) {
+  if (r.mes) cacheMes.delete(r.mes);
+  if (r.ahorros) {
+    datosAhorro = r.ahorros;
+    pintarAhorro();
+  }
+}
+
+function pintarAhorro() {
+  const a = datosAhorro;
+  $('ahorro-total').textContent = euros(a.total);
+  $('ahorro-inicial').textContent = euros(a.inicial);
+  $('ahorro-yo').textContent = euros(a.yo);
+  $('ahorro-pareja').textContent = euros(a.pareja);
+  if (!editandoObjetivo) pintarObjetivo();
+  mostrar('saldo-inicial', !a.hay_inicial);
+  $('lista-ahorros').replaceChildren(...(a.movimientos.length
+    ? a.movimientos.map(tarjetaAhorro)
+    : [crear('p', 'vacio', 'Todavía no hay movimientos de ahorro.')]));
+  explicarAhorro();
+}
+
+// Tarjeta del objetivo activo: nombre, barra, porcentaje, lo que falta y, con fecha, cuánto al mes hasta entonces.
+function pintarObjetivo() {
+  const o = datosAhorro.objetivo;
+  const t = $('ahorro-objetivo');
+  const boton = crear('button', 'reparto-cambiar', o ? 'Cambiar objetivo' : 'Crear objetivo');
+  boton.type = 'button';
+  boton.addEventListener('click', () => formObjetivo(o));
+  if (!o) {
+    t.replaceChildren(crear('h3', null, 'Ponte un objetivo'),
+      crear('p', 'ahorro-explica', 'Un nombre, un importe y, si quieres, una fecha: verás cuánto te falta y cuánto ahorrar al mes.'), boton);
+    return;
+  }
+  const cab = crear('div', 'categoria-cabecera');
+  cab.append(crear('h3', null, o.nombre), crear('span', 'categoria-total', euros(o.importe)));
+  const progreso = o.progreso || 0;
+  const barra = crear('div', 'presupuesto-barra');
+  barra.setAttribute('role', 'progressbar');
+  barra.setAttribute('aria-valuemin', '0');
+  barra.setAttribute('aria-valuemax', '100');
+  barra.setAttribute('aria-valuenow', String(Math.min(100, progreso)));
+  const relleno = crear('span');
+  relleno.style.width = Math.min(100, progreso) + '%';
+  barra.append(relleno);
+  const lineas = [progreso.toLocaleString('es-ES') + ' % · ' + (o.falta > 0 ? 'faltan ' + euros(o.falta) : '¡conseguido!')];
+  if (o.fecha && o.falta > 0) {
+    lineas.push(o.al_mes != null ? euros(o.al_mes) + '/mes hasta el ' + fecha(o.fecha) : 'La fecha (' + fecha(o.fecha) + ') ya ha pasado');
+  }
+  const caja = crear('div', 'presupuesto');
+  caja.append(barra, ...lineas.map((l) => crear('p', 'presupuesto-texto', l)));
+  t.replaceChildren(cab, caja, boton);
+}
+
+// Crear o cambiar el objetivo. Sin Deshacer (como los previstos): la notificación dice el antes y el después.
+function formObjetivo(o) {
+  editandoObjetivo = true;
+  const form = crear('form', 'form-categoria');
+  form.noValidate = true;
+  const nombre = entrada('text', o ? o.nombre : '');
+  nombre.maxLength = 40;
+  nombre.autocomplete = 'off';
+  const importe = entrada('text', o ? String(o.importe).replace('.', ',') : '');
+  importe.inputMode = 'decimal';
+  importe.autocomplete = 'off';
+  const fechaObj = entrada('date', o && o.fecha ? o.fecha : '');
+  const mensaje = crear('p', 'estado error reparto-mensaje');
+  const guardar = crear('button', 'btn-primario', 'Guardar objetivo');
+  guardar.type = 'submit';
+  const cancelar = crear('button', 'btn-suave', 'Cancelar');
+  cancelar.type = 'button';
+  const botones = crear('div', 'objetivo-botones');
+  botones.append(cancelar, guardar);
+  form.append(crear('h3', null, o ? 'Cambiar objetivo' : 'Nuevo objetivo'), campo('Nombre', nombre), campo('Importe (€)', importe),
+    campo('Fecha (opcional)', fechaObj), mensaje, botones);
+  const cerrar = () => {
+    editandoObjetivo = false;
+    pintarObjetivo();
+  };
+  cancelar.addEventListener('click', cerrar);
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!nombre.value.trim()) return (mensaje.textContent = 'Ponle un nombre al objetivo.');
+    if (!importe.value.trim()) return (mensaje.textContent = 'Pon un importe.');
+    guardar.disabled = true;
+    guardar.textContent = 'Guardando…';
+    mensaje.textContent = '';
+    try {
+      const r = await api('objetivo', { nombre: nombre.value.trim(), importe: importe.value.trim(), fecha: fechaObj.value || null });
+      const texto = (x) => '«' + x.nombre + '» ' + euros(x.importe) + (x.fecha ? ' (' + fecha(x.fecha) + ')' : '');
+      notificar(r.anterior ? 'Objetivo: ' + texto(r.anterior) + ' → ' + texto(r.objetivo) : 'Objetivo creado: ' + texto(r.objetivo), false);
+      editandoObjetivo = false;
+      aplicarAhorro(r);
+    } catch (err) {
+      mensaje.textContent = err.message;   // lo escrito se conserva para corregirlo
+      guardar.disabled = false;
+      guardar.textContent = 'Guardar objetivo';
+    }
+  });
+  $('ahorro-objetivo').replaceChildren(form);
+  setTimeout(() => nombre.focus(), 0);
+}
+
+function valorRadio(nombre) {
+  return document.querySelector('input[name="' + nombre + '"]:checked').value;
+}
+
+// Debajo de «Quién»: qué le pasa a tu mes con este movimiento.
+function explicarAhorro() {
+  const tipo = valorRadio('ahorro-tipo');
+  const quien = valorRadio('ahorro-quien');
+  $('ahorro-explica').textContent = quien === 'pareja'
+    ? 'Lo de tu pareja no toca tu mes: solo cambia el total ahorrado.'
+    : tipo === 'aportación' ? 'Sale de tu mes: baja el restante y no pasa al mes siguiente.'
+      : 'Vuelve a tu mes: sube el restante.';
+}
+
+function abrirMovimiento() {
+  if (!$('nuevo-movimiento').open) return;
+  if (!$('ahorro-fecha').value && datosAhorro) $('ahorro-fecha').value = datosAhorro.hoy;
+  estadoAhorro('estado-movimiento', '');
+}
+
+async function apuntarMovimiento(e) {
+  e.preventDefault();
+  const importe = Math.round(Number($('ahorro-importe').value.replace(',', '.')) * 100) / 100;
+  if (!(importe > 0)) return estadoAhorro('estado-movimiento', 'Escribe un importe válido.', true);
+  if (!$('ahorro-fecha').value) return estadoAhorro('estado-movimiento', 'Pon la fecha.', true);
+  const btn = $('apuntar-ahorro');
+  btn.disabled = true;
+  btn.textContent = 'Apuntando…';
+  estadoAhorro('estado-movimiento', '');
+  try {
+    const r = await api('ahorro', { tipo: valorRadio('ahorro-tipo'), quien: valorRadio('ahorro-quien'), importe,
+      fecha: $('ahorro-fecha').value, concepto: $('ahorro-concepto').value.trim() });
+    $('form-ahorro').reset();
+    $('nuevo-movimiento').open = false;
+    notificar('✓ ' + r.desc + (r.mes ? ' · cuenta en ' + partirEtiqueta(r.mes)[0] : ''), true);
+    aplicarAhorro(r);
+  } catch (err) {
+    estadoAhorro('estado-movimiento', err.message, true);   // lo escrito se conserva para corregirlo
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Apuntar';
+  }
+}
+
+async function apuntarInicial(e) {
+  e.preventDefault();
+  const importe = Math.round(Number($('inicial-importe').value.replace(',', '.')) * 100) / 100;
+  if (!(importe > 0)) return estadoAhorro('estado-inicial', 'Escribe un importe válido.', true);
+  const btn = $('apuntar-inicial');
+  btn.disabled = true;
+  estadoAhorro('estado-inicial', '');
+  try {
+    const r = await api('ahorro', { tipo: 'inicial', importe, fecha: datosAhorro ? datosAhorro.hoy : '' });
+    $('form-inicial').reset();
+    $('saldo-inicial').open = false;
+    notificar('✓ ' + r.desc, true);
+    aplicarAhorro(r);
+  } catch (err) {
+    estadoAhorro('estado-inicial', err.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+const NOMBRES_AHORRO = { inicial: 'Saldo inicial', 'aportación': 'Aportación', retirada: 'Retirada' };
+
+// Movimiento de ahorro: la retirada se ve en negativo. Para corregirlo, se borra y se vuelve a apuntar.
+function tarjetaAhorro(m) {
+  const chips = [crear('span', 'chip', fecha(m.fecha)), crear('span', 'chip chip-prim', NOMBRES_AHORRO[m.tipo] || m.tipo)];
+  if (m.quien) chips.push(crear('span', 'chip chip-acento', m.quien === 'yo' ? 'Tú' : 'Pareja'));
+  return tarjetaLista(m.id, m.concepto, m.tipo === 'retirada' ? -m.importe : m.importe, chips, () => {
+    const editor = crear('div', 'editor');
+    const eliminar = crear('button', 'btn-peligro', 'Eliminar');
+    eliminar.type = 'button';
+    dosToques(eliminar, async () => {
+      eliminar.disabled = true;
+      estadoAhorro('estado-ahorro', 'Eliminando…');
+      try {
+        const r = await api('borrar_ahorro', { id: m.id });
+        abierto = null;
+        estadoAhorro('estado-ahorro', '');
+        notificar(r.desc, true);
+        aplicarAhorro(r);
+      } catch (err) {
+        estadoAhorro('estado-ahorro', err.message, true);
+        eliminar.disabled = false;
+      }
+    });
+    editor.append(crear('p', 'aviso', 'Para corregirlo, elimínalo y vuelve a apuntarlo.'), eliminar);
+    return editor;
+  }, pintarAhorro);
+}
+
 /* ---------- Mis registros ---------- */
 
 let registros = null; // "registros" ({ recurrentes, movimientos, categorias, hoy }) + los ingresos de "ingresos"
@@ -1102,7 +1331,7 @@ function tarjetaIngreso(i) {
 }
 
 // Tarjeta de una lista: la cabecera (concepto, importe y chips) despliega su editor. Solo una abierta a la vez.
-function tarjetaLista(id, concepto, importe, chips, crearEditor) {
+function tarjetaLista(id, concepto, importe, chips, crearEditor, repintar = pintarRegistros) {
   const estaAbierto = abierto === id;
   const tarjeta = crear('article', 'registro' + (estaAbierto ? ' abierto' : ''));
 
@@ -1117,7 +1346,7 @@ function tarjetaLista(id, concepto, importe, chips, crearEditor) {
   cabecera.append(fila, meta);
   cabecera.addEventListener('click', () => {
     abierto = estaAbierto ? null : id;
-    pintarRegistros();
+    repintar();
   });
   tarjeta.append(cabecera);
   if (estaAbierto) tarjeta.append(crearEditor());
@@ -1308,6 +1537,7 @@ $('deshacer').addEventListener('click', async () => {
     notificar('↩︎ Deshecho: ' + r.desc, false);
     if (!$('vista-registros').classList.contains('oculto')) await cargarRegistros();
     if (!$('vista-mes').classList.contains('oculto')) await cargarMes(mesDatos && mesDatos.etiqueta);
+    if (!$('vista-ahorro').classList.contains('oculto')) await cargarAhorro();
   } catch (err) {
     notificar(err.message, true, true); // se puede reintentar
   }
@@ -1351,6 +1581,10 @@ $('form-gasto').addEventListener('submit', guardarGasto);
 $('form-gasto').addEventListener('change', actualizarGasto);
 
 $('nuevo-ingreso').addEventListener('toggle', abrirIngreso);
+$('nuevo-movimiento').addEventListener('toggle', abrirMovimiento);
+$('form-ahorro').addEventListener('submit', apuntarMovimiento);
+$('form-inicial').addEventListener('submit', apuntarInicial);
+document.querySelectorAll('input[name="ahorro-tipo"], input[name="ahorro-quien"]').forEach((r) => r.addEventListener('change', explicarAhorro));
 $('form-ingreso').addEventListener('submit', apuntarIngreso);
 $('form-ingreso').addEventListener('change', (e) => {
   if (e.target.id === 'ingreso-fecha') proponerMes();
