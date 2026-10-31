@@ -235,6 +235,12 @@ se equivoca, así que aquí no hay modelo ([`backend/Ingresos.gs`](backend/Ingre
   reparte el ingreso por tipo y, de cada uno, cuenta lo cobrado si lo hay y si no lo previsto. La nómina y las comisiones
   previstas se ponen desde «Mes», al tocar el ingreso, viendo el mes al que van; el restante se actualiza con la misma
   respuesta. La nómina se puede cambiar también en los meses siguientes, porque una subida de sueldo dura.
+- **Lo que sobra pasa al mes siguiente («arrastre»).** Al apuntar la nómina que cierra un mes, el servidor lee lo que
+  me quedó de verdad en él (lo cobrado menos los cargos fijos y los gastos puntuales; los presupuestos no reservan
+  nada) y lo apunta como un ingreso más del mes nuevo, en positivo o en negativo si me pasé. La hoja no puede hacerlo
+  con una fórmula: calcula un solo mes a la vez, el que tiene elegido, y no puede encadenar el restante de octubre
+  dentro de noviembre. Así que se guarda como un dato, una foto del momento de cerrar el mes; si después cambia un
+  gasto de ese mes, «Recalcular» la vuelve a sacar. Deshacer la nómina, o borrarla, quita también su arrastre.
 - **De dónde sale el «cobrado».** Al tocar el ingreso de «Mes» se abre su reparto: una línea por tipo (previsto,
   cobrado y lo que cuenta) y debajo los ingresos del mes (concepto · fecha · importe). Una prueba exige que sumen justo lo que la hoja cuenta como cobrado, y la ejecuto con
   ingresos de prueba que crea y borra ella misma: con la pestaña vacía, la comprobación solo diría 0 = 0.
@@ -279,6 +285,7 @@ acabaría en «Aina»; por eso la frase solo nombra la categoría elegida.
 | Cambiar la hoja con una función que se ejecuta una vez (una *migración*) | Copiar fórmulas a mano | Comprueba el estado antes de escribir y después, deshace si algo falla y se puede repetir sin riesgo. En la hoja real falló tres veces (texto distinto al del export, un nombre no válido en `LET` y el separador «;» de la configuración española) sin tocar nada |
 | Previsto de comisiones puesto desde «Mes», sin Deshacer, y la respuesta trae el mes recalculado | Ponerlo en la hoja a mano, o en el formulario de ingresos | Se pone viendo el mes y su restante; corregir es volver a cambiarlo (así no pisa el Deshacer de la última acción real). Devolver el mes en la misma respuesta ahorra un viaje de ~2 s a Apps Script |
 | Los gastos puntuales van al mes de la nómina, con el periodo calculado en la pestaña Meses | Mes natural, o calcular el periodo en el código | El mes que se vive empieza con la nómina. Calculado en una sola columna, el Resumen, «Mes», los pagos y la app usan el mismo periodo |
+| El arrastre del restante se guarda como una fila de Ingresos al apuntar la nómina, con un botón «Recalcular» | Una fórmula que encadene los meses, o calcularlo en la app | La hoja calcula un solo mes a la vez (el de `B1`): no puede encadenarlos. Guardarlo es una foto (un dato derivado *materializado*): rápido de leer y con el precio de que puede quedarse viejo, por eso se puede recalcular. El cálculo sigue en la hoja; el servidor solo lo copia |
 | Gasto con formulario que reutiliza el guardado de los dictados | Una acción nueva en el servidor, o pasar el texto por Haiku | Una sola validación para todo; sin LLM, lo escrito no se reinterpreta |
 
 ## Latencia
