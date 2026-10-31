@@ -394,14 +394,22 @@ con sus cabeceras, desplegables y D8 = 0. En el iPhone S1–S9 OK: saldo inicial
 mes, retirada de 5 € → −5,00 € y el restante sube 5, objetivo con fecha (barra, «faltan» y cuota al mes), cambiarlo con el
 antes y el después, eliminar y Deshacer, y bien en oscuro. Pau dejó su saldo inicial y su objetivo reales.
 
-**Fase 17 — Recurrentes de varias veces al mes, con una casilla por vez (v2.12) — en pruebas.** Detalle en la sección
+**Fase 17 — Recurrentes de varias veces al mes, con una casilla por vez (v2.12) — hecha.** Detalle en la sección
 «Fase 17». `?v=` 7.17.0. Probado en local: `aplicarFase17()` con las 40 fórmulas reales de Cálculo!O (export del 31 oct),
 con «,» y «;» (40/40 cambiadas, el resto de cada fórmula igual, segunda vez sin cambios, deshace si O no da número, se
 para si R1 está ocupada) y, con el simulador ampliado (Recurrentes, Cálculo con veces y semanas, Pagos y el cambio de
-precio de la v1), `probarVeces()` todo ✅ y `probarPagos()`, `probarAhorros()`, `probarArrastre()`, `probarIngresos()` y
-`probarPrevistos()` en verde; un mensual normal sigue con una línea «R001». Interfaz en el iPhone 13 simulado (claro y
-oscuro). Falta: `aplicarFase17()` en la hoja real, Nueva versión, pruebas del editor y V1–V7. Barbero (R011) está a 12 €:
-Pau decide antes de la V1 si es el precio de una visita o de las dos.
+precio de la v1), `probarVeces()` y las pruebas de las fases anteriores en verde.
+En la hoja real (31 oct): `aplicarFase17()` **a la primera** (N, R, O en 40 filas, Guía; total y suma de P iguales que
+antes, B7 = 0). Nueva versión publicada. En Apps Script W4–W6 OK: `probarVeces()` 9/9 y todo ✅ (2 veces → O = 2 y P = 20,
+dos líneas de 10 € con `cuadra` ✅; marcar cada vez baja el pendiente 10 € (472,94 → 462,94 → 452,94); bajar a 1 borra la
+«#2» y la línea única hereda la «#1»; Deshacer; semanal con 5 casillas; marca antigua sin «#» separada; cambio de precio
+con las veces copiadas; limpieza). La 1.ª ejecución falló en el último paso por la prueba, no por el código: la regla
+mensual de prueba acababa ese mes y la v1 no deja un cambio de precio sin cargos después («No hay más cargos…»); el
+simulador no imitaba esa comprobación. Arreglado (regla sin fin) y la limpieza ya había dejado la hoja como estaba.
+`probarMes()`, `probarPagos()`, `probarArrastre()`, `probarAhorros()` y `probarIngresos()` ✅. En el iPhone V1–V7 OK: Barbero
+a 2 veces (notificación, chip «Mensual · 2 veces», dos casillas en «Mes»), marcar la 1.ª baja una vez, «+ Nuevo gasto»
+mensual de 3 veces con tres líneas y Deshacer que borra la regla, semanal con una casilla por semana, Deshacer de las
+veces, «Mes» y el Resumen con el mismo total y `cuadra` ✅, y bien en oscuro.
 
 ## Fase 17 — Recurrentes de varias veces al mes, con una casilla por vez (v2.12)
 Caso real: el barbero, dos veces al mes. Antes solo cabía un mensual con el total (una casilla) o un mensual más un puntual
