@@ -245,6 +245,21 @@ se equivoca, así que aquí no hay modelo ([`backend/Ingresos.gs`](backend/Ingre
   cobrado y lo que cuenta) y debajo los ingresos del mes (concepto · fecha · importe). Una prueba exige que sumen justo lo que la hoja cuenta como cobrado, y la ejecuto con
   ingresos de prueba que crea y borra ella misma: con la pestaña vacía, la comprobación solo diría 0 = 0.
 
+## Ahorro: una cuenta conjunta, un libro de movimientos
+
+La pestaña «Ahorro» dice cuánto hay ahorrado de verdad y cuánto falta para un objetivo. La cuenta es conjunta con mi
+pareja, y eso decide el modelo:
+
+- **Lo que aparto yo sale de mi mes:** baja el restante de ese mes (por su fecha y el periodo de la nómina) y no se
+  arrastra al siguiente. Lo que retiro vuelve a mi mes. Lo que pone mi pareja solo suma al total.
+- **Un libro, no un saldo.** Cada movimiento es una fila (aportación, retirada o el saldo inicial, que se apunta una vez
+  y no afecta a ningún mes) y los totales se derivan de ellas. Nunca se guarda «el saldo»: se calcula. Una retirada que
+  dejaría el total en negativo se rechaza, y borrar un movimiento también.
+- **Objetivo con el modelo preparado para varios:** nombre, importe y fecha opcional, con su progreso y cuánto ahorrar
+  al mes hasta la fecha. Cambiarlo no borra el anterior: queda inactivo.
+- Como en el resto de la app, **la hoja calcula y la app enseña**: los totales, el progreso y el «ahorro del mes» son
+  fórmulas. En «Mes» aparece la línea «Apartado a ahorro» entre las cifras y el restante.
+
 ## Gasto con formulario: otro proponente, el mismo validador
 
 A veces no se puede hablar. En «Crear» hay también un formulario para apuntar un gasto (concepto, importe,
@@ -286,6 +301,9 @@ acabaría en «Aina»; por eso la frase solo nombra la categoría elegida.
 | Previsto de comisiones puesto desde «Mes», sin Deshacer, y la respuesta trae el mes recalculado | Ponerlo en la hoja a mano, o en el formulario de ingresos | Se pone viendo el mes y su restante; corregir es volver a cambiarlo (así no pisa el Deshacer de la última acción real). Devolver el mes en la misma respuesta ahorra un viaje de ~2 s a Apps Script |
 | Los gastos puntuales van al mes de la nómina, con el periodo calculado en la pestaña Meses | Mes natural, o calcular el periodo en el código | El mes que se vive empieza con la nómina. Calculado en una sola columna, el Resumen, «Mes», los pagos y la app usan el mismo periodo |
 | El arrastre del restante se guarda como una fila de Ingresos al apuntar la nómina, con un botón «Recalcular» | Una fórmula que encadene los meses, o calcularlo en la app | La hoja calcula un solo mes a la vez (el de `B1`): no puede encadenarlos. Guardarlo es una foto (un dato derivado *materializado*): rápido de leer y con el precio de que puede quedarse viejo, por eso se puede recalcular. El cálculo sigue en la hoja; el servidor solo lo copia |
+| El ahorro en pestañas propias («Ahorros» y «Objetivos») | Una categoría de gastos «Ahorro» | No se mezcla con los gastos, no ocupa uno de los 12 huecos del Resumen y una retirada no es un «gasto negativo» |
+| Cuenta conjunta: solo lo mío cuenta en mi mes | Contar todo lo que entra en la cuenta | Lo que pone mi pareja no sale de mi dinero; si contara, el restante del mes mentiría |
+| Ni una fórmula en la pestaña «Ahorros»; los totales, en «Objetivos» | Totales al pie de la propia pestaña | La v1 escribe cada fila nueva tras la última ocupada: una fórmula debajo la desplazaría (la misma lección de la fase 13) |
 | Gasto con formulario que reutiliza el guardado de los dictados | Una acción nueva en el servidor, o pasar el texto por Haiku | Una sola validación para todo; sin LLM, lo escrito no se reinterpreta |
 
 ## Latencia
