@@ -359,12 +359,19 @@ y con ella (enero y febrero a 1.450), comisiones sin casilla, y «+ Nuevo ingres
 (la Q7 no lo hacía porque la Q6 las dejó a 0). Limpieza: nómina 1.370 desde diciembre y comisiones a 0. README:
 viñetas en «Ingresos» y fila en Decisiones.
 
-**Fase 15 — Arrastre del restante al mes siguiente (v2.10) — en pruebas.** Detalle en la sección «Fase 15». `?v=` 7.15.0.
+**Fase 15 — Arrastre del restante al mes siguiente (v2.10) — hecha.** Detalle en la sección «Fase 15». `?v=` 7.15.0.
 Probado en local: `aplicarFase15()` con «,» y «;» (segunda vez sin cambios; si algo no da número, lo deshace todo; se para
 si D7:E7 está ocupada o falta la fase 14) y, con un simulador que calcula periodo, reparto y restante real,
-`probarArrastre()` todo ✅, `probarIngresos()` y `probarPrevistos()` en verde, y el caso real (nómina de diciembre el 27/11 →
-arrastre 1.209,69 = 1.335,48 + 202,21 − 300 − 28; el gasto del 28/11 ya es de diciembre). Interfaz en el iPhone 13
-simulado (claro y oscuro). Falta: `aplicarFase15()` en la hoja real, Nueva versión, pruebas del editor y A1–A5.
+`probarArrastre()`, `probarIngresos()` y `probarPrevistos()` en verde, y el caso real (nómina de diciembre el 27/11 →
+arrastre 1.209,69 = 1.335,48 + 202,21 − 300 − 28; el gasto del 28/11 ya es de diciembre).
+En la hoja real (31 oct): `aplicarFase15()` **a la primera**, todo ✅ (fila 5 del reparto, cabecera, D7:E7, Tipo, Importe,
+Guía; noviembre con ingreso 1.537,69 cobrado y B7 = 0). Nueva versión publicada. En Apps Script J4–J8 OK:
+`probarArrastre()` todo ✅ ((a)–(f) y limpieza), `probarIngresos()` 14/14, `probarMes()` 3/3, `probarPagos()` y
+`probarPrevistos()` ✅; el desplegable de Tipo tiene «arrastre» y un −5 a mano en una nómina se rechaza. En el iPhone
+A1–A8 OK (febrero y marzo de 2027): nómina de febrero sin arrastre («enero no tiene nómina apuntada»), nómina de marzo
+con «+X € del restante de febrero» y Deshacer que quita las dos filas, línea «Arrastre» con «Recalcular», un cargo de
+25 € en febrero → Recalcular baja justo 25, borrar la nómina de marzo se lleva su arrastre, y bien en oscuro.
+**Primer uso real:** al apuntar la nómina de noviembre (finales de noviembre) sale el arrastre de noviembre a diciembre.
 
 ## Fase 15 — Arrastre del restante al mes siguiente (v2.10)
 Si me queda dinero de un mes, sigo teniéndolo: al cerrar el mes (al apuntar la nómina del siguiente), lo que quedó se suma
