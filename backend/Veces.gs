@@ -125,9 +125,9 @@ function textoVeces_(n) {
 }
 
 /**
- * Prueba desde el editor (fase 17), con reglas de prueba en el último mes de Meses (un mensual de 10 €, un semanal de
- * 7 € y un anual de 5 €, que empiezan y acaban en ese mes). Limpieza en finally: Recurrentes, Cálculo, Pagos y el Deshacer
- * pendiente como estaban.
+ * Prueba desde el editor (fase 17), con reglas de prueba en el último mes de Meses: un mensual de 10 € (sin fin: el cambio
+ * de precio de la v1 exige que queden cargos después), un semanal de 7 € y un anual de 5 € (estos dos acaban ese mes).
+ * Limpieza en finally: Recurrentes, Cálculo, Pagos y el Deshacer pendiente como estaban.
  */
 function probarVeces() {
   const libro = libro_();
@@ -146,9 +146,9 @@ function probarVeces() {
   const cat = nombresCategorias_(libro.getSheetByName('Categorías'));   // Categorias.gs
   const categoria = cat.indexOf('Otros') >= 0 ? 'Otros' : cat[0];
   const ids = [];
-  const regla = (concepto, importe, frecuencia) => {
+  const regla = (concepto, importe, frecuencia, conFin) => {
     const id = siguienteId_(rec, 'R');   // v1
-    escribirFila_(rec, [id, concepto, importe, categoria, 'fijo', frecuencia, '', fechaSerial_(mes.inicio), fechaSerial_(fin), '',
+    escribirFila_(rec, [id, concepto, importe, categoria, 'fijo', frecuencia, '', fechaSerial_(mes.inicio), conFin ? fechaSerial_(fin) : '', '',
                         'Sí', 'probarVeces', ahoraSerial_()], FORMATOS_REC);   // v1
     ids.push(id);
     return id;
@@ -156,9 +156,9 @@ function probarVeces() {
   const lineas = (r, base) => [].concat(...r.categorias.map((k) => k.reglas)).filter((g) => (g.base || g.id) === base);
   const pagos = () => libro.getSheetByName(PAG_HOJA_);   // Pagos.gs
   try {
-    const mensual = regla('Prueba 17 mensual', 10, 'mensual');
-    const semanal = regla('Prueba 17 semanal', 7, 'semanal');
-    const anual = regla('Prueba 17 anual', 5, 'anual');
+    const mensual = regla('Prueba 17 mensual', 10, 'mensual', false);
+    const semanal = regla('Prueba 17 semanal', 7, 'semanal', true);
+    const anual = regla('Prueba 17 anual', 5, 'anual', true);
     asegurarFilasCalculo_();   // v1: Cálculo con filas para las reglas nuevas
     const presupuesto = rec.getRange(2, 1, rec.getLastRow() - 1, 5).getValues().filter((f) => String(f[4]) === 'presupuesto')[0];
 
