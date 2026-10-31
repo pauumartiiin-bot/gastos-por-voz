@@ -14,7 +14,7 @@ const ACCIONES_ = {
   interpretar: (p, t) => interpretar(t, p.frase, p.correccion || null),
   guardar: (p, t) => guardar(t, p.interpretacion, p.frase),
   deshacer: (p, t) => deshacer(t),
-  registros: (p, t) => listarRegistros(t),
+  registros: (p, t) => conVeces_(listarRegistros(t)),   // fase 17: + las veces al mes de cada recurrente (Veces.gs)
   editar: (p, t) => editarRegistro(t, p.hoja, p.id, p.cambios || {}),
   baja: (p, t) => darDeBaja(t, p.id, p.fecha_fin),
   eliminar: (p, t) => eliminarRegistro(t, p.hoja, p.id),
@@ -30,7 +30,8 @@ const ACCIONES_ = {
   ahorros: () => ahorros_(),   // Fase 16: Ahorros.gs
   ahorro: (p) => apuntarAhorro_(p),
   borrar_ahorro: (p) => borrarAhorro_(p),
-  objetivo: (p) => objetivo_(p)
+  objetivo: (p) => objetivo_(p),
+  veces: (p) => veces_(p)   // Fase 17: Veces.gs
 };
 
 function doPost(e) {
@@ -52,6 +53,10 @@ function doPost(e) {
     const resultado = accion(p, p.t);
     // Fase 11.3: un gasto borrado no puede dejar marcas en Pagos que heredaría el siguiente con su ID (Pagos.gs).
     if (resultado.ok !== false && (p.accion === 'eliminar' || p.accion === 'deshacer')) limpiarPagosTrasBorrar_();
+    // Fase 17: un cambio de precio (v1) crea la regla nueva copiando 13 columnas, sin las veces al mes (Veces.gs).
+    if (resultado.ok !== false && p.accion === 'editar' && p.hoja === 'Recurrentes' && p.cambios && p.cambios.modo === 'cambioPrecio') {
+      copiarVecesTrasCambioDePrecio_(String(p.id));
+    }
     // Fase B.1: tiempo dentro de doPost. El móvil lo resta del total para ver la red y el arranque de Apps Script.
     if (p.accion === 'dictar') resultado.ms_servidor = Date.now() - inicio;
     // Las funciones de la v1 no siempre devuelven "ok": se añade aquí.

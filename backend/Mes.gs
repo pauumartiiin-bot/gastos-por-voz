@@ -148,14 +148,10 @@ function construirMes_(h, zona, pagos) {
   const desde = textoFecha_(h.periodo[0], zona);
   const hasta = textoFecha_(h.periodo[1], zona);
 
-  // Cálculo: A ID, B Concepto, C Categoría, D Tipo, N Fecha_cargo, O Veces_en_mes, P Importe_en_mes.
-  // Las semanales no tienen Fecha_cargo en la hoja: van con null.
-  const reglas = agrupar_(h.calculo.filter((f) => f[0] && Number(f[14]) > 0).map((f) => ({
-    categoria: String(f[2]).trim(),
-    id: String(f[0]), concepto: String(f[1]), tipo: String(f[3]), importe: redondear2_(f[15]),
-    fecha_cargo: f[13] instanceof Date ? textoFecha_(f[13], zona) : null, veces: Number(f[14]),
-    pagado: estadoPago_(pagos, f[0], false), pagado_el: estadoPago_(pagos, f[0], false) ? pagos[String(f[0])].el : null
-  })));
+  // Cálculo: A ID, B Concepto, C Categoría, D Tipo, E Frecuencia, F Importe, N Fecha_cargo, O Veces_en_mes, P Importe_en_mes.
+  // Las semanales no tienen Fecha_cargo en la hoja: van con null. Fase 17: una regla con varias veces en el mes (mensual
+  // con Veces_mes o semanal) sale como una línea por vez, «R011#1»…, con el importe de una vez (F) y su casilla.
+  const reglas = agrupar_([].concat(...h.calculo.filter((f) => f[0] && Number(f[14]) > 0).map((f) => lineasRegla_(f, zona, pagos))));
 
   // Movimientos: A ID, B Fecha, C Concepto, D Importe, E Categoría; solo los del periodo.
   const movimientos = agrupar_(h.movimientos.filter((f) => f[0] && f[1] instanceof Date).map((f) => ({
@@ -171,7 +167,8 @@ function construirMes_(h, zona, pagos) {
       nombre: nombre, fijos: redondear2_(f[1]), presupuesto: redondear2_(f[2]), puntuales: redondear2_(f[3]),
       total: redondear2_(f[4]), disponible: redondear2_(f[5]),
       reglas: (reglas[nombre] || []).sort((a, b) =>
-        (a.fecha_cargo || '9999').localeCompare(b.fecha_cargo || '9999') || a.concepto.localeCompare(b.concepto)),
+        (a.fecha_cargo || '9999').localeCompare(b.fecha_cargo || '9999') || a.concepto.localeCompare(b.concepto) ||
+        (a.base || a.id).localeCompare(b.base || b.id) || (a.vez || 0) - (b.vez || 0)),
       movimientos: (movimientos[nombre] || []).sort((a, b) => a.fecha.localeCompare(b.fecha))
     };
   }).filter((c) => c.total > 0 || c.movimientos.length);
@@ -194,6 +191,26 @@ function construirMes_(h, zona, pagos) {
     categorias: categorias,
     cuadra: Math.round(suma * 100) === Math.round(totalPrevisto * 100)
   };
+}
+
+/**
+ * Las líneas de una fila de Cálculo. Una sola vez: { id: 'R011', importe: P }, pagada por «R011» o «R011#1» (la marca que
+ * queda al bajar a 1 vez). Varias (y no es presupuesto, que se pinta como barra): una por vez, { id: 'R011#2', base, vez,
+ * importe: F }, pagada por «R011#2» o por una fila antigua «R011» (antes, una sola casilla: todo pagado).
+ */
+function lineasRegla_(f, zona, pagos) {
+  const base = String(f[0]);
+  const veces = Number(f[14]);
+  const comun = { categoria: String(f[2]).trim(), concepto: String(f[1]), tipo: String(f[3]), frecuencia: String(f[4]),
+                  fecha_cargo: f[13] instanceof Date ? textoFecha_(f[13], zona) : null, veces: veces };
+  const marca = (ids) => ids.map((id) => pagos[id]).filter((p) => p)[0];
+  const linea = (extra, p) => Object.assign({}, comun, extra,
+    { pagado: p ? p.estado === 'pagado' : false, pagado_el: p && p.estado === 'pagado' ? p.el : null });
+  if (veces > 1 && comun.tipo !== 'presupuesto') {
+    return Array.from({ length: veces }, (_, k) => linea({ id: base + '#' + (k + 1), base: base, vez: k + 1,
+      importe: redondear2_(f[5]) }, marca([base + '#' + (k + 1), base])));
+  }
+  return [linea({ id: base, importe: redondear2_(f[15]) }, marca([base, base + '#1']))];
 }
 
 /** ¿Está pagado? Sin fila en Pagos, el estado normal; con fila, el que dice su Estado. */
