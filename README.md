@@ -226,11 +226,8 @@ se equivoca, así que aquí no hay modelo ([`backend/Ingresos.gs`](backend/Ingre
   dinero entra a partir del día 20, la app propone el mes siguiente. Se puede cambiar.
 - **Menos toques:** en una nómina, el importe es el ingreso previsto de ese mes; el concepto, si se deja vacío,
   se escribe solo («Nómina octubre»).
-- **Validar en dos capas.** El móvil avisa antes de enviar (una nómina repetida, o comisiones en un mes sin
-  nómina) y el servidor decide: una segunda nómina en el mismo mes se rechaza aunque alguien se salte la interfaz.
-- **Una trampa de la hoja, documentada.** El Resumen usa lo cobrado en cuanto un mes tiene algún ingreso; si
-  solo estuvieran las comisiones, el previsto dejaría de contar. Como llegan el mismo día que la nómina, no hizo
-  falta cambiar la fórmula: basta con el aviso.
+- **Validar en dos capas.** El móvil avisa antes de enviar (una nómina repetida) y el servidor decide: una
+  segunda nómina en el mismo mes se rechaza aunque alguien se salte la interfaz.
 - **Efecto en «Mes»:** al apuntar la nómina, el mes pasa de «previsto» a «cobrado» y, si es la del mes
   siguiente, ese pasa a ser el mes por defecto. Lo provoca un dato real, no una fecha fija.
 - **Cada tipo de ingreso, por separado.** Al principio había un solo previsto (la nómina) y, en cuanto entraba algo, todo
@@ -238,8 +235,8 @@ se equivoca, así que aquí no hay modelo ([`backend/Ingresos.gs`](backend/Ingre
   reparte el ingreso por tipo y, de cada uno, cuenta lo cobrado si lo hay y si no lo previsto. La nómina y las comisiones
   previstas se ponen desde «Mes», al tocar el ingreso, viendo el mes al que van; el restante se actualiza con la misma
   respuesta. La nómina se puede cambiar también en los meses siguientes, porque una subida de sueldo dura.
-- **De dónde sale el «cobrado».** La cabecera de «Mes» lista los ingresos del mes (concepto · fecha · importe)
-  debajo de las cifras. Una prueba exige que sumen justo lo que la hoja cuenta como cobrado, y la ejecuto con
+- **De dónde sale el «cobrado».** Al tocar el ingreso de «Mes» se abre su reparto: una línea por tipo (previsto,
+  cobrado y lo que cuenta) y debajo los ingresos del mes (concepto · fecha · importe). Una prueba exige que sumen justo lo que la hoja cuenta como cobrado, y la ejecuto con
   ingresos de prueba que crea y borra ella misma: con la pestaña vacía, la comprobación solo diría 0 = 0.
 
 ## Gasto con formulario: otro proponente, el mismo validador
