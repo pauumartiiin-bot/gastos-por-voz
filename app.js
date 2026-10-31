@@ -156,6 +156,7 @@ function textoFrecuencia(d) {
   if (!d.frecuencia) return '¿Frecuencia?';
   const partes = [FRECUENCIAS[d.frecuencia] || d.frecuencia];
   if (d.cada_meses) partes.push('cada ' + d.cada_meses + ' meses');
+  if (d.veces > 1) partes.push(d.veces + ' veces');   // fase 17
   if (d.dia_de_cobro) partes.push('día ' + d.dia_de_cobro);
   return partes.join(' · ');
 }
@@ -451,8 +452,20 @@ function actualizarGasto() {
   $('gasto-fecha-texto').textContent = f === 'puntual' ? 'Día del gasto' : 'Primer cargo';
   mostrar('campo-gasto-pagado', f === 'puntual');
   mostrar('campo-gasto-cada', f === 'mensual');
+  mostrar('campo-gasto-veces', f === 'mensual');
   mostrar('campo-gasto-fin', f !== 'puntual');
 }
+
+// «Veces al mes» del 1 al 10 (fase 17): en «+ Nuevo gasto» y en el editor de un recurrente.
+function opcionesVeces(select, elegida) {
+  select.replaceChildren(...Array.from({ length: 10 }, (_, k) => {
+    const o = crear('option', null, k === 0 ? '1 (una vez)' : String(k + 1));
+    o.value = String(k + 1);
+    o.selected = k + 1 === elegida;
+    return o;
+  }));
+}
+opcionesVeces($('gasto-veces'), 1);
 
 async function guardarGasto(e) {
   e.preventDefault();
@@ -494,6 +507,16 @@ async function guardarGasto(e) {
   try {
     const r = await api('guardar', { interpretacion, frase });
     let texto = '✓ ' + r.datos.concepto + ' · ' + euros(r.datos.importe) + ' guardado en ' + r.hoja;
+    // Fase 17: varias veces al mes. Sin su propio Deshacer: el de la notificación borra la regla, veces incluidas.
+    const veces = frecuencia === 'mensual' ? Number($('gasto-veces').value) : 1;
+    if (veces > 1) {
+      try {
+        await api('veces', { id: r.id, veces, conservar_deshacer: true });
+        texto += ' · ' + veces + ' veces al mes';
+      } catch (err) {
+        texto += ' · no se han podido poner las ' + veces + ' veces: cámbialo en «Mis registros»';
+      }
+    }
     if (pendiente) {
       try {
         await api('pagar', { etiqueta: mes.etiqueta, id: r.id, pagado: false });
@@ -944,6 +967,13 @@ function alternarReparto() {
   if (mesDatos) pintarReparto(mesDatos);
 }
 
+// Fase 17: una regla con varias veces en el mes llega como una línea por vez («1.ª vez», «2.ª semana»), cada una con su
+// casilla y el importe de una vez. Las de una sola vez no llevan nada (o «× N» si viniera de un backend anterior).
+function textoVez(g) {
+  if (g.vez) return g.vez + '.ª ' + (g.frecuencia === 'semanal' ? 'semana' : 'vez');
+  return g.veces > 1 ? '× ' + g.veces : '';
+}
+
 function tarjetaCategoria(k) {
   const t = crear('article', 'tarjeta categoria-mes');
   const cab = crear('div', 'categoria-cabecera');
@@ -952,7 +982,7 @@ function tarjetaCategoria(k) {
 
   // Las reglas de presupuesto no son un cargo: se ven como barra, no como línea, y no se marcan.
   k.reglas.filter((g) => g.tipo !== 'presupuesto').forEach((g) => t.append(
-    lineaPagable(g, g.fecha_cargo ? fechaCorta(g.fecha_cargo) : 'semanal', g.veces > 1 ? '× ' + g.veces : '')));
+    lineaPagable(g, g.fecha_cargo ? fechaCorta(g.fecha_cargo) : (g.vez ? '' : 'semanal'), textoVez(g))));
   if (k.presupuesto > 0) t.append(barraPresupuesto(k));
   if (k.movimientos.length) {
     const movs = crear('div', 'movimientos-mes');
@@ -965,7 +995,7 @@ function tarjetaCategoria(k) {
 function lineaMes(concepto, cuando, importe, veces, etiqueta = 'div') {
   const linea = crear(etiqueta, 'linea-mes');
   linea.append(crear('span', 'linea-concepto', concepto),
-    crear('span', 'linea-fecha', veces ? cuando + ' ' + veces : cuando),
+    crear('span', 'linea-fecha', [cuando, veces].filter((x) => x).join(' ')),
     crear('span', 'linea-importe', euros(importe)));
   return linea;
 }
@@ -1307,7 +1337,7 @@ function pintarLista(id, items, hoja, textoVacio) {
 function tarjetaRegistro(r, hoja) {
   const esRec = hoja === 'Recurrentes';
   const chips = [];
-  if (esRec) chips.push(crear('span', 'chip chip-prim', textoFrecuencia({ frecuencia: r.frecuencia, cada_meses: r.cada_meses })));
+  if (esRec) chips.push(crear('span', 'chip chip-prim', textoFrecuencia({ frecuencia: r.frecuencia, cada_meses: r.cada_meses, veces: r.veces })));
   else chips.push(crear('span', 'chip', fecha(r.fecha)));
   if (r.categoria) chips.push(crear('span', 'chip chip-acento', r.categoria));
   if (esRec && r.tipo === 'presupuesto') chips.push(crear('span', 'chip', 'Presupuesto'));
@@ -1395,6 +1425,25 @@ function editorRegistro(r, hoja) {
     return api('renombrar', { hoja, id: r.id, concepto });
   }));
   editor.append(campo('Nombre', nombre), renombrar, crear('hr', 'separador'));
+
+  // Fase 17: veces al mes de un mensual (no presupuesto), con su botón y su Deshacer. Afecta a todos los meses: la caché fuera.
+  if (esRec && r.veces != null) {
+    const veces = document.createElement('select');
+    opcionesVeces(veces, r.veces);
+    const cambiarVeces = crear('button', 'btn-suave', 'Cambiar');
+    cambiarVeces.type = 'button';
+    cambiarVeces.addEventListener('click', () => ejecutarRegistro(cambiarVeces, 'Cambiando las veces…', async () => {
+      const n = Number(veces.value);
+      if (n === r.veces) throw new Error('Ya se cobra ' + n + (n === 1 ? ' vez' : ' veces') + ' al mes.');
+      const x = await api('veces', { id: r.id, veces: n });
+      cacheMes.clear();
+      return x;
+    }));
+    const fila = crear('div', 'fila-veces');
+    fila.append(campo('Veces al mes', veces), cambiarVeces);
+    editor.append(fila, crear('small', 'ayuda-veces', 'El importe es el de cada vez: en «Mes», cada vez lleva su casilla.'),
+      crear('hr', 'separador'));
+  }
 
   const importe = entrada('text', String(r.importe).replace('.', ','));
   importe.inputMode = 'decimal';

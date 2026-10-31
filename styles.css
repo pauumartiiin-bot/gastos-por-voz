@@ -555,3 +555,9 @@ input[type="checkbox"]:checked, input[type="radio"]:checked {
 .mes-ahorro dd { font-size: 15px; }
 #estado-movimiento, #estado-inicial { text-align: left; }
 .ahorro-objetivo .reparto-cambiar { align-self: flex-start; }
+
+/* ---------- Veces al mes (fase 17) ---------- */
+.fila-veces { display: flex; gap: 10px; align-items: flex-end; }
+.fila-veces .campo { flex: 1; min-width: 0; }
+.fila-veces .btn-suave { height: 48px; padding: 0 16px; }
+.ayuda-veces { margin-top: -6px; font-size: 12px; color: var(--secundario); }

@@ -9,6 +9,10 @@
  * Fase 13: un gasto puntual puede cambiar de mes al apuntar una nómina (su periodo se mueve), así que su marca va
  * con su ID, sea cual sea el mes de la fila; al volver a marcarlo, la fila pasa al mes actual.
  * Fase 11.3: tras borrar un gasto, sus filas se limpian (la v1 reutiliza los IDs: el siguiente gasto las heredaría).
+ * Fase 17: una regla con varias veces en el mes (mensual con Veces_mes o semanal) tiene una casilla por vez y su clave es
+ * «R011#2» (partirId_, Veces.gs). Las de una sola vez siguen siendo «R011» (y aceptan también «R011#1», la marca que queda
+ * al bajar de varias veces a una). Una fila antigua sin «#» en una regla de varias veces significa «todo pagado»; al tocar
+ * una de sus líneas se separa en una fila por vez.
  */
 
 const PAG_HOJA_ = 'Pagos';
@@ -30,7 +34,9 @@ function pagar_(p) {
     if (normal.error) return { ok: false, error: 'rechazado', mensaje: normal.error };
 
     const hoja = hojaPagos_(libro);
-    const filas = filasPago_(hoja, etiqueta, id);
+    const vez = partirId_(id);   // Veces.gs
+    if (vez.vez != null) separarMarcaAntigua_(libro, hoja, etiqueta, vez.base);   // fase 17
+    const filas = filasPago_(hoja, etiqueta, id, true);
     let marcadoEl = null;
     if (p.pagado !== normal.pagado) {
       // Se aparta de lo normal: se guarda (una sola fila, aunque se marque dos veces).
@@ -57,13 +63,17 @@ function pagar_(p) {
  */
 function estadoNormal_(libro, id, mes, zona) {
   const rec = libro.getSheetByName('Recurrentes');
-  const fr = buscarFilaPorId_(rec, id);   // v1
+  const { base, vez } = partirId_(id);   // Veces.gs: «R011#2» es la 2.ª vez de la R011 (fase 17)
+  const fr = buscarFilaPorId_(rec, base);   // v1
   if (fr > 0) {
-    if (String(rec.getRange(fr, COL.TIPO).getValue()).trim() === 'presupuesto') {
+    const f = rec.getRange(fr, 1, 1, VEC_COL_).getValues()[0];
+    if (String(f[COL.TIPO - 1]).trim() === 'presupuesto') {
       return { error: 'Los presupuestos no se marcan como pagados.' };
     }
+    if (vez != null && (vez < 1 || vez > maxVecesRegla_(f))) return { error: 'Esa vez ya no existe. Recarga el mes.' };
     return { pagado: false };
   }
+  if (vez != null) return { error: 'Ese gasto ya no existe (¿se borró a mano?). Recarga el mes.' };
   const movs = libro.getSheetByName('Movimientos');
   const fm = buscarFilaPorId_(movs, id);
   if (fm > 0) {
@@ -112,15 +122,19 @@ function hojaPagos_(libro) {
 function limpiarPagosHuerfanos_(libro) {
   const hoja = libro.getSheetByName(PAG_HOJA_);
   if (!hoja || hoja.getLastRow() < 2) return [];
+  // ID → cuántas veces puede tener en un mes (fase 17): las marcas «R011#3» de una regla que ya solo tiene 2 sobran.
   const existen = {};
-  ['Recurrentes', 'Movimientos'].forEach((n) => {
-    const h = libro.getSheetByName(n);
-    if (h.getLastRow() > 1) h.getRange(2, 1, h.getLastRow() - 1, 1).getValues().forEach((f) => { existen[String(f[0])] = true; });
-  });
+  const rec = libro.getSheetByName('Recurrentes');
+  if (rec.getLastRow() > 1) {
+    rec.getRange(2, 1, rec.getLastRow() - 1, VEC_COL_).getValues().forEach((f) => { existen[String(f[0])] = maxVecesRegla_(f); });   // Veces.gs
+  }
+  const movs = libro.getSheetByName('Movimientos');
+  if (movs.getLastRow() > 1) movs.getRange(2, 1, movs.getLastRow() - 1, 1).getValues().forEach((f) => { existen[String(f[0])] = 1; });
   const ids = hoja.getRange(2, 2, hoja.getLastRow() - 1, 1).getValues().map((f) => String(f[0]));
   const borrados = [];
   for (let i = ids.length - 1; i >= 0; i--) {   // de abajo arriba, para no mover las filas pendientes
-    if (!existen[ids[i]]) {
+    const { base, vez } = partirId_(ids[i]);
+    if (!existen[base] || (vez != null && vez > existen[base])) {
       hoja.deleteRow(i + 2);
       borrados.unshift(ids[i]);
     }
@@ -143,14 +157,37 @@ function limpiarPagos() {
   Logger.log(borrados.length ? 'Filas huérfanas borradas: ' + borrados.join(', ') : 'No había filas huérfanas.');
 }
 
-/** Números de fila (de arriba abajo) con ese mes e ID; las de un gasto puntual, solo por su ID (fase 13). */
-function filasPago_(hoja, etiqueta, id) {
+/**
+ * Números de fila (de arriba abajo) con ese mes e ID; las de un gasto puntual, solo por su ID (fase 13). Con `alias`, las
+ * de un cargo de una sola vez («R011») incluyen también su «R011#1» (fase 17).
+ */
+function filasPago_(hoja, etiqueta, id, alias) {
   if (hoja.getLastRow() < 2) return [];
+  const ids = [id];
+  if (alias && !esPuntual_(id) && partirId_(id).vez == null) ids.push(id + '#1');   // Veces.gs
   const filas = [];
   hoja.getRange(2, 1, hoja.getLastRow() - 1, 2).getValues().forEach((f, i) => {
-    if (String(f[1]) === id && (esPuntual_(id) || String(f[0]) === etiqueta)) filas.push(i + 2);
+    if (ids.indexOf(String(f[1])) >= 0 && (esPuntual_(id) || String(f[0]) === etiqueta)) filas.push(i + 2);
   });
   return filas;
+}
+
+/**
+ * Fase 17: una fila antigua «R011» (sin número) en una regla que ese mes tiene varias veces significa «todas pagadas».
+ * Antes de tocar una de sus líneas se separa en una fila por vez («R011#1»…), con la misma fecha. Las veces de ese mes
+ * las calcula la hoja (Cálculo!O), así que hay que poner el mes en B1 (enMes_): solo pasa en este caso.
+ */
+function separarMarcaAntigua_(libro, hoja, etiqueta, base) {
+  const antiguas = filasPago_(hoja, etiqueta, base);
+  if (!antiguas.length) return;
+  const fila = buscarFilaPorId_(libro.getSheetByName('Recurrentes'), base);   // v1; Cálculo va por número de fila
+  const veces = Number(enMes_(libro, etiqueta, () => libro.getSheetByName('Cálculo').getRange(fila, 15).getValue())) || 1;   // Mes.gs
+  const el = hoja.getRange(antiguas[0], 3).getValue();
+  antiguas.reverse().forEach((f) => hoja.deleteRow(f));
+  for (let k = 1; k <= veces; k++) {
+    hoja.appendRow([etiqueta, base + '#' + k, el, 'pagado']);
+    hoja.getRange(hoja.getLastRow(), 3).setNumberFormat('dd/mm/yyyy hh:mm');
+  }
 }
 
 /** ¿Es un gasto puntual (Movimientos, M…)? Los cargos fijos son R…. */

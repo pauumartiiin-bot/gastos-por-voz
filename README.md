@@ -199,8 +199,11 @@ atenúan: lo que se ve sin atenuar es lo que queda por pagar.
 - **Una pestaña aparte, «Pagos»** (mes · ID · fecha · estado), que la app crea la primera vez y que guarda
   **solo lo que se aparta de lo normal**: un fijo pagado o un puntual pendiente. Así no hay una fila por cada
   café y los datos antiguos siguieron valiendo sin migrarlos. No toca ninguna fórmula: es informativo.
-- **La clave es mes + ID**, no la fecha del cargo: los cargos semanales no tienen una fecha única en el mes,
-  y un «× 4» es una sola casilla.
+- **La clave es mes + ID**, no la fecha del cargo: los cargos semanales no tienen una fecha única en el mes.
+- **Una casilla por vez.** Un recurrente puede cobrarse varias veces al mes (el barbero, dos veces: el importe es el
+  de cada vez) y un semanal se cobra cada semana: en «Mes» sale una línea por vez, cada una con su casilla. Su clave
+  es «R011#2» solo cuando hay más de una vez; las de una sola siguen siendo «R011», así que no hubo que migrar
+  ninguna marca, y una marca antigua sin número en una regla de varias veces vale como «todo pagado».
 - **Interfaz optimista.** Apps Script tarda unos 3 s; esperar su respuesta para rellenar una casilla se
   notaría. La casilla y el pendiente cambian al instante y, si el servidor falla (por ejemplo, sin
   conexión), vuelven atrás con un aviso. Funciona porque la acción casi nunca falla y es idempotente:
@@ -304,6 +307,7 @@ acabaría en «Aina»; por eso la frase solo nombra la categoría elegida.
 | El ahorro en pestañas propias («Ahorros» y «Objetivos») | Una categoría de gastos «Ahorro» | No se mezcla con los gastos, no ocupa uno de los 12 huecos del Resumen y una retirada no es un «gasto negativo» |
 | Cuenta conjunta: solo lo mío cuenta en mi mes | Contar todo lo que entra en la cuenta | Lo que pone mi pareja no sale de mi dinero; si contara, el restante del mes mentiría |
 | Ni una fórmula en la pestaña «Ahorros»; los totales, en «Objetivos» | Totales al pie de la propia pestaña | La v1 escribe cada fila nueva tras la última ocupada: una fórmula debajo la desplazaría (la misma lección de la fase 13) |
+| Varias veces al mes como un valor en la regla y la clave «R011#2» solo cuando hay más de una vez | Un día concreto por vez, o una fila de Pagos por vez siempre | Sin días, el modelo es un número; con la clave nueva solo donde hace falta, las marcas antiguas siguen valiendo sin migrarlas |
 | Gasto con formulario que reutiliza el guardado de los dictados | Una acción nueva en el servidor, o pasar el texto por Haiku | Una sola validación para todo; sin LLM, lo escrito no se reinterpreta |
 
 ## Latencia
@@ -349,6 +353,9 @@ visto es instantáneo gracias a la caché, que se actualiza por detrás.
 - **La primera visita a cada mes tarda ~3 s.** Los ya vistos salen al instante, pero la caché se borra al cerrar la app.
 - **El Resumen tiene sitio para 12 categorías.** La app respeta el límite y avisa, pero ampliarlo es trabajo en la hoja.
 - **Los pagos son informativos.** Marcar un cargo no cambia el restante; solo el pendiente de pagar.
+- **Las veces al mes no se dictan.** El JSON que devuelve Haiku es el de la v1 y no tiene ese campo: un dictado crea el
+  recurrente con 1 vez y las veces se cambian en «Mis registros» (o se ponen al crearlo con el formulario). Eliminar
+  un recurrente y deshacerlo también lo devuelve con 1 vez (el Deshacer de la v1 solo conoce sus 13 columnas).
 
 ## Qué he aprendido
 

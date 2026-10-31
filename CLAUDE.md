@@ -30,7 +30,7 @@ iPhone (esta app, GitHub Pages, instalada en pantalla de inicio)
   `redirect: 'follow'` (Apps Script responde con una redirección).
 - Interfaz en español. Comentarios del código en español, breves.
 
-## Contrato de la API (fases 6.1–16)
+## Contrato de la API (fases 6.1–17)
 Petición: un único `doPost` (en `backend/Api.gs`) que enruta por `accion`. Cuerpo JSON enviado como texto plano:
 ```json
 { "t": "<token>", "accion": "dictar", ...parámetros }
@@ -42,14 +42,14 @@ Petición: un único `doPost` (en `backend/Api.gs`) que enruta por `accion`. Cue
 | `guardar` | `interpretacion`, `frase` | `guardar` | `hoja`, `id`, `datos` |
 | `deshacer` | — | `deshacer` | `desc` |
 | `transcribir` | `audio`, `mime`, `modelo?`, `vocabulario?` | `transcribir_` | `texto`, `modelo`, `vocabulario`, `ms_vocabulario`, `ms_groq`, `prob_sin_voz` |
-| `registros` | — | `listarRegistros` | `recurrentes`, `movimientos`, `categorias`, `hoy` |
+| `registros` | — | `listarRegistros` + `conVeces_` (fase 17) | `recurrentes` (con `veces`: número en los mensuales que no son presupuesto, si no `null`), `movimientos`, `categorias`, `hoy` |
 | `editar` | `hoja`, `id`, `cambios` | `editarRegistro` | `desc` |
 | `baja` | `id`, `fecha_fin` | `darDeBaja` | `desc` |
 | `eliminar` | `hoja`, `id` | `eliminarRegistro` | `desc` |
 | `mes` | `etiqueta?` (sin ella, el mes por defecto) | `mes_` (nuevo, `backend/Mes.gs`) con `libro_` y `conBloqueo_` | `etiqueta`, `mes_inicio`, `por_defecto`, `meses`, `cabecera` (con `desglose`, fase 14, y `ahorro_mes`, fase 16), `categorias`, `cuadra`, `ingresos`, `ms` (detalle en «Fase 7», «Fase 12» y «Fase 14») |
 | `categoria` | `nombre`, `descripcion` | `crearCategoria_` (nuevo, `backend/Categorias.gs`) con `libro_`, `conBloqueo_`, `normalizar` y `apuntarDeshacer_` | `nombre`, `desc`, `huecos_libres` (detalle en «Fase 7b») |
 | `renombrar` | `hoja` (`Recurrentes` \| `Movimientos`), `id`, `concepto` | `renombrar_` (nuevo, `backend/Renombrar.gs`) con `libro_`, `conBloqueo_`, `buscarFilaPorId_`, `COL`/`COLM` y `apuntarDeshacer_` | `id`, `concepto`, `desc` (detalle en «Fase 8») |
-| `pagar` | `etiqueta`, `id` (regla R… o gasto puntual M…), `pagado` (`true` \| `false`) | `pagar_` (nuevo, `backend/Pagos.gs`) con `libro_`, `conBloqueo_`, `buscarFilaPorId_`, `COL` y `COLM` | `etiqueta`, `id`, `pagado`, `pagado_el` (detalle en «Fase 8» y «Fase 11») |
+| `pagar` | `etiqueta`, `id` (regla R…, «R011#2» para una vez de una regla de varias — fase 17 —, o gasto puntual M…), `pagado` (`true` \| `false`) | `pagar_` (nuevo, `backend/Pagos.gs`) con `libro_`, `conBloqueo_`, `buscarFilaPorId_`, `COL` y `COLM` | `etiqueta`, `id`, `pagado`, `pagado_el` (detalle en «Fase 8» y «Fase 11») |
 | `ingresos` | — | `ingresos_` (nuevo, `backend/Ingresos.gs`) con `libro_` y `normalizar` | `hoy`, `meses` (`etiqueta`, `inicio`, `previsto`, `previsto_comisiones`, `nomina`, `periodo_inicio`, `periodo_fin`), `ingresos` (últimos 20) (detalle en «Fase 9», «Fase 13» y «Fase 14») |
 | `ingreso` | `tipo` (no `arrastre`), `importe`, `fecha`, `mes`, `concepto?` | `apuntarIngreso_` (nuevo) con `conBloqueo_`, `siguienteId_`, `escribirFila_`, `fechaSerial_`, `ahoraSerial_` y `apuntarDeshacer_` | `id`, `desc`, `ingreso`, `arrastre` (`{ id, importe, desde, concepto }` o `null`), `motivo_arrastre` (fase 15) |
 | `borrar_ingreso` | `id` | `borrarIngreso_` (nuevo) con `conBloqueo_`, `buscarFilaPorId_`, `aJSON_` y `apuntarDeshacer_` | `id`, `desc`, `arrastre_borrado` (fase 15) |
@@ -58,6 +58,7 @@ Petición: un único `doPost` (en `backend/Api.gs`) que enruta por `accion`. Cue
 | `ahorro` | `tipo` (`inicial` \| `aportación` \| `retirada`), `quien` (`yo` \| `pareja`; no en `inicial`), `importe`, `fecha`, `concepto?` | `apuntarAhorro_` (nuevo) con `conBloqueo_`, `siguienteId_`, `escribirFila_`, `fechaSerial_`, `ahoraSerial_` y `apuntarDeshacer_` | `id`, `desc`, `movimiento`, `mes` (el mes que cambia, o `null`), `ahorros` |
 | `borrar_ahorro` | `id` | `borrarAhorro_` (nuevo) con `conBloqueo_`, `buscarFilaPorId_`, `aJSON_` y `apuntarDeshacer_` | `id`, `desc`, `mes`, `ahorros` |
 | `objetivo` | `nombre`, `importe`, `fecha?` | `objetivo_` (nuevo) con `conBloqueo_` y `fechaSerial_` | `anterior` (o `null`), `objetivo`, `ahorros` |
+| `veces` | `id`, `veces` (entero 1–10), `conservar_deshacer?` (sin su propio Deshacer: lo usa «+ Nuevo gasto») | `veces_` (nuevo, `backend/Veces.gs`) con `libro_`, `conBloqueo_`, `buscarFilaPorId_`, `COL` y `apuntarDeshacer_` | `id`, `veces`, `anterior`, `desc` (detalle en «Fase 17») |
 | `arrastre` | `etiqueta` (el mes que recibe el arrastre) | `arrastre_` (nuevo, `backend/Ingresos.gs`) con `libro_`, `conBloqueo_`, `enMes_`, `siguienteId_`, `escribirFila_` y `mes_` | `etiqueta`, `id` (o `null` si da 0), `desde`, `concepto`, `anterior`, `importe`, `mes` (detalle en «Fase 15») |
 
 - En `dictar` con `corrige`, lo dictado es el cambio pedido y `frase` es la frase original (así lo espera `interpretar`).
@@ -111,7 +112,8 @@ backend/Renombrar.gs    acción renombrar (fase 8.1): cambia el concepto de un g
 backend/Pagos.gs        acción pagar (fases 8.2 y 11.1): marca cargos fijos y gastos puntuales en la pestaña Pagos; se copia a mano
 backend/Ingresos.gs     acciones ingresos, ingreso y borrar_ingreso (fase 9.1) y arrastre (fase 15); se copia a mano
 backend/Latencia.gs     medirLatencia() (fase B.1): cronometra libro_, leerContexto_ e interpretar; se copia a mano
-backend/Migraciones.gs  cambios en la hoja de cada fase (aplicarFase13 a aplicarFase16), se ejecutan una vez desde el editor; se copia a mano
+backend/Migraciones.gs  cambios en la hoja de cada fase (aplicarFase13 a aplicarFase17), se ejecutan una vez desde el editor; se copia a mano
+backend/Veces.gs        acción veces y veces en registros (fase 17): recurrentes de varias veces al mes; se copia a mano
 backend/Ahorros.gs      acciones ahorros, ahorro, borrar_ahorro y objetivo (fase 16); se copia a mano
 backend/Previstos.gs    acción previsto (fase 14): comisiones previstas de un mes (Meses D); se copia a mano
 docs/                   capturas del README (generadas con datos inventados)
@@ -391,6 +393,68 @@ con sus cabeceras, desplegables y D8 = 0. En el iPhone S1–S9 OK: saldo inicial
 10 € → «cuenta en Noviembre 2026» y «Apartado a ahorro −10,00 €» con el restante 10 € menos, la de la pareja sin tocar el
 mes, retirada de 5 € → −5,00 € y el restante sube 5, objetivo con fecha (barra, «faltan» y cuota al mes), cambiarlo con el
 antes y el después, eliminar y Deshacer, y bien en oscuro. Pau dejó su saldo inicial y su objetivo reales.
+
+**Fase 17 — Recurrentes de varias veces al mes, con una casilla por vez (v2.12) — en pruebas.** Detalle en la sección
+«Fase 17». `?v=` 7.17.0. Probado en local: `aplicarFase17()` con las 40 fórmulas reales de Cálculo!O (export del 31 oct),
+con «,» y «;» (40/40 cambiadas, el resto de cada fórmula igual, segunda vez sin cambios, deshace si O no da número, se
+para si R1 está ocupada) y, con el simulador ampliado (Recurrentes, Cálculo con veces y semanas, Pagos y el cambio de
+precio de la v1), `probarVeces()` todo ✅ y `probarPagos()`, `probarAhorros()`, `probarArrastre()`, `probarIngresos()` y
+`probarPrevistos()` en verde; un mensual normal sigue con una línea «R001». Interfaz en el iPhone 13 simulado (claro y
+oscuro). Falta: `aplicarFase17()` en la hoja real, Nueva versión, pruebas del editor y V1–V7. Barbero (R011) está a 12 €:
+Pau decide antes de la V1 si es el precio de una visita o de las dos.
+
+## Fase 17 — Recurrentes de varias veces al mes, con una casilla por vez (v2.12)
+Caso real: el barbero, dos veces al mes. Antes solo cabía un mensual con el total (una casilla) o un mensual más un puntual
+(un apaño que descuadra). Decisiones (confirmadas por Pau, con las recomendaciones):
+- **«Veces al mes» solo en los mensuales que no son presupuesto** (1–10; vacío = 1). El importe es el de cada vez (12 € y 2
+  veces → 24 €/mes, como los semanales). Sin días concretos: las veces se numeran («1.ª vez», «2.ª vez») y la fecha es la del
+  cargo del mes.
+- **Una casilla por vez**, en los mensuales de varias veces y en los semanales (una por semana; antes, una sola casilla).
+  Cada línea lleva el importe de una vez y el pendiente cuenta las que faltan.
+- **Clave de Pagos:** «R011#2» solo cuando la regla tiene más de una vez en ese mes; las de una sola vez siguen siendo «R011»
+  (nada que migrar). Una línea única también vale con «R011#1» (la marca que queda al bajar de varias veces a una). Una
+  fila antigua «R011» sin número en una regla de varias veces = todo pagado; al tocar una de sus líneas, `pagar` la separa en
+  una fila por vez (`separarMarcaAntigua_`, que lee las veces de ese mes en Cálculo con `enMes_`: solo en ese caso). La
+  limpieza borra las marcas de reglas que no existen y las de número mayor que el máximo (mensual: sus veces; semanal: 5;
+  anual o presupuesto: 1).
+- **Nada de fórmulas en Recurrentes:** «Veces_mes» es un valor en N (la v1 escribe 13 columnas, A–M, y deja N vacía = 1).
+- **Lo que la v1 no conoce:** el cambio de precio (`cambioDePrecio_`) copia 13 columnas → `doPost`, tras un `editar` con
+  `modo: 'cambioPrecio'` en Recurrentes, copia las veces a la regla nueva (`copiarVecesTrasCambioDePrecio_`, la encuentra por la
+  nota «Cambio de precio: sustituye a R011 …»). Eliminar y Deshacer devuelve la regla con 1 vez (aceptado y documentado). Por
+  voz no cambia nada (el JSON de Haiku es de la v1): un dictado crea el recurrente con 1 vez (limitación en el README).
+- **`registros`:** `Api.gs` pasa la respuesta de `listarRegistros` (v1, 13 columnas) por `conVeces_`, que añade `veces`. Sin
+  acción nueva.
+- **Poner las mismas veces que ya tiene → `rechazado`** («Ya se cobra 2 veces al mes»), para no gastar el Deshacer.
+- **«+ Nuevo gasto» con varias veces:** tras `guardar`, `veces` con `conservar_deshacer: true` (sin su propio Deshacer), para
+  que el Deshacer de la notificación siga siendo el del gasto (borra la regla, veces incluidas). Si falla, el gasto queda
+  guardado y el aviso dice que se cambie en «Mis registros».
+
+Hoja (`aplicarFase17()`, Migraciones.gs; mismas garantías que las anteriores): Recurrentes!N1 `Veces_mes` con validación
+`AND(INT(N2)=N2, N2>=1, N2<=10)` (vacío vale); Cálculo!R «Veces» = `IF(OR($A2="", $E2<>"mensual", $D2="presupuesto"), 1,
+IF(INDEX(Recurrentes!$N:$N, ROW())="", 1, INDEX(Recurrentes!$N:$N, ROW())))` (anuales, semanales y presupuestos, siempre 1);
+en Cálculo!O, solo el trozo `IF($N2<>"", 1, 0)` pasa a `IF($N2<>"", $R2, 0)` (expresión regular que tolera «,», «;» y
+espacios; el resto de la fórmula, tal cual). La v1 amplía Cálculo copiando la última fila hasta `getLastColumn()`, así que
+copia también R. Comprueba antes (N1 y R1 vacías, el patrón en todas las filas con fórmula de O) y después (R y O con
+números; la suma de Cálculo!P, B5 iguales que antes y B7 = 0, porque nadie tiene aún más de 1 vez); si algo falla, restaura
+O, vacía R y quita N1 y su validación. Guía: 2 filas.
+
+Código:
+- `backend/Veces.gs`: `veces_`, `conVeces_`, `copiarVecesTrasCambioDePrecio_`, `partirId_`, `vecesDe_`, `maxVecesRegla_` y
+  `probarVeces()`. `Api.gs`: la acción, `registros` con `conVeces_` y la copia tras el cambio de precio.
+- `Mes.gs`: `lineasRegla_` convierte cada fila de Cálculo en sus líneas (`id` «R011#n», `base`, `vez`, `veces`, `frecuencia`,
+  importe de una vez = Cálculo F); la suma de las líneas es `Importe_en_mes`, así que `cuadra` no cambia.
+- `Pagos.gs`: `estadoNormal_` valida el número de vez; `pagar_` separa una marca antigua y busca la línea única también como
+  «#1» (`filasPago_` con `alias`); `limpiarPagosHuerfanos_` con el máximo de cada regla.
+- App: en «Mes», «Barbero · 1 nov · 1.ª vez · 12 €» y «Pádel · 1.ª semana · 7 €» (`textoVez`), cada una con su casilla; en
+  «Mis registros», campo «Veces al mes» con «Cambiar» (notificación con Deshacer; la caché de meses se vacía) en los
+  mensuales que no son presupuesto, y chip «Mensual · 2 veces»; en «+ Nuevo gasto», «Veces al mes» con Mensual.
+
+Pruebas: `probarVeces()` (reglas de prueba en el último mes: mensual de 10 €, semanal de 7 € y anual de 5 €): validaciones
+(0, 11, texto, 2,5, semanal, anual, ID inexistente, las mismas veces y un presupuesto real); 2 veces → Cálculo O = 2 y P = 20 y
+«Mes» con «#1» y «#2» de 10 €; marcar las dos → el pendiente baja 10 y 10; bajar a 1 → la marca «#2» se borra y la línea única
+hereda la «#1»; Deshacer → vuelve a 2; semanal → una línea por semana; una marca antigua sin «#» → todas pagadas, y desmarcar
+la 2.ª la separa; cambio de precio (v1) → la regla nueva sigue con 2 veces. Limpieza en `finally` (Recurrentes, Cálculo,
+Pagos y `ULTIMO`).
 
 ## Fase 16 — Ahorro: cuenta conjunta, saldo inicial y objetivo (v2.11)
 Saber siempre cuánto hay ahorrado de verdad y cuánto falta para un objetivo. La cuenta es conjunta con la pareja.
