@@ -235,8 +235,9 @@ se equivoca, así que aquí no hay modelo ([`backend/Ingresos.gs`](backend/Ingre
   siguiente, ese pasa a ser el mes por defecto. Lo provoca un dato real, no una fecha fija.
 - **Cada tipo de ingreso, por separado.** Al principio había un solo previsto (la nómina) y, en cuanto entraba algo, todo
   lo previsto desaparecía: con la nómina cobrada y las comisiones aún no, el mes perdía las comisiones. Ahora la hoja
-  reparte el ingreso por tipo y, de cada uno, cuenta lo cobrado si lo hay y si no lo previsto. Las comisiones previstas
-  se ponen desde «Mes», al tocar el ingreso, viendo el mes al que van; el restante se actualiza con la misma respuesta.
+  reparte el ingreso por tipo y, de cada uno, cuenta lo cobrado si lo hay y si no lo previsto. La nómina y las comisiones
+  previstas se ponen desde «Mes», al tocar el ingreso, viendo el mes al que van; el restante se actualiza con la misma
+  respuesta. La nómina se puede cambiar también en los meses siguientes, porque una subida de sueldo dura.
 - **De dónde sale el «cobrado».** La cabecera de «Mes» lista los ingresos del mes (concepto · fecha · importe)
   debajo de las cifras. Una prueba exige que sumen justo lo que la hoja cuenta como cobrado, y la ejecuto con
   ingresos de prueba que crea y borra ella misma: con la pestaña vacía, la comprobación solo diría 0 = 0.

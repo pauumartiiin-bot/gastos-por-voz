@@ -1,20 +1,28 @@
 /**
  * Previstos.gs — Fase 14: el ingreso previsto de cada tipo, puesto desde la app.
  * Archivo nuevo. La hoja sigue siendo la fuente de verdad: la acción solo escribe una celda de Meses y el reparto
- * (Resumen H1:K4) lo calcula la hoja. Hoy solo las comisiones (Meses D); la nómina prevista (Meses C) se pone a mano.
+ * (Resumen H1:K4) lo calcula la hoja. La nómina prevista (Meses C) y las comisiones previstas (Meses D). La nómina
+ * puede cambiarse también en los meses siguientes (una subida de sueldo dura); las comisiones, solo mes a mes.
  * Sin Deshacer de la v1 (como pagar): para corregir se vuelve a cambiar, y así no se pisa el de la última acción real.
  */
 
-const PREV_COLUMNAS_ = { comisiones: 4 };   // tipo → columna de Meses. Si un día entra la nómina: { nómina: 3, … }
+const PREV_COLUMNAS_ = { 'nómina': 3, comisiones: 4 };   // tipo → columna de Meses
+const PREV_CON_SIGUIENTES_ = ['nómina'];                 // tipos que se pueden cambiar también en los meses siguientes
 const PREV_MAX_ = 100000;
 const PREV_FORMATO_ = '#,##0.00 "€"';
 
-/** Acción "previsto": { etiqueta, tipo, importe } → escribe el previsto y devuelve el mes ya recalculado. */
+/**
+ * Acción "previsto": { etiqueta, tipo, importe, siguientes? } → escribe el previsto (con `siguientes`, también en los
+ * meses que vienen después, hasta el último de Meses) y devuelve el mes ya recalculado y cuántos meses ha cambiado.
+ */
 function previsto_(p) {
   const etiqueta = String(p.etiqueta == null ? '' : p.etiqueta);
   const tipo = String(p.tipo == null ? '' : p.tipo);
   const columna = PREV_COLUMNAS_[tipo];
   if (!columna) return { ok: false, error: 'entrada' };
+  if (p.siguientes != null && typeof p.siguientes !== 'boolean') return { ok: false, error: 'entrada' };   // como pagado en pagar
+  const siguientes = p.siguientes === true;
+  if (siguientes && PREV_CON_SIGUIENTES_.indexOf(tipo) < 0) return { ok: false, error: 'entrada' };
   const libro = libro_();   // v1
   const meses = libro.getSheetByName('Meses');
   const fila = filaDeMes_(meses, etiqueta);
@@ -25,17 +33,19 @@ function previsto_(p) {
   if (error) return { ok: false, error: 'rechazado', mensaje: error };
   const importe = Math.round(Number(String(p.importe).replace(',', '.')) * 100) / 100;
 
+  const filas = siguientes ? meses.getLastRow() - fila + 1 : 1;   // este mes y, si se pide, todos los de después
   const anterior = conBloqueo_(() => {   // v1: un acceso a la vez
-    const celda = meses.getRange(fila, columna);
-    const antes = redondear2_(celda.getValue());   // Mes.gs; una celda vacía es 0
-    if (importe === 0) celda.clearContent();       // 0 quita el previsto
-    else celda.setValue(importe).setNumberFormat(PREV_FORMATO_);
+    const rango = meses.getRange(fila, columna, filas, 1);
+    const antes = redondear2_(rango.getCell(1, 1).getValue());   // Mes.gs; una celda vacía es 0
+    if (importe === 0) rango.clearContent();                      // 0 quita el previsto
+    else rango.setValues(Array.from({ length: filas }, () => [importe])).setNumberFormat(PREV_FORMATO_);
     return antes;
   });
 
   // El mes ya recalculado en la misma respuesta: un viaje a Apps Script (~2 s) en vez de dos (fase B).
   const mes = mes_({ etiqueta: etiqueta });   // Mes.gs; fuera del bloqueo, porque mes_ toma el suyo
-  return { etiqueta: etiqueta, tipo: tipo, anterior: anterior, importe: importe, mes: mes.ok === false ? null : mes };
+  return { etiqueta: etiqueta, tipo: tipo, anterior: anterior, importe: importe, meses_cambiados: filas,
+           mes: mes.ok === false ? null : mes };
 }
 
 /** Mensaje del problema, o null. Vale un número o un texto numérico («250», «250,5»); 0 quita el previsto. */
@@ -56,8 +66,9 @@ function filaDeMes_(hoja, etiqueta) {
 }
 
 /**
- * Prueba desde el editor: las validaciones y, en el último mes de Meses, poner 250 de comisiones previstas, ver que el
- * reparto las cuenta, cambiarlas a 0 y que la celda quede vacía. La celda queda como estaba (finally).
+ * Prueba desde el editor: las validaciones; en el último mes de Meses, poner 250 de comisiones previstas, ver que el
+ * reparto las cuenta, cambiarlas a 0 y que la celda quede vacía; y la nómina prevista, en el penúltimo mes «y los
+ * siguientes» (cambian los dos últimos). Las celdas quedan como estaban (finally).
  */
 function probarPrevistos() {
   const libro = libro_();
@@ -66,7 +77,8 @@ function probarPrevistos() {
   const mes = etiquetas[etiquetas.length - 1];   // el más lejano: casi seguro que no tiene ingresos
   const casos = [
     ['mes inventado', { etiqueta: 'Mes inventado', tipo: 'comisiones', importe: 1 }, 'entrada'],
-    ['tipo «nómina» (no entra en esta fase)', { etiqueta: mes, tipo: 'nómina', importe: 1 }, 'entrada'],
+    ['«siguientes» en comisiones (solo la nómina)', { etiqueta: mes, tipo: 'comisiones', importe: 1, siguientes: true }, 'entrada'],
+    ['«siguientes» que no es sí/no', { etiqueta: mes, tipo: 'nómina', importe: 1, siguientes: 'sí' }, 'entrada'],
     ['tipo inventado', { etiqueta: mes, tipo: 'sueldo', importe: 1 }, 'entrada'],
     ['importe negativo', { etiqueta: mes, tipo: 'comisiones', importe: -5 }, 'rechazado'],
     ['importe enorme', { etiqueta: mes, tipo: 'comisiones', importe: PREV_MAX_ + 1 }, 'rechazado'],
@@ -86,6 +98,10 @@ function probarPrevistos() {
   const celda = hoja.getRange(filaDeMes_(hoja, mes), PREV_COLUMNAS_.comisiones);
   const original = celda.getValue();
   const formato = celda.getNumberFormat();
+  const penultimo = etiquetas[etiquetas.length - 2];
+  const nominas = hoja.getRange(filaDeMes_(hoja, penultimo), PREV_COLUMNAS_['nómina'], 2, 1);   // C del penúltimo y del último
+  const nominasAntes = nominas.getValues();
+  const nominasFormato = nominas.getNumberFormats();
   try {
     const comisiones = (r) => r.mes.cabecera.desglose.filter((d) => d.tipo === 'comisiones')[0];
     const r1 = previsto_({ etiqueta: mes, tipo: 'comisiones', importe: '250' });
@@ -99,10 +115,25 @@ function probarPrevistos() {
     const bien2 = r2.anterior === 250 && celda.getValue() === '' && comisiones(r2).previsto === 0 &&
                   r2.mes.cabecera.ingreso === Math.round((r1.mes.cabecera.ingreso - (c1.cobrado > 0 ? 0 : 250)) * 100) / 100;
     Logger.log((bien2 ? '✅ ' : '❌ ') + 'Ponerlo a 0 → celda vacía · ingreso ' + r2.mes.cabecera.ingreso);
+
+    // Nómina prevista en el penúltimo mes «y los siguientes»: cambian el penúltimo y el último.
+    const r3 = previsto_({ etiqueta: penultimo, tipo: 'nómina', importe: 1500.5, siguientes: true });
+    const n3 = r3.mes.cabecera.desglose.filter((d) => d.tipo === 'nómina')[0];
+    const valores = nominas.getValues().map((f) => f[0]);
+    const bien3 = r3.meses_cambiados === 2 && valores[0] === 1500.5 && valores[1] === 1500.5 && n3.previsto === 1500.5;
+    Logger.log((bien3 ? '✅ ' : '❌ ') + 'Nómina prevista de ' + penultimo + ' y siguientes → ' + r3.anterior + ' € → ' +
+               r3.importe + ' € en ' + r3.meses_cambiados + ' meses · celdas ' + valores.join(' y ') + ' · reparto ' + n3.previsto);
+    const r4 = previsto_({ etiqueta: mes, tipo: 'nómina', importe: 1400 });
+    const bien4 = r4.meses_cambiados === 1 && nominas.getValues()[0][0] === 1500.5 && nominas.getValues()[1][0] === 1400;
+    Logger.log((bien4 ? '✅ ' : '❌ ') + 'Nómina prevista solo de ' + mes + ' → 1400 sin tocar el mes anterior (' +
+               nominas.getValues().map((f) => f[0]).join(' y ') + ')');
   } finally {
     if (original === '') celda.clearContent();
     else celda.setValue(original);
     celda.setNumberFormat(formato);
-    Logger.log((celda.getValue() === original ? '✅ ' : '❌ ') + 'Limpieza: Meses D de ' + mes + ' como estaba');
+    nominas.setValues(nominasAntes).setNumberFormats(nominasFormato);
+    const igual = celda.getValue() === original &&
+                  JSON.stringify(nominas.getValues()) === JSON.stringify(nominasAntes);
+    Logger.log((igual ? '✅ ' : '❌ ') + 'Limpieza: Meses C y D de los meses de prueba como estaban');
   }
 }

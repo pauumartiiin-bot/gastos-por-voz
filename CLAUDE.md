@@ -53,7 +53,7 @@ Petición: un único `doPost` (en `backend/Api.gs`) que enruta por `accion`. Cue
 | `ingresos` | — | `ingresos_` (nuevo, `backend/Ingresos.gs`) con `libro_` y `normalizar` | `hoy`, `meses` (`etiqueta`, `inicio`, `previsto`, `previsto_comisiones`, `nomina`, `periodo_inicio`, `periodo_fin`), `ingresos` (últimos 20) (detalle en «Fase 9», «Fase 13» y «Fase 14») |
 | `ingreso` | `tipo`, `importe`, `fecha`, `mes`, `concepto?` | `apuntarIngreso_` (nuevo) con `conBloqueo_`, `siguienteId_`, `escribirFila_`, `fechaSerial_`, `ahoraSerial_` y `apuntarDeshacer_` | `id`, `desc`, `ingreso` |
 | `borrar_ingreso` | `id` | `borrarIngreso_` (nuevo) con `conBloqueo_`, `buscarFilaPorId_`, `aJSON_` y `apuntarDeshacer_` | `id`, `desc` |
-| `previsto` | `etiqueta`, `tipo` (`comisiones`), `importe` (≥ 0; 0 lo quita) | `previsto_` (nuevo, `backend/Previstos.gs`) con `libro_`, `conBloqueo_` y `mes_` | `etiqueta`, `tipo`, `anterior`, `importe`, `mes` (el mes ya recalculado; detalle en «Fase 14») |
+| `previsto` | `etiqueta`, `tipo` (`nómina` \| `comisiones`), `importe` (≥ 0; 0 lo quita), `siguientes?` (solo nómina: también los meses de después) | `previsto_` (nuevo, `backend/Previstos.gs`) con `libro_`, `conBloqueo_` y `mes_` | `etiqueta`, `tipo`, `anterior`, `importe`, `meses_cambiados`, `mes` (el mes ya recalculado; detalle en «Fase 14») |
 
 - En `dictar` con `corrige`, lo dictado es el cambio pedido y `frase` es la frase original (así lo espera `interpretar`).
 - `ms_interpretar` incluye leer el contexto de la hoja + Haiku + validación.
@@ -347,8 +347,11 @@ y dos filas en Decisiones.
 **Fase 14 — Comisiones previstas y reparto del ingreso por tipo (v2.9) — en pruebas.** Detalle en la sección «Fase 14».
 `?v=` 7.13.0. Probado en local: `aplicarFase14()` con las fórmulas reales (comas y «;»; segunda vez sin cambios; si el
 reparto no da números, lo deshace todo y la hoja queda igual) y la interfaz en el iPhone 13 simulado (claro y oscuro).
-Falta: copiar Api.gs, Mes.gs, Ingresos.gs, Previstos.gs y Migraciones.gs, `aplicarFase14()`, Nueva versión, pruebas en el
-editor y en el iPhone.
+`aplicarFase14()` en la hoja real (31 oct): **a la primera**, todo ✅ (Meses D, reparto H1:K4, cabecera por tipo, Guía);
+noviembre: nómina cobrada 1.335,48 + comisiones cobradas 202,21 = ingreso 1.537,69 (cobrado), B7 = 0. En el iPhone
+Q1–Q8 OK (Q3: el campo solo abre teclado numérico; Q7 no propuso el previsto porque la Q6 lo dejaba a 0: se repite).
+**14.2 (nómina prevista desde la app)** — `?v=` 7.14.0, probada en local. Falta: Previstos.gs y Nueva versión,
+`probarPrevistos()`/`probarIngresos()`/`probarMes()` y pruebas en el iPhone.
 
 ## Fase 14 — Comisiones previstas y reparto del ingreso por tipo (v2.9)
 Hasta ahora había un solo previsto por mes (Meses C, la nómina) y `B4 = IF(E5>0, E5, E4)`: en cuanto se cobraba algo, todo
@@ -381,8 +384,16 @@ las comisiones dejaba fuera la nómina prevista, el aviso de la fase 9). Decisio
   teclado decimal) con Guardar y Cancelar; el rechazo sale junto al campo sin borrar lo escrito. Mientras se escribe no se
   repinta el reparto (una actualización de la caché borraría el campo). Guardar cuenta como un cambio del mes en
   `pagosMes` (como marcar un pago, 8.4): una respuesta de «mes» pedida antes se descarta y no pisa el previsto nuevo.
-- Pruebas: `probarPrevistos()` (validaciones 7/7, poner 250 y leerlo en el reparto, poner 0 y celda vacía; la celda queda
-  como estaba) y `probarIngresos()` con los casos (a)–(d) con 300 € de comisiones previstas en el último mes (nada cobrado →
+- **14.2 — Nómina prevista desde la app** (pedido por Pau antes de cerrar la fase; decisiones con las recomendaciones):
+  `PREV_COLUMNAS_` admite `nómina` (Meses C) y la línea de la Nómina también lleva «Cambiar previsto». Solo en la nómina,
+  casilla **«También los meses siguientes»** (desmarcada; una subida de sueldo dura): `siguientes: true` escribe desde ese
+  mes hasta la última fila de Meses y devuelve `meses_cambiados`; en comisiones → `entrada`, y un valor no booleano →
+  `entrada` (como `pagado` en `pagar`). 0 vacía la celda, como en las comisiones. Un formulario a la vez (los otros
+  «Cambiar previsto» se desactivan). Notificación «Nómina prevista de diciembre: 1.370 € → 1.400 € (y los N meses
+  siguientes)»; los meses siguientes se borran de la caché de la 8.4 para que traigan el previsto nuevo.
+- Pruebas: `probarPrevistos()` (validaciones 8/8, poner 250 de comisiones y leerlo en el reparto, poner 0 y celda vacía,
+  nómina en el penúltimo mes «y los siguientes» → cambian los dos últimos, nómina solo del último sin tocar el
+  anterior; las celdas quedan como estaban) y `probarIngresos()` con los casos (a)–(d) con 300 € de comisiones previstas en el último mes (nada cobrado →
   previsto; solo nómina → parcial; las dos → cobrado; extra de 50 → se suma). Meses D queda como estaba.
 
 ## Fase 13 — Los gastos puntuales van al mes de la nómina (v2.8)
