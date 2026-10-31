@@ -26,7 +26,11 @@ const ACCIONES_ = {
   ingreso: (p) => apuntarIngreso_(p),
   borrar_ingreso: (p) => borrarIngreso_(p),
   previsto: (p) => previsto_(p),   // Fase 14: Previstos.gs
-  arrastre: (p) => arrastre_(p)   // Fase 15: Ingresos.gs
+  arrastre: (p) => arrastre_(p),   // Fase 15: Ingresos.gs
+  ahorros: () => ahorros_(),   // Fase 16: Ahorros.gs
+  ahorro: (p) => apuntarAhorro_(p),
+  borrar_ahorro: (p) => borrarAhorro_(p),
+  objetivo: (p) => objetivo_(p)
 };
 
 function doPost(e) {

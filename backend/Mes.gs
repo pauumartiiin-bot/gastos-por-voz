@@ -12,11 +12,14 @@
  * sustituye a su previsto. B4 suma «cuenta» y E6 dice previsto, parcial o cobrado.
  * Fase 15: fila 5 del reparto, el arrastre del mes anterior (solo cobrado, puede ser negativo), y E7 «Restante real»
  * (cobrado − fijos − gastos puntuales): lo que pasa al mes siguiente al apuntar su nómina (Ingresos.gs).
+ * Fase 16: E8 «Ahorro del mes» (lo que aparto yo − lo que retiro yo, por fecha dentro del periodo E2:E3). El Restante
+ * (B6) y el Restante real (E7) ya lo restan: lo apartado no se arrastra. Lo de la pareja y el saldo inicial no cuentan.
  */
 
 const MES_REPARTO_ = 'H2:K5';                                       // Resumen: una fila por tipo, de I a K previsto · cobrado · cuenta
 const MES_TIPOS_ = ['nómina', 'comisiones', 'extra', 'arrastre'];   // el orden de esas filas
 const MES_RESTANTE_REAL_ = 'E7';                                    // fase 15
+const MES_AHORRO_ = 'E8';                                           // fase 16
 
 const MES_CELDA_ = 'B1';            // Resumen: etiqueta del mes elegido
 const MES_PRIMERA_FILA_ = 10;       // Resumen: tabla por categoría, filas 10–129
@@ -124,6 +127,7 @@ function leerMesEnHoja_(libro, etiqueta) {
       periodo: resumen.getRange('E2:E3').getValues().map((f) => f[0]),    // periodo de los puntuales (fase 13)
       ingreso: resumen.getRange('E4:E6').getValues().map((f) => f[0]),    // previsto, cobrado, origen
       reparto: resumen.getRange(MES_REPARTO_).getValues(),                // fases 14 y 15: el ingreso por tipo
+      ahorro: resumen.getRange(MES_AHORRO_).getValue(),                   // fase 16: vacía antes de aplicarFase16 → 0
       tabla: resumen.getRange(MES_PRIMERA_FILA_, 1, MES_ULTIMA_FILA_ - MES_PRIMERA_FILA_ + 1, 7).getValues(),
       calculo: calculo.getLastRow() < 2 ? []
         : calculo.getRange(2, 1, calculo.getLastRow() - 1, MES_COLS_CALCULO_).getValues(),
@@ -184,7 +188,8 @@ function construirMes_(h, zona, pagos) {
       cobrado: redondear2_(h.ingreso[1]), origen: String(h.ingreso[2]),
       desglose: MES_TIPOS_.map((tipo, i) => ({ tipo: tipo, previsto: redondear2_(h.reparto[i][1]),
                                               cobrado: redondear2_(h.reparto[i][2]), cuenta: redondear2_(h.reparto[i][3]) })),
-      total_previsto: totalPrevisto, restante: redondear2_(h.cabecera[4]), pendiente: redondear2_(pendiente)
+      total_previsto: totalPrevisto, restante: redondear2_(h.cabecera[4]), pendiente: redondear2_(pendiente),
+      ahorro_mes: redondear2_(h.ahorro)
     },
     categorias: categorias,
     cuadra: Math.round(suma * 100) === Math.round(totalPrevisto * 100)
@@ -287,6 +292,9 @@ function comprobarCasoMes_(caso, r) {
   // Fase 14: el ingreso del mes es justo la suma de lo que cuenta de cada tipo (cobrado si hay, si no previsto).
   const cuenta = redondear2_(r.cabecera.desglose.reduce((s, d) => s + d.cuenta, 0));
   if (cuenta !== r.cabecera.ingreso) fallos.push('reparto ' + cuenta + ' ≠ ingreso ' + r.cabecera.ingreso);
+  // Fase 16: el restante es el ingreso menos lo previsto menos lo apartado a ahorro ese mes.
+  const restante = redondear2_(r.cabecera.ingreso - r.cabecera.total_previsto - (r.cabecera.ahorro_mes || 0));
+  if (restante !== r.cabecera.restante) fallos.push('restante ' + r.cabecera.restante + ' ≠ ' + restante);
   // El total depende de los datos reales (reglas nuevas, gastos puntuales): avisa, pero no es un fallo.
   const aviso = r.cabecera.total_previsto === caso.total ? ''
     : ' ⚠️ total ' + r.cabecera.total_previsto + ' (referencia ' + caso.total + ' sin gastos puntuales; este mes tiene ' +
@@ -301,7 +309,8 @@ function logMes_(r) {
   const c = r.cabecera;
   Logger.log('== ' + r.etiqueta + ' (inicio ' + r.mes_inicio + ') · ' + r.ms + ' ms');
   Logger.log('Ingreso ' + c.ingreso + ' (' + c.origen + '; previsto ' + c.previsto_ingreso + ', cobrado ' + c.cobrado +
-             ') · Total previsto ' + c.total_previsto + ' · Restante ' + c.restante + ' · Pendiente de pagar ' + c.pendiente);
+             ') · Total previsto ' + c.total_previsto + ' · Ahorro del mes ' + c.ahorro_mes + ' · Restante ' + c.restante +
+             ' · Pendiente de pagar ' + c.pendiente);
   r.categorias.forEach((k) => {
     Logger.log('  ' + k.nombre + ': total ' + k.total + ' (fijos ' + k.fijos + ', presupuesto ' + k.presupuesto +
                ', puntuales ' + k.puntuales + ', disponible ' + k.disponible + ')');
