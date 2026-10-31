@@ -347,8 +347,9 @@ y dos filas en Decisiones.
 **Fase 14 — Comisiones previstas y reparto del ingreso por tipo (v2.9) — en pruebas.** Detalle en la sección «Fase 14».
 `?v=` 7.13.0. Probado en local: `aplicarFase14()` con las fórmulas reales (comas y «;»; segunda vez sin cambios; si el
 reparto no da números, lo deshace todo y la hoja queda igual) y la interfaz en el iPhone 13 simulado (claro y oscuro).
-Falta: copiar Api.gs, Mes.gs, Ingresos.gs, Previstos.gs y Migraciones.gs, `aplicarFase14()`, Nueva versión, pruebas en el
-editor y en el iPhone.
+`aplicarFase14()` en la hoja real (31 oct): **a la primera**, todo ✅ (Meses D, reparto H1:K4, cabecera por tipo, Guía);
+noviembre: nómina cobrada 1.335,48 + comisiones cobradas 202,21 = ingreso 1.537,69 (cobrado), B7 = 0. Falta: Nueva
+versión, `probarPrevistos()`/`probarIngresos()`/`probarMes()` y pruebas en el iPhone.
 
 ## Fase 14 — Comisiones previstas y reparto del ingreso por tipo (v2.9)
 Hasta ahora había un solo previsto por mes (Meses C, la nómina) y `B4 = IF(E5>0, E5, E4)`: en cuanto se cobraba algo, todo
