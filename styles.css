@@ -478,6 +478,7 @@ input[type="checkbox"]:checked, input[type="radio"]:checked {
   border-radius: 12px; background: var(--fondo); color: var(--texto); }
 .reparto-editar .btn-suave { height: 40px; padding: 0 14px; border-radius: 12px; }
 .reparto-editar .estado { flex-basis: 100%; margin: 0; }
+.reparto-siguientes { flex-basis: 100%; display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--secundario); }
 .reparto-editar .estado:empty { display: none; }
 .reparto-lineas:empty { display: none !important; }
 .reparto-lineas { padding-top: 8px; border-top: 1px dashed var(--borde); }

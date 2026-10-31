@@ -786,6 +786,7 @@ function pintarReparto(r) {
 }
 
 // «Nómina · prevista 1.370 € · cobrada 1.370 € ✓». Las comisiones salen siempre: desde aquí se pone su previsto.
+// La nómina y las comisiones llevan «Cambiar previsto» (los extras no tienen previsto).
 function lineaTipo(d, etiqueta) {
   const [nombre, prevista, cobrada] = NOMBRES_TIPO[d.tipo] || [d.tipo, 'previsto', 'cobrado'];
   const linea = crear('div', 'reparto-tipo');
@@ -795,7 +796,7 @@ function lineaTipo(d, etiqueta) {
   linea.append(crear('span', 'reparto-nombre', nombre),
     crear('span', 'reparto-cuenta', euros(d.cuenta) + (d.cobrado > 0 ? ' ✓' : '')),
     crear('span', 'reparto-detalle', detalle.join(' · ')));
-  if (d.tipo === 'comisiones') {
+  if (d.tipo === 'nómina' || d.tipo === 'comisiones') {
     const cambiar = crear('button', 'reparto-cambiar', 'Cambiar previsto');
     cambiar.type = 'button';
     cambiar.addEventListener('click', () => linea.append(formPrevisto(d, etiqueta, cambiar)));
@@ -805,26 +806,37 @@ function lineaTipo(d, etiqueta) {
 }
 
 // Campo de importe con Guardar y Cancelar. 0 quita el previsto. Si el servidor rechaza, el mensaje sale aquí mismo.
+// En la nómina, «También los meses siguientes» (una subida de sueldo dura). Un formulario a la vez.
 function formPrevisto(d, etiqueta, boton) {
   editandoPrevisto = etiqueta;
-  boton.disabled = true;
+  const botones = document.querySelectorAll('.reparto-cambiar');
+  botones.forEach((b) => { b.disabled = true; });
   const form = crear('form', 'reparto-editar');
   const campo = crear('input', 'campo-importe');
   campo.inputMode = 'decimal';
   campo.autocomplete = 'off';
   campo.value = d.previsto ? String(d.previsto).replace('.', ',') : '';
   campo.placeholder = '0';
-  campo.setAttribute('aria-label', 'Comisiones previstas');
+  const nombre = d.tipo === 'nómina' ? 'Nómina prevista' : 'Comisiones previstas';
+  campo.setAttribute('aria-label', nombre);
   const guardar = crear('button', 'btn-suave', 'Guardar');
   guardar.type = 'submit';
   const cancelar = crear('button', 'btn-suave', 'Cancelar');
   cancelar.type = 'button';
   const mensaje = crear('p', 'estado error');
-  form.append(campo, guardar, cancelar, mensaje);
+  form.append(campo, guardar, cancelar);
+  const siguientes = crear('input');
+  if (d.tipo === 'nómina') {
+    siguientes.type = 'checkbox';
+    const etiquetaSiguientes = crear('label', 'reparto-siguientes');
+    etiquetaSiguientes.append(siguientes, crear('span', null, 'También los meses siguientes'));
+    form.append(etiquetaSiguientes);
+  }
+  form.append(mensaje);
   const cerrar = () => {
     editandoPrevisto = null;
     form.remove();
-    boton.disabled = false;
+    botones.forEach((b) => { b.disabled = false; });
   };
   cancelar.addEventListener('click', cerrar);
   form.addEventListener('submit', async (e) => {
@@ -839,10 +851,16 @@ function formPrevisto(d, etiqueta, boton) {
     cambios.cambios++;
     cambios.enVuelo++;
     try {
-      const r = await api('previsto', { etiqueta, tipo: 'comisiones', importe: texto });
+      const params = { etiqueta, tipo: d.tipo, importe: texto };
+      if (siguientes.checked) params.siguientes = true;
+      const r = await api('previsto', params);
       cerrar();
       const mes = partirEtiqueta(etiqueta)[0].split(' ')[0].toLowerCase();
-      notificar('Comisiones previstas de ' + mes + ': ' + euros(r.anterior) + ' → ' + euros(r.importe), false);
+      const otros = (r.meses_cambiados || 1) - 1;
+      notificar(nombre + ' de ' + mes + ': ' + euros(r.anterior) + ' → ' + euros(r.importe) +
+        (otros ? ' (y ' + (otros === 1 ? 'el mes siguiente' : 'los ' + otros + ' meses siguientes') + ')' : ''), false);
+      // Los meses siguientes guardados en la caché ya no valen: se vuelven a pedir al visitarlos.
+      if (otros && r.mes) r.mes.meses.slice(r.mes.meses.indexOf(etiqueta) + 1).forEach((m) => cacheMes.delete(m));
       if (r.mes) {
         cacheMes.set(etiqueta, r.mes);   // el mes ya recalculado, en la misma respuesta
         if (mesDestino === etiqueta) {
