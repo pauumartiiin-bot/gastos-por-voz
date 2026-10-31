@@ -555,3 +555,113 @@ function aplicarFase16() {
   });
 }
 
+// Fase 17: el «1» de los mensuales en Cálculo!O (`IF($N2<>"", 1, 0)`) y el mismo trozo ya cambiado (`IF($N2<>"", $R2, 0)`).
+const MIG_O_ANTES_ = /IF\(\s*\$N(\d+)\s*<>\s*""\s*([,;])\s*1\s*[,;]\s*0\s*\)/;
+const MIG_O_DESPUES_ = /IF\(\s*\$N(\d+)\s*<>\s*""\s*[,;]\s*\$R\1\s*[,;]\s*0\s*\)/;
+
+/**
+ * Fase 17: recurrentes de varias veces al mes. Recurrentes!N «Veces_mes» (un valor, entero 1–10 o vacío = 1), Cálculo!R
+ * «Veces» (las veces de la regla; 1 en anuales, semanales y presupuestos, aunque N tenga algo) y, en los mensuales,
+ * Cálculo!O = R cuando hay cargo (los semanales no cambian). Como nadie tiene todavía más de 1 vez, los totales no deben
+ * moverse: se comprueba la suma de Cálculo!P y el Resumen (B5, B7) antes y después; si algo no cuadra, se deshace todo.
+ */
+function aplicarFase17() {
+  const libro = libro_();   // v1
+  conBloqueo_(() => {       // v1
+    const rec = libro.getSheetByName('Recurrentes');
+    const calc = libro.getSheetByName('Cálculo');
+    const resumen = libro.getSheetByName('Resumen');
+    const guia = libro.getSheetByName('Guía');
+    const ultima = calc.getLastRow();
+    const rangoO = calc.getRange(2, 15, ultima - 1, 1);
+    const formulasO = rangoO.getFormulas().map((f) => f[0]);
+    const sep = separadorDeHoja_(calc.getRange(2, 1, ultima - 1, 17).getFormulas());
+    const local = (formula) => formula.replace(/,/g, sep);   // estas fórmulas no llevan comas dentro de textos
+
+    // 1. Comprobaciones: nada se escribe si algo no cuadra.
+    const n1 = rec.getRange(1, VEC_COL_).getValue();
+    const yaN = n1 === 'Veces_mes';
+    if (!yaN && n1 !== '') return Logger.log('❌ Recurrentes!N1 no está vacía («' + n1 + '»). No se ha cambiado nada.');
+    const r1 = calc.getRange(1, 18).getValue();
+    const yaR = r1 === 'Veces';
+    if (!yaR && r1 !== '') return Logger.log('❌ Cálculo!R1 no está vacía («' + r1 + '»). No se ha cambiado nada.');
+    const conFormula = formulasO.filter((f) => f);
+    const porCambiar = conFormula.filter((f) => MIG_O_ANTES_.test(f)).length;
+    const cambiadas = conFormula.filter((f) => MIG_O_DESPUES_.test(f)).length;
+    if (porCambiar + cambiadas !== conFormula.length || !conFormula.length) {
+      return Logger.log('❌ Cálculo!O no tiene la fórmula esperada en todas sus filas (' + porCambiar + ' por cambiar + ' + cambiadas +
+                        ' ya cambiadas de ' + conFormula.length + '). No se ha cambiado nada.\nO2: ' + formulasO[0]);
+    }
+    SpreadsheetApp.flush();
+    const sumaP = () => calc.getRange(2, 16, ultima - 1, 1).getValues().reduce((t, f) => t + (Number(f[0]) || 0), 0);
+    const antes = { p: sumaP(), b5: resumen.getRange('B5').getValue(), b7: resumen.getRange('B7').getValue() };
+
+    const reglaN = rec.getRange(2, VEC_COL_, rec.getMaxRows() - 1, 1);
+    const deshacer = (motivo) => {
+      rangoO.setFormulas(formulasO.map((f) => [f]));
+      if (!yaR) calc.getRange(1, 18, ultima, 1).clearContent();
+      if (!yaN) { rec.getRange(1, VEC_COL_).clearContent(); reglaN.setDataValidation(null); }
+      Logger.log('❌ ' + motivo + ' Se ha deshecho: no se ha cambiado nada (separador «' + sep + '»).');
+    };
+
+    // 2. Recurrentes!N «Veces_mes»: un valor (nada de fórmulas: la v1 escribe tras getLastRow()).
+    if (!yaN) {
+      rec.getRange(1, VEC_COL_).setValue('Veces_mes').setFontWeight('bold');
+      reglaN.setDataValidation(SpreadsheetApp.newDataValidation()
+        .requireFormulaSatisfied(local('=AND(INT(N2)=N2, N2>=1, N2<=10)'))
+        .setHelpText('Solo mensuales: veces al mes (entero del 1 al 10). Vacío = 1.').setAllowInvalid(false).build());
+      Logger.log('✅ Recurrentes: N «Veces_mes» (entero 1–10 o vacío)');
+    } else {
+      Logger.log('· Recurrentes: N ya estaba');
+    }
+
+    // 3. Cálculo!R «Veces» y O de los mensuales = R. Solo se cambia ese trozo de O; el resto de la fórmula, tal cual.
+    if (!yaR) {
+      calc.getRange(1, 18).setValue('Veces');
+      const filas = [];
+      for (let r = 2; r <= ultima; r++) {
+        filas.push([local('=IF(OR($A' + r + '="",$E' + r + '<>"mensual",$D' + r + '="presupuesto"),1,' +
+                          'IF(INDEX(Recurrentes!$N:$N,ROW())="",1,INDEX(Recurrentes!$N:$N,ROW())))')]);
+      }
+      calc.getRange(2, 18, filas.length, 1).setFormulas(filas);
+      Logger.log('✅ Cálculo: R «Veces» en las filas 2–' + ultima);
+    } else {
+      Logger.log('· Cálculo: R ya estaba');
+    }
+    if (porCambiar) {
+      rangoO.setFormulas(formulasO.map((f) => [f.replace(MIG_O_ANTES_, (m, n, s1) => 'IF($N' + n + '<>""' + s1 + '$R' + n + s1 + '0)')]));
+      Logger.log('✅ Cálculo: O de los mensuales usa R (' + porCambiar + ' filas)');
+    } else {
+      Logger.log('· Cálculo: O ya usaba R');
+    }
+
+    // 4. Comprobación: R y O con números y los totales iguales que antes (nadie tiene aún más de 1 vez).
+    SpreadsheetApp.flush();
+    const r = calc.getRange(2, 18, ultima - 1, 1).getValues().map((f) => f[0]);
+    const o = rangoO.getValues().map((f) => f[0]);
+    const despues = { p: sumaP(), b5: resumen.getRange('B5').getValue(), b7: resumen.getRange('B7').getValue() };
+    const igual = (x, y) => Math.round(Number(x) * 100) === Math.round(Number(y) * 100);
+    if (!r.every((v) => typeof v === 'number') || !o.every((v) => typeof v === 'number') ||
+        !igual(despues.p, antes.p) || !igual(despues.b5, antes.b5) || despues.b7 !== 0) {
+      return deshacer('Cálculo o el Resumen no dan lo esperado (R «' + calc.getRange(2, 18).getDisplayValue() + '», O «' +
+                      calc.getRange(2, 15).getDisplayValue() + '», suma de P ' + antes.p + ' → ' + despues.p + ', B5 ' + antes.b5 +
+                      ' → ' + despues.b5 + ', B7 ' + despues.b7 + ').');
+    }
+
+    // 5. Guía.
+    const filasGuia = guia.getRange(1, 1, guia.getLastRow(), 2).getValues();
+    if (!filasGuia.some((f) => f[1] === 'Veces_mes')) {
+      const nuevas = [
+        ['Recurrentes', 'Veces_mes', 'Solo mensuales que no son presupuesto: cuántas veces se cobra al mes (el importe es el de cada vez: 12 € y 2 veces = 24 €/mes). Vacío = 1. En «Mes», cada vez tiene su casilla de pagado. Se cambia en «Mis registros».', 'Entero 1–10 o vacío', '2'],
+        ['Cálculo', 'R Veces', 'Las veces al mes de la regla (1 en anuales, semanales y presupuestos). Veces_en_mes (O) la usa en los mensuales.', 'Solo fórmulas: no editar', '']
+      ];
+      guia.getRange(guia.getLastRow() + 1, 1, nuevas.length, 5).setValues(nuevas);
+      Logger.log('✅ Guía: 2 filas nuevas');
+    } else {
+      Logger.log('· Guía: las filas ya estaban');
+    }
+    Logger.log('✅ ' + resumen.getRange('B1').getValue() + ': total previsto ' + despues.b5 + ' (antes ' + antes.b5 + ') · suma de Cálculo!P ' +
+               Math.round(despues.p * 100) / 100 + ' (antes ' + Math.round(antes.p * 100) / 100 + ') · B7 = ' + despues.b7);
+  });
+}
+
