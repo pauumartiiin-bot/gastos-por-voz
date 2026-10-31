@@ -30,7 +30,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800&display=swap">
   <!-- ?v= obliga al navegador a descargar los archivos nuevos en cada versión -->
-  <link rel="stylesheet" href="styles.css?v=7.16.0">
+  <link rel="stylesheet" href="styles.css?v=7.17.0">
 </head>
 <body>
   <div class="halo halo-a" aria-hidden="true"></div>
@@ -116,6 +116,10 @@
               <option value="1">1 (cada mes)</option><option value="2">2</option><option value="3">3 (trimestral)</option>
               <option value="4">4</option><option value="6">6 (semestral)</option>
             </select>
+          </label>
+          <label id="campo-gasto-veces" class="campo oculto" for="gasto-veces">Veces al mes
+            <select id="gasto-veces"></select>
+            <small>Si se cobra varias veces al mes (el barbero, dos veces). El importe es el de cada vez.</small>
           </label>
           <label id="campo-gasto-fin" class="campo oculto" for="gasto-fin">Último cargo (opcional)
             <input id="gasto-fin" type="date">
@@ -339,7 +343,7 @@
     </button>
   </nav>
 
-  <script src="config.js?v=7.16.0"></script>
-  <script src="app.js?v=7.16.0"></script>
+  <script src="config.js?v=7.17.0"></script>
+  <script src="app.js?v=7.17.0"></script>
 </body>
 </html>
