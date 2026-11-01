@@ -352,14 +352,93 @@ async function ejecutar(btn, mensajeEspera, fn) {
 // Una sola para las dos vistas: el servidor solo puede deshacer la última acción.
 let temporizador = 0;
 
+let finNotificacion = 0;   // cuándo se oculta sola (para reanudar la cuenta tras un deslizamiento a medias)
+
 function notificar(texto, conDeshacer, esError = false) {
-  clearTimeout(temporizador);
   $('notificacion-texto').textContent = texto;
   $('notificacion-texto').classList.toggle('error', esError);
   mostrar('deshacer', conDeshacer);
   $('deshacer').disabled = false;
+  const n = $('notificacion');
+  n.classList.remove('saliendo', 'volviendo');
+  n.style.transform = '';
+  n.style.opacity = '';
   mostrar('notificacion', true);
-  temporizador = setTimeout(() => mostrar('notificacion', false), conDeshacer ? MS_NOTIFICACION : 3000);
+  programarCierre(conDeshacer ? MS_NOTIFICACION : 3000);
+}
+
+function programarCierre(ms) {
+  clearTimeout(temporizador);
+  finNotificacion = Date.now() + ms;
+  temporizador = setTimeout(cerrarNotificacion, ms);
+}
+
+function cerrarNotificacion() {
+  clearTimeout(temporizador);
+  const n = $('notificacion');
+  mostrar('notificacion', false);
+  n.classList.remove('saliendo', 'volviendo');
+  n.style.transform = '';
+  n.style.opacity = '';
+}
+
+/*
+ * Fase 18.1: la notificación se quita deslizándola hacia abajo. Sigue al dedo solo hacia abajo y se va apagando; al
+ * soltar pasados 40 px (o con un gesto rápido) sale del todo, si no vuelve a su sitio. Mientras el dedo está encima, la
+ * cuenta atrás se para y luego sigue (mínimo 1,5 s). Quitarla no deshace nada. Si el gesto empezó en «Deshacer» y el
+ * dedo se ha movido, ese toque no deshace.
+ */
+const SALIDA_PX = 40;
+const SALIDA_VELOCIDAD = 0.5;   // px/ms hacia abajo
+const MOVIMIENTO_PX = 10;       // a partir de aquí ya no es un toque, es un deslizamiento
+let gesto = null;               // { id, y0, t0, dy, movido, restante }
+
+function iniciarGesto(e) {
+  if (gesto) return;
+  ignorarClic = false;   // un deslizamiento anterior que no llegó a dar «click» no puede comerse este toque
+  gesto = { id: e.pointerId, y0: e.clientY, t0: Date.now(), dy: 0, movido: false,
+            restante: Math.max(1500, finNotificacion - Date.now()) };
+  clearTimeout(temporizador);   // la cuenta se para mientras el dedo está encima
+  const n = $('notificacion');
+  n.classList.remove('volviendo', 'saliendo');
+  n.setPointerCapture(e.pointerId);
+}
+
+function moverGesto(e) {
+  if (!gesto || e.pointerId !== gesto.id) return;
+  const dy = Math.max(0, e.clientY - gesto.y0);   // solo hacia abajo
+  gesto.dy = dy;
+  if (Math.abs(e.clientY - gesto.y0) > MOVIMIENTO_PX) gesto.movido = true;
+  const n = $('notificacion');
+  n.style.transform = 'translateY(' + dy + 'px)';
+  n.style.opacity = String(Math.max(0, 1 - dy / 120));
+}
+
+function terminarGesto(e) {
+  if (!gesto || e.pointerId !== gesto.id) return;
+  const { dy, t0, restante, movido } = gesto;
+  const velocidad = dy / Math.max(1, Date.now() - t0);
+  const n = $('notificacion');
+  if (n.hasPointerCapture(e.pointerId)) n.releasePointerCapture(e.pointerId);
+  gesto = null;
+  if (movido) ignorarClic = true;   // el «click» que llega tras soltar no es un toque en «Deshacer»
+  if (e.type !== 'pointercancel' && (dy > SALIDA_PX || (movido && velocidad > SALIDA_VELOCIDAD))) {
+    n.classList.add('saliendo');
+    n.style.transform = 'translateY(120%)';
+    n.style.opacity = '0';
+    setTimeout(cerrarNotificacion, sinAnimaciones() ? 0 : 170);
+    return;
+  }
+  n.classList.add('volviendo');
+  n.style.transform = '';
+  n.style.opacity = '';
+  programarCierre(restante);
+}
+
+let ignorarClic = false;
+
+function sinAnimaciones() {
+  return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
 /* ---------- Nueva categoría (fase 7b) ---------- */
@@ -1275,27 +1354,77 @@ const NOMBRES_AHORRO = { inicial: 'Saldo inicial', 'aportación': 'Aportación',
 function tarjetaAhorro(m) {
   const chips = [crear('span', 'chip', fecha(m.fecha)), crear('span', 'chip chip-prim', NOMBRES_AHORRO[m.tipo] || m.tipo)];
   if (m.quien) chips.push(crear('span', 'chip chip-acento', m.quien === 'yo' ? 'Tú' : 'Pareja'));
-  return tarjetaLista(m.id, m.concepto, m.tipo === 'retirada' ? -m.importe : m.importe, chips, () => {
-    const editor = crear('div', 'editor');
-    const eliminar = crear('button', 'btn-peligro', 'Eliminar');
-    eliminar.type = 'button';
-    dosToques(eliminar, async () => {
-      eliminar.disabled = true;
-      estadoAhorro('estado-ahorro', 'Eliminando…');
-      try {
-        const r = await api('borrar_ahorro', { id: m.id });
-        abierto = null;
-        estadoAhorro('estado-ahorro', '');
-        notificar(r.desc, true);
-        aplicarAhorro(r);
-      } catch (err) {
-        estadoAhorro('estado-ahorro', err.message, true);
-        eliminar.disabled = false;
-      }
+  return tarjetaLista(m.id, m.concepto, m.tipo === 'retirada' ? -m.importe : m.importe, chips, () => editorAhorro(m), pintarAhorro);
+}
+
+// Guardar o eliminar un movimiento de ahorro: la respuesta trae los totales nuevos; los meses, se vuelven a pedir.
+async function accionAhorro(boton, espera, fn) {
+  boton.disabled = true;
+  estadoAhorro('estado-ahorro', espera);
+  try {
+    const r = await fn();
+    abierto = null;
+    estadoAhorro('estado-ahorro', '');
+    notificar(r.desc, true);
+    cacheMes.clear();
+    aplicarAhorro(r);
+  } catch (err) {
+    estadoAhorro('estado-ahorro', err.message, true);
+    boton.disabled = false;
+  }
+}
+
+/*
+ * Fase 18.3: editar un movimiento de ahorro (editar_ahorro). Concepto, importe, fecha y quién; del saldo inicial, solo
+ * el concepto y el importe. El tipo nunca. Un solo Deshacer para todo.
+ */
+function editorAhorro(m) {
+  const editor = crear('div', 'editor');
+  const esInicial = m.tipo === 'inicial';
+  const concepto = entrada('text', m.concepto);
+  concepto.maxLength = 60;
+  concepto.autocapitalize = 'sentences';
+  const importe = entrada('text', String(m.importe).replace('.', ','));
+  importe.inputMode = 'decimal';
+  editor.append(campo('Concepto', concepto), campo('Importe (€)', importe));
+  let dia = null;
+  let quien = null;
+  if (esInicial) {
+    editor.append(campoFijo('Fecha', fecha(m.fecha) + ' · no se cambia (no cuenta en ningún mes)'));
+  } else {
+    dia = entrada('date', m.fecha);
+    quien = document.createElement('select');
+    [['yo', 'Yo'], ['pareja', 'Pareja']].forEach(([v, t]) => {
+      const o = crear('option', null, t);
+      o.value = v;
+      o.selected = v === m.quien;
+      quien.append(o);
     });
-    editor.append(crear('p', 'aviso', 'Para corregirlo, elimínalo y vuelve a apuntarlo.'), eliminar);
-    return editor;
-  }, pintarAhorro);
+    editor.append(campo('Fecha', dia), campo('Quién', quien),
+      crear('p', 'aviso', 'Si cambias la fecha o quién, cambia el mes al que resta: solo lo tuyo cuenta en tu mes.'));
+  }
+  editor.append(campoFijo('Tipo', (NOMBRES_AHORRO[m.tipo] || m.tipo) + ' · no se cambia'));
+
+  const guardar = crear('button', 'btn-primario', 'Guardar cambios');
+  guardar.type = 'button';
+  guardar.addEventListener('click', () => accionAhorro(guardar, 'Guardando…', async () => {
+    const params = { id: m.id };
+    const c = concepto.value.replace(/\s+/g, ' ').trim();
+    if (!c) throw new Error('Escribe el concepto.');
+    if (c !== m.concepto) params.concepto = c;
+    const n = Math.round(Number(importe.value.replace(',', '.')) * 100) / 100;
+    if (!(n > 0)) throw new Error('Escribe un importe válido.');
+    if (n !== m.importe) params.importe = n;
+    if (dia && dia.value && dia.value !== m.fecha) params.fecha = dia.value;
+    if (quien && quien.value !== m.quien) params.quien = quien.value;
+    if (Object.keys(params).length === 1) throw new Error('No hay cambios que guardar.');
+    return api('editar_ahorro', params);
+  }));
+  const eliminar = crear('button', 'btn-peligro', 'Eliminar');
+  eliminar.type = 'button';
+  dosToques(eliminar, () => accionAhorro(eliminar, 'Eliminando…', () => api('borrar_ahorro', { id: m.id })));
+  editor.append(guardar, eliminar);
+  return editor;
 }
 
 /* ---------- Mis registros ---------- */
@@ -1312,7 +1441,7 @@ async function cargarRegistros() {
   estadoRegistros('Cargando…');
   try {
     const [r, i] = await Promise.all([api('registros'), api('ingresos')]);
-    registros = Object.assign(r, { ingresos: i.ingresos });
+    registros = Object.assign(r, { ingresos: i.ingresos, meses: i.meses });
     estadoRegistros('');
     pintarRegistros();
   } catch (err) {
@@ -1346,18 +1475,78 @@ function tarjetaRegistro(r, hoja) {
   return tarjetaLista(r.id, r.concepto, r.importe, chips, () => editorRegistro(r, hoja));
 }
 
-// Ingreso (fase 9): se ve con su tipo y el mes al que va; para corregirlo, se borra y se vuelve a apuntar.
+// Ingreso (fase 9): se ve con su tipo y el mes al que va. Desde la 18.3 se edita (editorIngreso).
 function tarjetaIngreso(i) {
   const chips = [crear('span', 'chip', fecha(i.fecha)), crear('span', 'chip chip-prim', i.tipo),
     crear('span', 'chip chip-acento', partirEtiqueta(i.mes)[0])];
-  return tarjetaLista(i.id, i.concepto, i.importe, chips, () => {
-    const editor = crear('div', 'editor');
-    const eliminar = crear('button', 'btn-peligro', 'Eliminar');
-    eliminar.type = 'button';
-    dosToques(eliminar, () => ejecutarRegistro(eliminar, 'Eliminando…', () => api('borrar_ingreso', { id: i.id })));
-    editor.append(crear('p', 'aviso', 'Para corregirlo, elimínalo y vuelve a apuntarlo en «Crear».'), eliminar);
+  return tarjetaLista(i.id, i.concepto, i.importe, chips, () => editorIngreso(i));
+}
+
+// Un dato que no se edita en este registro: se ve como texto, no como campo.
+function campoFijo(etiqueta, texto) {
+  const p = crear('p', 'campo-fijo');
+  p.append(crear('span', 'campo-fijo-etiqueta', etiqueta), crear('span', null, texto));
+  return p;
+}
+
+/*
+ * Fase 18.3: editar un ingreso (editar_ingreso). Concepto, importe, fecha y mes; de una nómina, no el mes; de un
+ * arrastre, nada (se corrige con «Recalcular»). El tipo nunca. Un solo Deshacer para todo. Si el cambio puede haber
+ * dejado viejo un arrastre, la notificación lo dice.
+ */
+function editorIngreso(i) {
+  const editor = crear('div', 'editor');
+  const eliminar = crear('button', 'btn-peligro', 'Eliminar');
+  eliminar.type = 'button';
+  dosToques(eliminar, () => ejecutarRegistro(eliminar, 'Eliminando…', () => api('borrar_ingreso', { id: i.id })));
+  if (i.tipo === 'arrastre') {
+    editor.append(crear('p', 'aviso', 'El arrastre no se edita: se corrige con «Recalcular» en «Mes» (toca el Ingreso del mes).'), eliminar);
     return editor;
-  });
+  }
+  const esNomina = i.tipo === 'nómina';
+  const concepto = entrada('text', i.concepto);
+  concepto.maxLength = 60;
+  concepto.autocapitalize = 'sentences';
+  const importe = entrada('text', String(i.importe).replace('.', ','));
+  importe.inputMode = 'decimal';
+  const dia = entrada('date', i.fecha);
+  editor.append(campo('Concepto', concepto), campo('Importe (€)', importe), campo('Día en que entra', dia));
+  let mes = null;
+  if (esNomina) {
+    editor.append(campoFijo('Mes', partirEtiqueta(i.mes)[0] + ' · no se cambia (bórrala y vuelve a apuntarla)'));
+  } else {
+    mes = document.createElement('select');
+    (registros.meses || []).forEach((m) => {
+      const o = crear('option', null, m.etiqueta);
+      o.value = m.etiqueta;
+      o.selected = m.etiqueta === i.mes;
+      mes.append(o);
+    });
+    editor.append(campo('Mes al que va', mes));
+  }
+  editor.append(campoFijo('Tipo', i.tipo + ' · no se cambia'));
+  if (esNomina) editor.append(crear('p', 'aviso', 'Cambiar la fecha mueve el inicio del mes: algún gasto puntual puede pasar de un mes a otro.'));
+
+  const guardar = crear('button', 'btn-primario', 'Guardar cambios');
+  guardar.type = 'button';
+  guardar.addEventListener('click', () => ejecutarRegistro(guardar, 'Guardando…', async () => {
+    const params = { id: i.id };
+    const c = concepto.value.replace(/\s+/g, ' ').trim();
+    if (!c) throw new Error('Escribe el concepto.');
+    if (c !== i.concepto) params.concepto = c;
+    const n = Math.round(Number(importe.value.replace(',', '.')) * 100) / 100;
+    if (!(n > 0)) throw new Error('Escribe un importe válido.');
+    if (n !== i.importe) params.importe = n;
+    if (dia.value && dia.value !== i.fecha) params.fecha = dia.value;
+    if (mes && mes.value !== i.mes) params.mes = mes.value;
+    if (Object.keys(params).length === 1) throw new Error('No hay cambios que guardar.');
+    const x = await api('editar_ingreso', params);
+    cacheMes.clear();   // la fecha de una nómina mueve el periodo de dos meses: mejor pedirlos todos otra vez
+    if (x.aviso) x.desc += ' · ' + x.aviso;
+    return x;
+  }));
+  editor.append(guardar, eliminar);
+  return editor;
 }
 
 // Tarjeta de una lista: la cabecera (concepto, importe y chips) despliega su editor. Solo una abierta a la vez.
@@ -1412,37 +1601,20 @@ function editorRegistro(r, hoja) {
   const esRec = hoja === 'Recurrentes';
   const editor = crear('div', 'editor');
 
-  // Nombre, con su propio botón: así cada cambio tiene su Deshacer (el servidor solo guarda el último).
+  // Fase 18.2: un solo «Guardar cambios» para todo (nombre, importe, categoría y veces), con un Deshacer que lo
+  // revierte todo junto (guardar_registro, Guardar.gs). Antes, el nombre y las veces tenían su propio botón.
   const nombre = entrada('text', r.concepto);
   nombre.maxLength = 60;
   nombre.autocapitalize = 'sentences';
-  const renombrar = crear('button', 'btn-suave', 'Cambiar nombre');
-  renombrar.type = 'button';
-  renombrar.addEventListener('click', () => ejecutarRegistro(renombrar, 'Cambiando el nombre…', () => {
-    const concepto = nombre.value.trim();
-    if (!concepto) throw new Error('Escribe el nombre nuevo.');
-    if (concepto === r.concepto) throw new Error('Es el mismo nombre que ya tiene.');
-    return api('renombrar', { hoja, id: r.id, concepto });
-  }));
-  editor.append(campo('Nombre', nombre), renombrar, crear('hr', 'separador'));
+  editor.append(campo('Nombre', nombre));
 
-  // Fase 17: veces al mes de un mensual (no presupuesto), con su botón y su Deshacer. Afecta a todos los meses: la caché fuera.
+  // Fase 17: veces al mes de un mensual (no presupuesto).
+  let veces = null;
   if (esRec && r.veces != null) {
-    const veces = document.createElement('select');
+    veces = document.createElement('select');
     opcionesVeces(veces, r.veces);
-    const cambiarVeces = crear('button', 'btn-suave', 'Cambiar');
-    cambiarVeces.type = 'button';
-    cambiarVeces.addEventListener('click', () => ejecutarRegistro(cambiarVeces, 'Cambiando las veces…', async () => {
-      const n = Number(veces.value);
-      if (n === r.veces) throw new Error('Ya se cobra ' + n + (n === 1 ? ' vez' : ' veces') + ' al mes.');
-      const x = await api('veces', { id: r.id, veces: n });
-      cacheMes.clear();
-      return x;
-    }));
-    const fila = crear('div', 'fila-veces');
-    fila.append(campo('Veces al mes', veces), cambiarVeces);
-    editor.append(fila, crear('small', 'ayuda-veces', 'El importe es el de cada vez: en «Mes», cada vez lleva su casilla.'),
-      crear('hr', 'separador'));
+    editor.append(campo('Veces al mes', veces),
+      crear('small', 'ayuda-veces', 'El importe es el de cada vez: en «Mes», cada vez lleva su casilla.'));
   }
 
   const importe = entrada('text', String(r.importe).replace('.', ','));
@@ -1477,20 +1649,26 @@ function editorRegistro(r, hoja) {
 
   const guardar = crear('button', 'btn-primario', 'Guardar cambios');
   guardar.type = 'button';
-  guardar.addEventListener('click', () => ejecutarRegistro(guardar, 'Guardando…', () => {
+  guardar.addEventListener('click', () => ejecutarRegistro(guardar, 'Guardando…', async () => {
+    const params = { hoja, id: r.id };
+    const concepto = nombre.value.replace(/\s+/g, ' ').trim();
+    if (!concepto) throw new Error('Escribe el nombre.');
+    if (concepto !== r.concepto) params.concepto = concepto;
     const cambios = {};
     const nuevo = Math.round(Number(importe.value.replace(',', '.')) * 100) / 100;
     if (!(nuevo > 0)) throw new Error('Escribe un importe válido.');
     if (nuevo !== r.importe) cambios.importe = nuevo;
     if (categoria.value !== r.categoria) cambios.categoria = categoria.value;
-    if (!Object.keys(cambios).length) throw new Error('No hay cambios que guardar.');
     if (cambios.importe != null && esCambioPrecio()) {
       cambios.modo = 'cambioPrecio';
       cambios.desde = desde.value;
-    } else {
-      cambios.modo = 'correccion';
     }
-    return api('editar', { hoja, id: r.id, cambios });
+    if (Object.keys(cambios).length) params.cambios = cambios;
+    if (veces && Number(veces.value) !== r.veces) params.veces = Number(veces.value);
+    if (!params.concepto && !params.cambios && !params.veces) throw new Error('No hay cambios que guardar.');
+    const x = await api('guardar_registro', params);
+    cacheMes.clear();   // el nombre, el importe o las veces salen en «Mes»
+    return x;
   }));
   editor.append(guardar);
 
@@ -1577,7 +1755,17 @@ $('descartar').addEventListener('click', () => {
   estado('Descartado. No se ha guardado nada.');
 });
 
-$('deshacer').addEventListener('click', async () => {
+$('notificacion').addEventListener('pointerdown', iniciarGesto);
+$('notificacion').addEventListener('pointermove', moverGesto);
+$('notificacion').addEventListener('pointerup', terminarGesto);
+$('notificacion').addEventListener('pointercancel', terminarGesto);
+
+$('deshacer').addEventListener('click', async (e) => {
+  if (ignorarClic) {   // fue un deslizamiento que empezó en el botón, no un toque
+    ignorarClic = false;
+    e.preventDefault();
+    return;
+  }
   clearTimeout(temporizador); // no se oculta mientras se deshace
   $('deshacer').disabled = true;
   $('notificacion-texto').textContent = 'Deshaciendo…';

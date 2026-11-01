@@ -246,6 +246,11 @@ button:disabled { cursor: default; opacity: 0.5; }
   align-items: center;
   animation: aparecer 0.2s ease-out;
 }
+/* Fase 18.1: se quita deslizándola hacia abajo. Solo ella captura el gesto (el resto de la app, pan-x pan-y). */
+.notificacion { touch-action: none; }
+.notificacion.volviendo { transition: transform 0.18s ease-out, opacity 0.18s ease-out; }
+.notificacion.saliendo { transition: transform 0.16s ease-in, opacity 0.16s ease-in; }
+@media (prefers-reduced-motion: reduce) { .notificacion.volviendo, .notificacion.saliendo { transition: none; } }
 .notificacion p { flex: 1; font-size: 15px; font-weight: 600; }
 .notificacion p.error { color: var(--error); }
 .notificacion .btn-suave { flex: 0 0 auto; padding: 0 18px; }
@@ -557,7 +562,8 @@ input[type="checkbox"]:checked, input[type="radio"]:checked {
 .ahorro-objetivo .reparto-cambiar { align-self: flex-start; }
 
 /* ---------- Veces al mes (fase 17) ---------- */
-.fila-veces { display: flex; gap: 10px; align-items: flex-end; }
-.fila-veces .campo { flex: 1; min-width: 0; }
-.fila-veces .btn-suave { height: 48px; padding: 0 16px; }
 .ayuda-veces { margin-top: -6px; font-size: 12px; color: var(--secundario); }
+
+/* Fase 18.3: un dato que no se edita en ese registro, como texto. */
+.campo-fijo { margin: 0; display: flex; flex-direction: column; gap: 4px; font-size: 15px; }
+.campo-fijo-etiqueta { font-size: 13px; font-weight: 600; color: var(--secundario); }
