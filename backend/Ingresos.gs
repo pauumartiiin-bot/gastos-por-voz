@@ -525,3 +525,149 @@ function probarArrastre() {
     Logger.log((igual ? '✅ ' : '❌ ') + 'Limpieza: Ingresos, Movimientos y el Deshacer pendiente como estaban');
   }
 }
+
+/* ---------- Fase 18.3: editar un ingreso ---------- */
+
+/**
+ * Acción "editar_ingreso": { id, concepto?, importe?, fecha?, mes? } → cambia lo que llegue, con las validaciones de
+ * apuntar y un Deshacer que lo devuelve todo (un paso «celda» por campo). No se cambia el tipo (de o a nómina toca la
+ * regla de una por mes, el periodo y el arrastre), ni el mes de una nómina (cambia qué mes cierra), y un arrastre no se
+ * edita (se corrige con «Recalcular»). Un cambio puede dejar viejo un arrastre: la respuesta lo avisa (`aviso`).
+ */
+function editarIngreso_(p) {
+  const libro = libro_();
+  const zona = libro.getSpreadsheetTimeZone();
+  const id = String(p.id == null ? '' : p.id);
+  const hoy = Utilities.formatDate(new Date(), zona, 'yyyy-MM-dd');
+  const meses = mesesDeLaHoja_(libro, zona).map((m) => m.etiqueta);   // Mes.gs
+  return conBloqueo_(() => {   // v1
+    const hoja = libro.getSheetByName(ING_HOJA_);
+    const fila = buscarFilaPorId_(hoja, id);   // v1
+    if (fila < 0) return { ok: false, error: 'rechazado', mensaje: 'Ese ingreso ya no existe (¿se borró a mano?). Recarga la lista.' };
+    const f = hoja.getRange(fila, 1, 1, 8).getValues()[0];
+    const tipo = String(f[4]);
+    const esNomina = normalizar(tipo) === 'nomina';   // v1
+    if (tipo === ING_ARRASTRE_) return { ok: false, error: 'rechazado', mensaje: 'El arrastre no se edita: usa «Recalcular» en «Mes».' };
+    if (p.tipo != null && String(p.tipo) !== tipo) {
+      return { ok: false, error: 'rechazado', mensaje: 'El tipo no se cambia: bórralo y vuelve a apuntarlo.' };
+    }
+    const antes = { concepto: String(f[3]), importe: redondear2_(f[5]), fecha: textoFecha_(f[1], zona), mes: String(f[2]) };
+    const despues = Object.assign({}, antes);
+    if (p.concepto != null) despues.concepto = String(p.concepto).replace(/\s+/g, ' ').trim();
+    if (p.importe != null && p.importe !== '') despues.importe = Math.round(Number(String(p.importe).replace(',', '.')) * 100) / 100;
+    if (p.fecha != null) despues.fecha = String(p.fecha);
+    if (p.mes != null) despues.mes = String(p.mes);
+    if (esNomina && despues.mes !== antes.mes) {
+      return { ok: false, error: 'rechazado', mensaje: 'El mes de una nómina no se cambia: bórrala y vuelve a apuntarla (así se recalcula su arrastre).' };
+    }
+    const cambia = Object.keys(antes).filter((k) => despues[k] !== antes[k]);
+    if (!cambia.length) return { ok: false, error: 'rechazado', mensaje: 'No hay cambios que guardar.' };
+    if (meses.indexOf(despues.mes) < 0) return { ok: false, error: 'entrada' };
+    if (!despues.concepto) return { ok: false, error: 'rechazado', mensaje: 'Escribe el concepto.' };
+    const error = validarIngreso_(despues.importe, despues.fecha, despues.concepto, hoy);
+    if (error) return { ok: false, error: 'rechazado', mensaje: error };
+
+    // Escribir y apuntar un Deshacer con un paso «celda» por campo (la v1 busca la fila por el ID de la columna A).
+    const columnas = { fecha: 2, mes: 3, concepto: 4, importe: 6 };
+    const pasos = cambia.map((k) => {
+      const col = columnas[k];
+      const anterior = f[col - 1];
+      hoja.getRange(fila, col).setValue(k === 'fecha' ? fechaSerial_(despues.fecha) : despues[k]);   // v1
+      return { op: 'celda', hoja: ING_HOJA_, id: id, col: col, valor: aJSON_(anterior) };   // v1
+    });
+    apuntarDeshacer_('Deshechos los cambios de «' + despues.concepto + '»', pasos);   // v1
+
+    const textos = { concepto: () => '«' + antes.concepto + '» → «' + despues.concepto + '»',
+                     importe: () => textoEuros_(antes.importe) + ' → ' + textoEuros_(despues.importe),
+                     fecha: () => antes.fecha.split('-').reverse().join('/') + ' → ' + despues.fecha.split('-').reverse().join('/'),
+                     mes: () => antes.mes.split(' (')[0] + ' → ' + despues.mes.split(' (')[0] };
+    return { id: id, desc: '«' + despues.concepto + '»: ' + cambia.map((k) => textos[k]()).join(' · '),
+             aviso: avisoArrastre_(hoja, meses, [antes.mes, despues.mes], esNomina) };
+  });
+}
+
+/**
+ * Arrastres que el cambio puede haber dejado viejos (son fotos, fase 15): el del mes siguiente a cada mes tocado y, si es
+ * una nómina (su fecha mueve el periodo del mes anterior), el de su propio mes. Texto para la notificación, o null.
+ */
+function avisoArrastre_(hoja, meses, tocados, esNomina) {
+  const viejos = [];
+  tocados.forEach((m) => {
+    const i = meses.indexOf(m);
+    const candidatos = [meses[i + 1]].concat(esNomina ? [m] : []);
+    candidatos.filter((x) => x && viejos.indexOf(x) < 0 && filaArrastre_(hoja, x)).forEach((x) => viejos.push(x));
+  });
+  if (!viejos.length) return null;
+  const nombres = viejos.map((x) => x.split(' (')[0]);
+  return 'El arrastre de ' + nombres.join(' y ') + ' puede haber cambiado: usa «Recalcular» en «Mes».';
+}
+
+/**
+ * Prueba desde el editor (fase 18.3), en los dos últimos meses de Meses: un extra y una nómina de prueba (fecha de hoy) y
+ * un arrastre de prueba. Limpieza en finally: Ingresos y el Deshacer pendiente como estaban.
+ */
+function probarEditarIngreso() {
+  const libro = libro_();
+  const zona = libro.getSpreadsheetTimeZone();
+  const hoy = Utilities.formatDate(new Date(), zona, 'yyyy-MM-dd');
+  const hoja = libro.getSheetByName(ING_HOJA_);
+  const props = PropertiesService.getScriptProperties();
+  const token = props.getProperty('TOKEN');
+  const ultimo = props.getProperty('ULTIMO');
+  const filasAntes = hoja.getLastRow();
+  const meses = mesesDeLaHoja_(libro, zona);   // Mes.gs
+  const n = meses[meses.length - 2];
+  const n1 = meses[meses.length - 1];
+  const ids = [];
+  const valor = (id, col) => { const f = buscarFilaPorId_(hoja, id); return f > 0 ? hoja.getRange(f, col).getValue() : null; };
+  const log = (bien, texto) => Logger.log((bien ? '✅ ' : '❌ ') + texto);
+  if (leerIngresos_(hoja, zona).some((i) => i.mes === n.etiqueta || i.mes === n1.etiqueta)) {
+    return Logger.log('⚠️ ' + n.etiqueta + ' o ' + n1.etiqueta + ' ya tienen ingresos: no se prueba para no tocar datos reales.');
+  }
+  try {
+    // Un extra: concepto + importe → cambian; un Deshacer devuelve los dos.
+    const extra = apuntarIngreso_({ tipo: 'extra', importe: 50, fecha: hoy, mes: n1.etiqueta, concepto: 'Prueba 18 extra' }).id;
+    ids.push(extra);
+    const a = editarIngreso_({ id: extra, concepto: 'Prueba 18 cambiado', importe: '60,5' });
+    const a1 = [valor(extra, 4), valor(extra, 6)];
+    const d = deshacer(token);   // v1
+    const a2 = [valor(extra, 4), valor(extra, 6)];
+    log(a1.join() === 'Prueba 18 cambiado,60.5' && a2.join() === 'Prueba 18 extra,50', 'Concepto + importe → ' + a.desc +
+        ' · Deshacer → ' + d.desc + ' · vuelve a ' + a2.join(' · '));
+
+    // Importe no válido → rechazado sin cambiar nada; sin cambios → rechazado.
+    const antes = props.getProperty('ULTIMO');
+    const b = editarIngreso_({ id: extra, concepto: 'No debería', importe: 0 });
+    log(b.error === 'rechazado' && valor(extra, 4) === 'Prueba 18 extra' && props.getProperty('ULTIMO') === antes,
+        'Importe 0 con un concepto válido → ' + (b.mensaje || b.error));
+    const s = editarIngreso_({ id: extra, concepto: 'Prueba 18 extra' });
+    log(s.error === 'rechazado', 'Sin cambios → ' + (s.mensaje || s.error));
+
+    // Nómina: el mes y el tipo no se cambian; la fecha sí, y mueve el inicio del periodo de su mes (Meses E).
+    const r = apuntarIngreso_({ tipo: 'nómina', importe: 1000, fecha: hoy, mes: n1.etiqueta, concepto: 'Prueba 18 nómina' });
+    ids.push(r.id);
+    if (r.arrastre) ids.push(r.arrastre.id);
+    const m = editarIngreso_({ id: r.id, mes: n.etiqueta });
+    const t = editarIngreso_({ id: r.id, tipo: 'extra' });
+    log(m.error === 'rechazado' && t.error === 'rechazado', 'Nómina: cambiar el mes → ' + (m.mensaje || m.error) + ' · el tipo → ' + (t.mensaje || t.error));
+    const ayer = sumarDias_(hoy, -1);
+    const f1 = editarIngreso_({ id: r.id, fecha: ayer });
+    const periodo = mesesDeLaHoja_(libro, zona).filter((x) => x.etiqueta === n1.etiqueta)[0].periodo_inicio;
+    log(f1.ok !== false && periodo === ayer, 'Nómina: fecha → ' + (f1.desc || f1.mensaje) + ' · el periodo de ' + n1.etiqueta + ' empieza el ' + periodo);
+
+    // Arrastre: no se edita. Y mover el extra a N avisa del arrastre de N+1.
+    const idArr = siguienteId_(hoja, 'I');   // v1
+    escribirFila_(hoja, [idArr, fechaSerial_(hoy), n1.etiqueta, 'Prueba 18 arrastre', ING_ARRASTRE_, 10, '', ahoraSerial_()], ING_FORMATOS_);
+    ids.push(idArr);
+    const e = editarIngreso_({ id: idArr, importe: 20 });
+    log(e.error === 'rechazado' && /Recalcular/.test(e.mensaje || ''), 'Arrastre → ' + (e.mensaje || e.error));
+    const v = editarIngreso_({ id: extra, mes: n.etiqueta });
+    log(v.ok !== false && /arrastre/.test(v.aviso || ''), 'Extra de ' + n1.etiqueta.split(' (')[0] + ' a ' + n.etiqueta.split(' (')[0] + ' → aviso: ' + v.aviso);
+  } finally {
+    leerIngresos_(hoja, zona).filter((i) => i.mes === n.etiqueta || i.mes === n1.etiqueta || ids.indexOf(i.id) >= 0)
+      .forEach((i) => { let f; while ((f = buscarFilaPorId_(hoja, i.id)) > 0) hoja.deleteRow(f); });
+    if (ultimo === null) props.deleteProperty('ULTIMO');
+    else props.setProperty('ULTIMO', ultimo);
+    log(hoja.getLastRow() === filasAntes && props.getProperty('ULTIMO') === ultimo, 'Limpieza: Ingresos y el Deshacer pendiente como estaban');
+  }
+}

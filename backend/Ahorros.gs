@@ -370,3 +370,132 @@ function probarAhorros() {
     Logger.log((igual ? '✅ ' : '❌ ') + 'Limpieza: Ahorros, Objetivos y el Deshacer pendiente como estaban');
   }
 }
+
+/* ---------- Fase 18.3: editar un movimiento de ahorro ---------- */
+
+/**
+ * Acción "editar_ahorro": { id, concepto?, importe?, fecha?, quien? } → cambia lo que llegue, con las validaciones de
+ * apuntar y un Deshacer que lo devuelve todo (un paso «celda» por campo). El tipo no se cambia (de aportación a retirada
+ * es otro movimiento); del saldo inicial solo el concepto y el importe (es único y no cuenta en ningún mes). El total
+ * ahorrado nunca queda en negativo. La respuesta trae los meses afectados y los totales recalculados.
+ */
+function editarAhorro_(p) {
+  const libro = libro_();
+  const zona = libro.getSpreadsheetTimeZone();
+  const id = String(p.id == null ? '' : p.id);
+  const hoy = Utilities.formatDate(new Date(), zona, 'yyyy-MM-dd');
+  const r = conBloqueo_(() => {   // v1
+    const hoja = libro.getSheetByName(AHO_HOJA_);
+    const fila = hoja ? buscarFilaPorId_(hoja, id) : -1;   // v1
+    if (fila < 0) return { ok: false, error: 'rechazado', mensaje: 'Ese movimiento ya no existe (¿se borró a mano?). Recarga la lista.' };
+    const f = hoja.getRange(fila, 1, 1, 8).getValues()[0];
+    const tipo = String(f[2]);
+    if (p.tipo != null && String(p.tipo) !== tipo) {
+      return { ok: false, error: 'rechazado', mensaje: 'El tipo no se cambia: bórralo y vuelve a apuntarlo.' };
+    }
+    const antes = { concepto: String(f[4]), importe: redondear2_(f[5]), fecha: textoFecha_(f[1], zona), quien: String(f[3]) };
+    const despues = Object.assign({}, antes);
+    if (p.concepto != null) despues.concepto = String(p.concepto).replace(/\s+/g, ' ').trim();
+    if (p.importe != null && p.importe !== '') despues.importe = Math.round(Number(String(p.importe).replace(',', '.')) * 100) / 100;
+    if (p.fecha != null) despues.fecha = String(p.fecha);
+    if (p.quien != null) despues.quien = String(p.quien);
+    if (tipo === 'inicial') {
+      if (despues.fecha !== antes.fecha) return { ok: false, error: 'rechazado', mensaje: 'La fecha del saldo inicial no se cambia: no cuenta en ningún mes.' };
+      if (despues.quien !== antes.quien) return { ok: false, error: 'rechazado', mensaje: 'El saldo inicial no es de nadie: no tiene «quién».' };
+    } else if (AHO_QUIEN_.indexOf(despues.quien) < 0) {
+      return { ok: false, error: 'entrada' };
+    }
+    const cambia = Object.keys(antes).filter((k) => despues[k] !== antes[k]);
+    if (!cambia.length) return { ok: false, error: 'rechazado', mensaje: 'No hay cambios que guardar.' };
+    if (!despues.concepto) return { ok: false, error: 'rechazado', mensaje: 'Escribe el concepto.' };
+    const error = validarAhorro_(despues.importe, despues.fecha, despues.concepto, hoy);
+    if (error) return { ok: false, error: 'rechazado', mensaje: error };
+    // El total con el cambio: lo de antes sale y entra lo de ahora (una retirada resta).
+    const efecto = (importe) => (tipo === 'retirada' ? -importe : importe);
+    const total = redondear2_(totalAhorrado_(libro) - efecto(antes.importe) + efecto(despues.importe));
+    if (total < 0) return { ok: false, error: 'rechazado', mensaje: 'No se puede: el total ahorrado quedaría en ' + textoEuros_(total) + '.' };   // Ingresos.gs
+
+    const columnas = { fecha: 2, quien: 4, concepto: 5, importe: 6 };
+    const pasos = cambia.map((k) => {
+      const col = columnas[k];
+      const anterior = f[col - 1];
+      hoja.getRange(fila, col).setValue(k === 'fecha' ? fechaSerial_(despues.fecha) : despues[k]);   // v1
+      return { op: 'celda', hoja: AHO_HOJA_, id: id, col: col, valor: aJSON_(anterior) };   // v1
+    });
+    apuntarDeshacer_('Deshechos los cambios de «' + despues.concepto + '»', pasos);   // v1
+
+    const nombreQuien = (q) => (q === 'yo' ? 'tú' : q === 'pareja' ? 'pareja' : '—');
+    const textos = { concepto: () => '«' + antes.concepto + '» → «' + despues.concepto + '»',
+                     importe: () => textoEuros_(antes.importe) + ' → ' + textoEuros_(despues.importe),
+                     fecha: () => antes.fecha.split('-').reverse().join('/') + ' → ' + despues.fecha.split('-').reverse().join('/'),
+                     quien: () => nombreQuien(antes.quien) + ' → ' + nombreQuien(despues.quien) };
+    // Los meses que cambian (el de antes y el de ahora, si cuentan en un mes), para que la app los vuelva a pedir.
+    const meses = [[antes.quien, antes.fecha], [despues.quien, despues.fecha]]
+      .filter(([q]) => cuentaEnMes_(tipo, q)).map(([, fecha]) => mesDeFecha_(libro, fecha, zona)).filter((m, i, a) => m && a.indexOf(m) === i);
+    return { id: id, desc: '«' + despues.concepto + '»: ' + cambia.map((k) => textos[k]()).join(' · '), meses: meses };
+  });
+  if (r.ok === false) return r;
+  return Object.assign(r, { ahorros: leerAhorros_(libro) });
+}
+
+/**
+ * Prueba desde el editor (fase 18.3). Mes de hoy; se comprueban diferencias, así que vale con datos reales. Limpieza en
+ * finally: Ahorros (también el importe del saldo inicial real, si lo hay) y el Deshacer pendiente como estaban.
+ */
+function probarEditarAhorro() {
+  const libro = libro_();
+  const zona = libro.getSpreadsheetTimeZone();
+  const hoy = Utilities.formatDate(new Date(), zona, 'yyyy-MM-dd');
+  const hoja = libro.getSheetByName(AHO_HOJA_);
+  if (!hoja) return Logger.log('❌ Falta la pestaña Ahorros: ejecuta antes aplicarFase16().');
+  const props = PropertiesService.getScriptProperties();
+  const token = props.getProperty('TOKEN');
+  const ultimo = props.getProperty('ULTIMO');
+  const filasAntes = hoja.getLastRow();
+  const mes = mesDeFecha_(libro, hoy, zona);
+  const cab = () => mes_({ etiqueta: mes }).cabecera;   // Mes.gs
+  const ids = [];
+  const valor = (id, col) => { const f = buscarFilaPorId_(hoja, id); return f > 0 ? hoja.getRange(f, col).getValue() : null; };
+  const log = (bien, texto) => Logger.log((bien ? '✅ ' : '❌ ') + texto);
+  const inicialReal = leerMovimientosAhorro_(hoja, zona).filter((m) => m.tipo === 'inicial')[0];
+  const importeInicialReal = inicialReal ? valor(inicialReal.id, 6) : null;
+  try {
+    // Aportación mía de 100 pasada a «pareja» → el ahorro del mes baja 100 y el total no cambia; Deshacer la devuelve.
+    const ap = apuntarAhorro_({ tipo: 'aportación', quien: 'yo', importe: 100, fecha: hoy, concepto: 'Prueba 18' });
+    ids.push(ap.id);
+    const c1 = cab();
+    const a = editarAhorro_({ id: ap.id, quien: 'pareja' });
+    const c2 = cab();
+    log(a.ok !== false && c2.ahorro_mes === redondear2_(c1.ahorro_mes - 100) && a.ahorros.total === ap.ahorros.total && a.meses.join() === mes,
+        'De «yo» a «pareja» → ' + a.desc + ' · ahorro del mes ' + c1.ahorro_mes + ' → ' + c2.ahorro_mes + ' · total ' + a.ahorros.total);
+    const d = deshacer(token);   // v1
+    log(valor(ap.id, 4) === 'yo', 'Deshacer → ' + d.desc + ' · vuelve a «' + valor(ap.id, 4) + '»');
+
+    // El tipo no se cambia; sin cambios; un importe que dejaría el total en negativo.
+    const t = editarAhorro_({ id: ap.id, tipo: 'retirada' });
+    const s = editarAhorro_({ id: ap.id, concepto: 'Prueba 18' });
+    const re = apuntarAhorro_({ tipo: 'retirada', quien: 'yo', importe: redondear2_(totalAhorrado_(libro) - 10), fecha: hoy, concepto: 'Prueba 18' });
+    ids.push(re.id);
+    const neg = editarAhorro_({ id: ap.id, importe: 1 });
+    log(t.error === 'rechazado' && s.error === 'rechazado' && neg.error === 'rechazado' && valor(ap.id, 6) === 100,
+        'Tipo → ' + t.mensaje + ' · sin cambios → ' + s.mensaje + ' · importe 1 con casi todo retirado → ' + neg.mensaje);
+
+    // Saldo inicial (el real, si lo hay; si no, uno de prueba): la fecha no se cambia; el importe sí, sin tocar el mes.
+    let idInicial = inicialReal ? inicialReal.id : null;
+    if (!idInicial) { idInicial = apuntarAhorro_({ tipo: 'inicial', importe: 500, fecha: hoy }).id; ids.push(idInicial); }
+    const fi = editarAhorro_({ id: idInicial, fecha: sumarDias_(hoy, -1) });
+    const c3 = cab();
+    const total0 = totalAhorrado_(libro);
+    const im = editarAhorro_({ id: idInicial, importe: redondear2_(Number(valor(idInicial, 6)) + 100) });
+    const c4 = cab();
+    log(fi.error === 'rechazado' && im.ok !== false && im.ahorros.total === redondear2_(total0 + 100) && c4.restante === c3.restante && !im.meses.length,
+        'Saldo inicial: fecha → ' + fi.mensaje + ' · importe → ' + im.desc + ' · total ' + total0 + ' → ' + im.ahorros.total + ' · el mes no cambia');
+  } finally {
+    ids.slice().reverse().forEach((id) => { let f; while ((f = buscarFilaPorId_(hoja, id)) > 0) hoja.deleteRow(f); });
+    if (inicialReal) hoja.getRange(buscarFilaPorId_(hoja, inicialReal.id), 6).setValue(importeInicialReal);
+    if (ultimo === null) props.deleteProperty('ULTIMO');
+    else props.setProperty('ULTIMO', ultimo);
+    log(hoja.getLastRow() === filasAntes && props.getProperty('ULTIMO') === ultimo &&
+        (!inicialReal || valor(inicialReal.id, 6) === importeInicialReal), 'Limpieza: Ahorros y el Deshacer pendiente como estaban');
+  }
+}
