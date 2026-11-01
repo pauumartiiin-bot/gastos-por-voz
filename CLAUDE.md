@@ -30,7 +30,7 @@ iPhone (esta app, GitHub Pages, instalada en pantalla de inicio)
   `redirect: 'follow'` (Apps Script responde con una redirección).
 - Interfaz en español. Comentarios del código en español, breves.
 
-## Contrato de la API (fases 6.1–17)
+## Contrato de la API (fases 6.1–18)
 Petición: un único `doPost` (en `backend/Api.gs`) que enruta por `accion`. Cuerpo JSON enviado como texto plano:
 ```json
 { "t": "<token>", "accion": "dictar", ...parámetros }
@@ -60,6 +60,9 @@ Petición: un único `doPost` (en `backend/Api.gs`) que enruta por `accion`. Cue
 | `objetivo` | `nombre`, `importe`, `fecha?` | `objetivo_` (nuevo) con `conBloqueo_` y `fechaSerial_` | `anterior` (o `null`), `objetivo`, `ahorros` |
 | `veces` | `id`, `veces` (entero 1–10), `conservar_deshacer?` (sin su propio Deshacer: lo usa «+ Nuevo gasto») | `veces_` (nuevo, `backend/Veces.gs`) con `libro_`, `conBloqueo_`, `buscarFilaPorId_`, `COL` y `apuntarDeshacer_` | `id`, `veces`, `anterior`, `desc` (detalle en «Fase 17») |
 | `arrastre` | `etiqueta` (el mes que recibe el arrastre) | `arrastre_` (nuevo, `backend/Ingresos.gs`) con `libro_`, `conBloqueo_`, `enMes_`, `siguienteId_`, `escribirFila_` y `mes_` | `etiqueta`, `id` (o `null` si da 0), `desde`, `concepto`, `anterior`, `importe`, `mes` (detalle en «Fase 15») |
+| `guardar_registro` | `hoja` (`Recurrentes` \| `Movimientos`), `id`, `concepto?`, `cambios?: { importe?, categoria?, modo?, desde? }` (los de `editar`), `veces?` (solo mensuales que no son presupuesto) | `guardarRegistro_` (nuevo, `backend/Guardar.gs`): `editarRegistro` (v1), `renombrar_` y `veces_`, con un solo `apuntarDeshacer_` al final | `id`, `id_nuevo` (la regla nueva tras un cambio de precio, o `null`), `desc` (detalle en «Fase 18») |
+| `editar_ingreso` | `id`, `concepto?`, `importe?`, `fecha?`, `mes?` (no en nómina; el tipo y los arrastres no se editan) | `editarIngreso_` (nuevo, `backend/Ingresos.gs`) con `conBloqueo_`, `buscarFilaPorId_`, `fechaSerial_`, `aJSON_` y `apuntarDeshacer_` | `id`, `desc`, `aviso` (arrastre que puede haber cambiado, o `null`) |
+| `editar_ahorro` | `id`, `concepto?`, `importe?`, `fecha?`, `quien?` (en el saldo inicial, solo concepto e importe; el tipo no se edita) | `editarAhorro_` (nuevo, `backend/Ahorros.gs`) con `conBloqueo_`, `buscarFilaPorId_`, `fechaSerial_`, `aJSON_` y `apuntarDeshacer_` | `id`, `desc`, `meses` (los que cambian), `ahorros` |
 
 - En `dictar` con `corrige`, lo dictado es el cambio pedido y `frase` es la frase original (así lo espera `interpretar`).
 - `ms_interpretar` incluye leer el contexto de la hoja + Haiku + validación.
@@ -110,11 +113,12 @@ backend/Mes.gs          acción mes (fase 7): lee el mes de la hoja y restaura R
 backend/Categorias.gs   acción categoria (fase 7b): crea una categoría antes de «Otros»; se copia a mano
 backend/Renombrar.gs    acción renombrar (fase 8.1): cambia el concepto de un gasto; se copia a mano
 backend/Pagos.gs        acción pagar (fases 8.2 y 11.1): marca cargos fijos y gastos puntuales en la pestaña Pagos; se copia a mano
-backend/Ingresos.gs     acciones ingresos, ingreso y borrar_ingreso (fase 9.1) y arrastre (fase 15); se copia a mano
+backend/Ingresos.gs     acciones ingresos, ingreso y borrar_ingreso (fase 9.1), arrastre (fase 15) y editar_ingreso (fase 18); se copia a mano
 backend/Latencia.gs     medirLatencia() (fase B.1): cronometra libro_, leerContexto_ e interpretar; se copia a mano
 backend/Migraciones.gs  cambios en la hoja de cada fase (aplicarFase13 a aplicarFase17), se ejecutan una vez desde el editor; se copia a mano
 backend/Veces.gs        acción veces y veces en registros (fase 17): recurrentes de varias veces al mes; se copia a mano
-backend/Ahorros.gs      acciones ahorros, ahorro, borrar_ahorro y objetivo (fase 16); se copia a mano
+backend/Ahorros.gs      acciones ahorros, ahorro, borrar_ahorro y objetivo (fase 16) y editar_ahorro (fase 18); se copia a mano
+backend/Guardar.gs      acción guardar_registro (fase 18.2): un solo «Guardar cambios» con Deshacer compuesto; se copia a mano
 backend/Previstos.gs    acción previsto (fase 14): comisiones previstas de un mes (Meses D); se copia a mano
 docs/                   capturas del README (generadas con datos inventados)
 CLAUDE.md               este archivo
@@ -137,7 +141,7 @@ README.md               README de portfolio (fase 6.5)
   tiempos y prob. sin voz. Fuera de él el cliente no envía `modelo` ni `vocabulario` (valores del servidor).
   Se mantiene tras la 6.4 para seguir midiendo en uso real.
 - Deshacer: una sola notificación flotante sobre la barra, común a Crear, Mes y Mis registros (el servidor solo
-  deshace la última acción). Se oculta a los 8 s (`MS_NOTIFICACION`).
+  deshace la última acción). Se oculta a los 8 s (`MS_NOTIFICACION`) o al deslizarla hacia abajo (fase 18.1).
 
 ## Estado actual
 **Fase 6.0 — hecha.** El micrófono funciona en la app instalada (iOS pide permiso solo la primera vez),
@@ -410,6 +414,53 @@ simulador no imitaba esa comprobación. Arreglado (regla sin fin) y la limpieza 
 a 2 veces (notificación, chip «Mensual · 2 veces», dos casillas en «Mes»), marcar la 1.ª baja una vez, «+ Nuevo gasto»
 mensual de 3 veces con tres líneas y Deshacer que borra la regla, semanal con una casilla por semana, Deshacer de las
 veces, «Mes» y el Resumen con el mismo total y `cuadra` ✅, y bien en oscuro.
+
+**Fase 18 — Notificación deslizable y editar todo con un solo botón (v2.13) — en pruebas.** Detalle en la sección
+«Fase 18». `?v=` 7.18.0. Probado en local: con el simulador (mocks de la v1, incluido su `deshacer`),
+`probarGuardarRegistro()`, `probarEditarIngreso()` y `probarEditarAhorro()` todo ✅ con la hoja vacía y con datos, y un
+fallo inyectado en `veces_` tras escribir importe y nombre lo deshace todo. Interfaz en el iPhone 13 simulado (claro y
+oscuro): deslizar 80 px quita la notificación, 20 px la devuelve y se va sola a su tiempo, deslizar empezando en
+«Deshacer» no deshace y tocarlo sí; editor de gastos con un solo «Guardar cambios» que envía solo lo que cambia; nómina
+con mes y tipo fijos; arrastre sin campos; ahorro de «Tú» a «Pareja».
+
+## Fase 18 — Notificación deslizable y editar todo con un solo botón (v2.13)
+Tres arreglos de uso diario. Decisiones (confirmadas por Pau, con las recomendaciones):
+- **18.1 Notificación deslizable.** Se quita arrastrándola hacia abajo (Pointer Events, `touch-action: none`): sale si
+  baja más de 40 px o con un gesto rápido (> 0,5 px/ms); si no, vuelve y sigue su temporizador con lo que le quedaba
+  (mín. 1,5 s). Mientras se arrastra, el temporizador se pausa. Un gesto que empieza en «Deshacer» no lo pulsa (a partir
+  de 10 px cuenta como arrastre). Con `prefers-reduced-motion`, sin animación.
+- **18.2 Un solo «Guardar cambios»** en el editor de un gasto (nombre, importe, categoría y, en los mensuales, veces). Sustituye a
+  «Cambiar nombre» (8.1) y «Cambiar» (veces, 17): la razón de tenerlos separados era que el Deshacer solo revertía la
+  última operación; ahora `guardar_registro` deja **un Deshacer compuesto**. Cómo (`backend/Guardar.gs`, sin tocar la v1):
+  valida todo antes de escribir (nombre con `validarConcepto_`, importe con el límite de la v1, categoría con
+  `buscarCategoria`, veces 1–10); ejecuta primero `editarRegistro` (v1, la única que aún puede rechazar algo, como las
+  fechas de un cambio de precio), luego `renombrar_` y `veces_`; tras cada una lee los pasos que dejó en `ULTIMO` y al
+  final escribe un único `ULTIMO` con todos, en orden inverso. Si algo falla a mitad, apunta lo hecho y llama al
+  `deshacer` de la v1 → `rechazado` «No se ha guardado nada: …». Sin cambios → `rechazado` «No hay cambios que guardar».
+  Con cambio de precio y nombre nuevo se renombran **las dos reglas** (la vieja y la nueva, que encuentra
+  `reglaNuevaTrasCambio_` por su nota) y las veces van a la nueva (`copiarVecesTrasCambioDePrecio_`). Caché de «Mes»: se
+  vacía entera.
+- **18.3 Editar ingresos y movimientos de ahorro** en «Mis registros» y «Ahorro», con los campos que no rompen nada:
+  - Ingresos (`editar_ingreso`): concepto, importe, fecha y mes. **El tipo no se cambia** (borrar y volver a apuntar).
+    **El mes de una nómina tampoco**: cierra el mes anterior y crea su arrastre (fase 15). **Un arrastre no se edita**:
+    se corrige con «Recalcular». Mismas validaciones que al apuntar (`validarIngreso_`). Si el cambio toca un mes cuyo
+    siguiente tiene arrastre, la respuesta trae `aviso` («El arrastre de X puede haber cambiado: usa «Recalcular»…»): no
+    se recalcula solo (es una foto, fase 15).
+  - Ahorros (`editar_ahorro`): concepto, importe, fecha y quién. El tipo no se cambia; en el saldo inicial, solo
+    concepto e importe. El total con el cambio no puede quedar en negativo. Devuelve los `meses` cuyo ahorro cambia y
+    los totales.
+  - Deshacer: un `apuntarDeshacer_` con un paso `celda` por campo cambiado (la fecha como `{serie}` con `aJSON_`).
+  - Caché de «Mes»: se vacía entera (decidido: más simple que calcular qué meses toca).
+- App: `campoFijo` enseña lo que no se cambia y por qué; una nota bajo la fecha de una nómina avisa de que mueve el
+  inicio del mes (fase 13) y otra bajo «Quién» de que solo lo tuyo cuenta en tu mes.
+
+Pruebas: `probarGuardarRegistro()` (regla «Prueba 18» de 10 € sin fin y gasto «Prueba 18 gasto» de 5 €): 5 validaciones;
+solo el nombre y Deshacer; nombre + importe + categoría y Deshacer; nombre + veces y Deshacer; cambio de precio con nombre
+y 2 veces → la regla nueva con el nombre, 11 € y 2 veces, y el Deshacer la quita. `probarEditarIngreso()`: concepto +
+importe y Deshacer; importe 0, sin cambios; nómina (mes y tipo rechazados, la fecha mueve `periodo_inicio`); arrastre
+rechazado; aviso al mover un extra. `probarEditarAhorro()`: de yo a pareja (el ahorro del mes baja y el total no) y
+Deshacer; tipo, sin cambios y total negativo rechazados; saldo inicial (fecha rechazada, importe sin tocar el mes).
+Limpieza en `finally` en las tres.
 
 ## Fase 17 — Recurrentes de varias veces al mes, con una casilla por vez (v2.12)
 Caso real: el barbero, dos veces al mes. Antes solo cabía un mensual con el total (una casilla) o un mensual más un puntual

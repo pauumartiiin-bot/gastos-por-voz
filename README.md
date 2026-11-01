@@ -26,7 +26,7 @@ con Claude Haiku y la validaba con código. La **v2** (este repositorio) añade:
 
 - **Dictado por voz** con Whisper (vía Groq), pensado para usarlo en diez segundos desde el iPhone.
 - **App propia instalable** (HTML, CSS y JavaScript sin frameworks, servida en GitHub Pages).
-- **Mis registros**: ver, editar, dar de baja y eliminar gastos, siempre con *Deshacer*.
+- **Mis registros**: ver, editar, dar de baja y eliminar gastos e ingresos, siempre con *Deshacer*.
 - **Mes** (v2.1): el mes elegido con ingreso, previsto y restante, los gastos por categoría y una barra en
   las categorías con presupuesto. [Cómo funciona](#pestaña-mes-la-hoja-como-única-fuente-de-verdad).
 - **Categorías propias** (v2.2): crear una categoría con nombre y descripción desde el móvil; la descripción
@@ -219,6 +219,25 @@ atenúan: lo que se ve sin atenuar es lo que queda por pagar.
 En «Mis registros», además, se puede **cambiar el nombre** de un gasto
 ([`backend/Renombrar.gs`](backend/Renombrar.gs)). En un cargo recurrente, el nombre nuevo sale en todos los meses.
 
+## Editar: un botón, un Deshacer
+
+Al principio cada cambio de un gasto tenía su botón («Cambiar nombre», «Cambiar» las veces y «Guardar cambios» para
+importe y categoría), porque el servidor guarda una sola acción para deshacer: con un botón para todo, Deshacer solo
+habría revertido la última de varias escrituras. Era incómodo, así que ahora hay **un solo «Guardar cambios»** y un
+**Deshacer compuesto** ([`backend/Guardar.gs`](backend/Guardar.gs)):
+
+- Primero **se valida todo** sin escribir nada. Después se ejecutan las acciones que ya existían (la edición de la v1,
+  renombrar y las veces) y, tras cada una, se recoge lo que apuntó para deshacerse. Al final se guarda **una sola
+  acción para deshacer con todos los pasos**, en orden inverso. El `deshacer` de la v1 no cambia: ya sabía recorrer
+  varios pasos.
+- **Si algo falla a mitad**, se deshace lo que ya se había escrito y la respuesta dice «No se ha guardado nada»: o se
+  guarda todo o nada (lo que en bases de datos se llama una *transacción*, aquí hecha a mano).
+- **Ingresos y ahorros también se editan**, pero solo en los campos que no rompen nada. El tipo no se cambia. El mes de
+  una nómina tampoco, porque cierra el mes anterior y crea su arrastre. Un arrastre se corrige con «Recalcular», no a
+  mano. La app enseña esos campos como texto fijo, con el porqué. Si el cambio toca un mes del que ya salió un
+  arrastre, avisa de que conviene recalcularlo, pero no lo recalcula solo: es una foto.
+- La notificación de Deshacer se quita **deslizándola hacia abajo**; un gesto que empieza sobre «Deshacer» no lo pulsa.
+
 ## Ingresos: un formulario, no un LLM
 
 Los gastos se dictan porque son frases libres y variadas. Los ingresos no: son tres o cuatro al mes, siempre
@@ -296,9 +315,9 @@ acabaría en «Aina»; por eso la frase solo nombra la categoría elegida.
 | Pagos guarda solo las excepciones al estado normal (fijo pendiente, puntual pagado) | Una fila por gasto y mes | Casi vacía, sin migrar los datos de antes y sin marcar cada café |
 | Limpiar las marcas de gastos borrados en el servidor | Parchearlo en el móvil | Un problema de integridad de datos se arregla donde viven los datos; el parche del móvil solo cubría un camino |
 | Caché de meses que enseña lo guardado y a la vez lo actualiza (*stale-while-revalidate*), solo en memoria | Caché pura, o pedir también los meses de al lado por adelantado | La caché pura habría que borrarla en cada guardar, editar o deshacer, y un olvido enseñaría datos viejos; adelantar meses ocuparía la hoja (cada petición escribe `B1`) y retrasaría el mes que quieres ver |
-| «Cambiar nombre» con su propio botón | Un único «Guardar cambios» para nombre, importe y categoría | Cada cambio tiene su Deshacer; con uno solo, Deshacer revertiría solo la última de dos operaciones |
+| Un solo «Guardar cambios» con un Deshacer compuesto (todo o nada) | Un botón por campo, que es lo que tuve primero | Con un botón por campo, cada uno tenía su Deshacer, pero era incómodo. Juntar los pasos de deshacer de cada acción en uno solo da lo mejor de los dos sin tocar la v1; si algo falla a mitad, se deshace lo hecho |
 | Ingresos con formulario y mes propuesto por la regla del día 20 | Dictarlos, o elegir siempre el mes a mano | Son pocos datos y siempre iguales; el prompt de Haiku es de la v1 y la regla acierta en el caso habitual |
-| Corregir un ingreso borrándolo y volviéndolo a apuntar | Un editor de ingresos | Pasa pocas veces; menos código que mantener |
+| Editar ingresos y ahorros solo en los campos seguros (no el tipo, ni el mes de una nómina, ni un arrastre) | Editarlo todo, o seguir borrando y volviendo a apuntar | Esos campos arrastran consecuencias (el arrastre, el periodo del mes): cambiarlos es borrar y apuntar de nuevo, que ya las recalcula. El resto se corrige sin perder la fecha de registro |
 | Dejar la latencia como está tras medirla tramo a tramo | Cachear el contexto de la hoja o calentar Apps Script | La caché ahorraba ~0,3 s tocando código de la v1 y calentar no cambiaba nada (frío ≈ caliente); el grueso (~2 s) es Apps Script |
 | Cambiar la hoja con una función que se ejecuta una vez (una *migración*) | Copiar fórmulas a mano | Comprueba el estado antes de escribir y después, deshace si algo falla y se puede repetir sin riesgo. En la hoja real falló tres veces (texto distinto al del export, un nombre no válido en `LET` y el separador «;» de la configuración española) sin tocar nada |
 | Previsto de comisiones puesto desde «Mes», sin Deshacer, y la respuesta trae el mes recalculado | Ponerlo en la hoja a mano, o en el formulario de ingresos | Se pone viendo el mes y su restante; corregir es volver a cambiarlo (así no pisa el Deshacer de la última acción real). Devolver el mes en la misma respuesta ahorra un viaje de ~2 s a Apps Script |
@@ -374,7 +393,7 @@ visto es instantáneo gracias a la caché, que se actualiza por detrás.
 ## Estructura y puesta en marcha
 
 ```
-index.html              página: token, crear (dictar, nueva categoría y nuevo ingreso), mes, mis registros y ajustes
+index.html              página: token, crear (dictar, nuevo gasto, ingreso o categoría), mes, ahorro, mis registros y ajustes
 styles.css              estilos; colores como variables para tema claro y oscuro
 app.js                  lógica del cliente: grabación, vistas, llamadas a la API
 config.js               URL del endpoint de Apps Script (no es secreta)
@@ -388,12 +407,18 @@ backend/Mes.gs          acción mes: lee el mes de la hoja y restaura Resumen!B1
 backend/Categorias.gs   acción categoria: crea una categoría antes de «Otros»
 backend/Renombrar.gs    acción renombrar: cambia el nombre de un gasto
 backend/Pagos.gs        acción pagar: marca o desmarca un cargo fijo en la pestaña Pagos
-backend/Ingresos.gs     acciones ingresos, ingreso y borrar_ingreso: apuntar y borrar ingresos
+backend/Ingresos.gs     acciones de ingresos: apuntar, editar, borrar y el arrastre del restante
+backend/Previstos.gs    acción previsto: nómina y comisiones previstas de un mes
+backend/Ahorros.gs      acciones de ahorro: movimientos, saldo inicial y objetivo
+backend/Veces.gs        acción veces: recurrentes que se cobran varias veces al mes
+backend/Guardar.gs      acción guardar_registro: un solo «Guardar cambios» con Deshacer compuesto
+backend/Migraciones.gs  cambios en la hoja de cada fase (se ejecutan una vez desde el editor)
+backend/Latencia.gs     medirLatencia(): cronometra cada tramo del dictado
 docs/                   capturas del README
 ```
 
-1. **Apps Script** (sobre el proyecto de la v1): crea `Api.gs`, `Transcribir.gs`, `Vocabulario.gs`, `Mes.gs`,
-   `Categorias.gs`, `Renombrar.gs`, `Pagos.gs` e `Ingresos.gs` con el contenido de `backend/` y añade en las propiedades del script `GROQ_API_KEY`, junto a las de la v1
+1. **Apps Script** (sobre el proyecto de la v1): crea un archivo por cada `.gs` de `backend/` con su contenido,
+   ejecuta una vez desde el editor las migraciones de `Migraciones.gs` (`aplicarFase13` a `aplicarFase17`) y añade en las propiedades del script `GROQ_API_KEY`, junto a las de la v1
    (`TOKEN`, `ANTHROPIC_API_KEY`). Crea una implementación nueva como aplicación web.
 2. **Frontend:** pon la URL `/exec` de la implementación en `config.js` y publica el repositorio con GitHub Pages.
 3. **iPhone:** abre la página en Safari → Compartir → *Añadir a la pantalla de inicio*, y pega el token la
