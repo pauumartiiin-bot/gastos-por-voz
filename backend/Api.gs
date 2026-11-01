@@ -31,7 +31,10 @@ const ACCIONES_ = {
   ahorro: (p) => apuntarAhorro_(p),
   borrar_ahorro: (p) => borrarAhorro_(p),
   objetivo: (p) => objetivo_(p),
-  veces: (p) => veces_(p)   // Fase 17: Veces.gs
+  veces: (p) => veces_(p),   // Fase 17: Veces.gs
+  guardar_registro: (p, t) => guardarRegistro_(p, t),   // Fase 18.2: Guardar.gs
+  editar_ingreso: (p) => editarIngreso_(p),             // Fase 18.3: Ingresos.gs
+  editar_ahorro: (p) => editarAhorro_(p)                // Fase 18.3: Ahorros.gs
 };
 
 function doPost(e) {
