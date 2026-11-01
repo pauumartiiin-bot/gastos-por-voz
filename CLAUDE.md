@@ -415,13 +415,20 @@ a 2 veces (notificación, chip «Mensual · 2 veces», dos casillas en «Mes»),
 mensual de 3 veces con tres líneas y Deshacer que borra la regla, semanal con una casilla por semana, Deshacer de las
 veces, «Mes» y el Resumen con el mismo total y `cuadra` ✅, y bien en oscuro.
 
-**Fase 18 — Notificación deslizable y editar todo con un solo botón (v2.13) — en pruebas.** Detalle en la sección
+**Fase 18 — Notificación deslizable y editar todo con un solo botón (v2.13) — hecha.** Detalle en la sección
 «Fase 18». `?v=` 7.18.0. Probado en local: con el simulador (mocks de la v1, incluido su `deshacer`),
 `probarGuardarRegistro()`, `probarEditarIngreso()` y `probarEditarAhorro()` todo ✅ con la hoja vacía y con datos, y un
 fallo inyectado en `veces_` tras escribir importe y nombre lo deshace todo. Interfaz en el iPhone 13 simulado (claro y
 oscuro): deslizar 80 px quita la notificación, 20 px la devuelve y se va sola a su tiempo, deslizar empezando en
 «Deshacer» no deshace y tocarlo sí; editor de gastos con un solo «Guardar cambios» que envía solo lo que cambia; nómina
 con mes y tipo fijos; arrastre sin campos; ahorro de «Tú» a «Pareja».
+En Apps Script (1 nov; Nueva versión publicada) G1–G6 OK: `probarGuardarRegistro()` 5/5 y todo ✅ (cambio de precio con
+nombre y 2 veces → regla nueva con 11 € y 2 veces), `probarEditarIngreso()` y `probarEditarAhorro()` todo ✅ con limpieza (el
+saldo inicial real, como estaba), y `probarRenombrar()`, `probarVeces()`, `probarMes()`, `probarArrastre()`,
+`probarIngresos()` y `probarAhorros()` en verde. En el iPhone N1–N10 OK: deslizar quita la notificación, a medias vuelve,
+desde «Deshacer» no deshace; un solo «Guardar cambios» con nombre + importe y nombre + veces (Barbero) deshechos de una vez;
+comisiones con Deshacer; nómina con mes y tipo fijos y arrastre sin campos; ahorro de «Tú» a «Pareja» cambia «Mes» y vuelve
+con Deshacer; saldo inicial solo con concepto e importe; bien en oscuro.
 
 ## Fase 18 — Notificación deslizable y editar todo con un solo botón (v2.13)
 Tres arreglos de uso diario. Decisiones (confirmadas por Pau, con las recomendaciones):
