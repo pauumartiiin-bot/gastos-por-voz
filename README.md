@@ -275,8 +275,14 @@ pareja, y eso decide el modelo:
 - **Lo que aparto yo sale de mi mes:** baja el restante de ese mes (por su fecha y el periodo de la nómina) y no se
   arrastra al siguiente. Lo que retiro vuelve a mi mes. Lo que pone mi pareja solo suma al total.
 - **Un libro, no un saldo.** Cada movimiento es una fila (aportación, retirada o el saldo inicial, que se apunta una vez
-  y no afecta a ningún mes) y los totales se derivan de ellas. Nunca se guarda «el saldo»: se calcula. Una retirada que
-  dejaría el total en negativo se rechaza, y borrar un movimiento también.
+  y no afecta a ningún mes) y los totales se derivan de ellas. Nunca se guarda «el saldo»: se calcula.
+- **Aportaciones programadas, sin inflar el total.** Se puede apuntar un movimiento hasta un año vista, pero el total, el
+  desglose y el progreso del objetivo solo cuentan lo que ya ha pasado; lo programado sale aparte («Programado» y «Con lo
+  programado»). Al llegar su día, la fórmula (`TODAY()`) lo pasa sola a ahorrado. Si es mío, ya resta del mes de su fecha.
+- **El saldo no puede quedar en negativo en ninguna fecha.** No basta con mirar el total de hoy, ni el total con lo
+  programado: con 100 € hoy y 500 € programados para junio, retirar 300 € hoy cuadraría al final, pero hasta junio la
+  cuenta estaría en −200 €. El servidor recorre los movimientos por fecha y comprueba el saldo día a día al retirar,
+  borrar o editar.
 - **Objetivo con el modelo preparado para varios:** nombre, importe y fecha opcional, con su progreso y cuánto ahorrar
   al mes hasta la fecha. Cambiarlo no borra el anterior: queda inactivo.
 - Como en el resto de la app, **la hoja calcula y la app enseña**: los totales, el progreso y el «ahorro del mes» son
@@ -325,6 +331,7 @@ acabaría en «Aina»; por eso la frase solo nombra la categoría elegida.
 | El arrastre del restante se guarda como una fila de Ingresos al apuntar la nómina, con un botón «Recalcular» | Una fórmula que encadene los meses, o calcularlo en la app | La hoja calcula un solo mes a la vez (el de `B1`): no puede encadenarlos. Guardarlo es una foto (un dato derivado *materializado*): rápido de leer y con el precio de que puede quedarse viejo, por eso se puede recalcular. El cálculo sigue en la hoja; el servidor solo lo copia |
 | El ahorro en pestañas propias («Ahorros» y «Objetivos») | Una categoría de gastos «Ahorro» | No se mezcla con los gastos, no ocupa uno de los 12 huecos del Resumen y una retirada no es un «gasto negativo» |
 | Cuenta conjunta: solo lo mío cuenta en mi mes | Contar todo lo que entra en la cuenta | Lo que pone mi pareja no sale de mi dinero; si contara, el restante del mes mentiría |
+| El total ahorrado solo cuenta lo que ya ha pasado (fecha ≤ hoy); lo programado, aparte | Contar todas las filas, como al principio | Con aportaciones a un año vista, el total y el progreso del objetivo dirían que tengo un dinero que aún no está en la cuenta. La pregunta de la pestaña es «¿cuánto tengo de verdad?» |
 | Ni una fórmula en la pestaña «Ahorros»; los totales, en «Objetivos» | Totales al pie de la propia pestaña | La v1 escribe cada fila nueva tras la última ocupada: una fórmula debajo la desplazaría (la misma lección de la fase 13) |
 | Varias veces al mes como un valor en la regla y la clave «R011#2» solo cuando hay más de una vez | Un día concreto por vez, o una fila de Pagos por vez siempre | Sin días, el modelo es un número; con la clave nueva solo donde hace falta, las marcas antiguas siguen valiendo sin migrarlas |
 | Gasto con formulario que reutiliza el guardado de los dictados | Una acción nueva en el servidor, o pasar el texto por Haiku | Una sola validación para todo; sin LLM, lo escrito no se reinterpreta |

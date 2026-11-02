@@ -30,7 +30,7 @@ iPhone (esta app, GitHub Pages, instalada en pantalla de inicio)
   `redirect: 'follow'` (Apps Script responde con una redirección).
 - Interfaz en español. Comentarios del código en español, breves.
 
-## Contrato de la API (fases 6.1–18)
+## Contrato de la API (fases 6.1–19)
 Petición: un único `doPost` (en `backend/Api.gs`) que enruta por `accion`. Cuerpo JSON enviado como texto plano:
 ```json
 { "t": "<token>", "accion": "dictar", ...parámetros }
@@ -54,8 +54,8 @@ Petición: un único `doPost` (en `backend/Api.gs`) que enruta por `accion`. Cue
 | `ingreso` | `tipo` (no `arrastre`), `importe`, `fecha`, `mes`, `concepto?` | `apuntarIngreso_` (nuevo) con `conBloqueo_`, `siguienteId_`, `escribirFila_`, `fechaSerial_`, `ahoraSerial_` y `apuntarDeshacer_` | `id`, `desc`, `ingreso`, `arrastre` (`{ id, importe, desde, concepto }` o `null`), `motivo_arrastre` (fase 15) |
 | `borrar_ingreso` | `id` | `borrarIngreso_` (nuevo) con `conBloqueo_`, `buscarFilaPorId_`, `aJSON_` y `apuntarDeshacer_` | `id`, `desc`, `arrastre_borrado` (fase 15) |
 | `previsto` | `etiqueta`, `tipo` (`nómina` \| `comisiones`), `importe` (≥ 0; 0 lo quita), `siguientes?` (solo nómina: también los meses de después) | `previsto_` (nuevo, `backend/Previstos.gs`) con `libro_`, `conBloqueo_` y `mes_` | `etiqueta`, `tipo`, `anterior`, `importe`, `meses_cambiados`, `mes` (el mes ya recalculado; detalle en «Fase 14») |
-| `ahorros` | — | `ahorros_` (nuevo, `backend/Ahorros.gs`) con `libro_` | `hoy`, `total`, `inicial`, `yo`, `pareja`, `objetivo` (`nombre`, `importe`, `fecha`, `progreso` en %, `falta`, `al_mes`) o `null`, `hay_inicial`, `movimientos` (últimos 20) (detalle en «Fase 16») |
-| `ahorro` | `tipo` (`inicial` \| `aportación` \| `retirada`), `quien` (`yo` \| `pareja`; no en `inicial`), `importe`, `fecha`, `concepto?` | `apuntarAhorro_` (nuevo) con `conBloqueo_`, `siguienteId_`, `escribirFila_`, `fechaSerial_`, `ahoraSerial_` y `apuntarDeshacer_` | `id`, `desc`, `movimiento`, `mes` (el mes que cambia, o `null`), `ahorros` |
+| `ahorros` | — | `ahorros_` (nuevo, `backend/Ahorros.gs`) con `libro_` | `hoy`, `total`, `inicial`, `yo`, `pareja` (lo ya ocurrido), `programado`, `con_programado` (fase 19), `objetivo` (`nombre`, `importe`, `fecha`, `progreso` en %, `falta`, `al_mes`, `progreso_con_programado`) o `null`, `hay_inicial`, `movimientos` (todos los programados y los últimos 20 hechos; cada uno con `programado`) (detalle en «Fase 16» y «Fase 19») |
+| `ahorro` | `tipo` (`inicial` \| `aportación` \| `retirada`), `quien` (`yo` \| `pareja`; no en `inicial`), `importe`, `fecha` (hasta un año desde hoy; el inicial, no futuro), `concepto?` | `apuntarAhorro_` (nuevo) con `conBloqueo_`, `siguienteId_`, `escribirFila_`, `fechaSerial_`, `ahoraSerial_` y `apuntarDeshacer_` | `id`, `desc`, `movimiento`, `mes` (el mes que cambia, o `null`), `ahorros` |
 | `borrar_ahorro` | `id` | `borrarAhorro_` (nuevo) con `conBloqueo_`, `buscarFilaPorId_`, `aJSON_` y `apuntarDeshacer_` | `id`, `desc`, `mes`, `ahorros` |
 | `objetivo` | `nombre`, `importe`, `fecha?` | `objetivo_` (nuevo) con `conBloqueo_` y `fechaSerial_` | `anterior` (o `null`), `objetivo`, `ahorros` |
 | `veces` | `id`, `veces` (entero 1–10), `conservar_deshacer?` (sin su propio Deshacer: lo usa «+ Nuevo gasto») | `veces_` (nuevo, `backend/Veces.gs`) con `libro_`, `conBloqueo_`, `buscarFilaPorId_`, `COL` y `apuntarDeshacer_` | `id`, `veces`, `anterior`, `desc` (detalle en «Fase 17») |
@@ -115,9 +115,9 @@ backend/Renombrar.gs    acción renombrar (fase 8.1): cambia el concepto de un g
 backend/Pagos.gs        acción pagar (fases 8.2 y 11.1): marca cargos fijos y gastos puntuales en la pestaña Pagos; se copia a mano
 backend/Ingresos.gs     acciones ingresos, ingreso y borrar_ingreso (fase 9.1), arrastre (fase 15) y editar_ingreso (fase 18); se copia a mano
 backend/Latencia.gs     medirLatencia() (fase B.1): cronometra libro_, leerContexto_ e interpretar; se copia a mano
-backend/Migraciones.gs  cambios en la hoja de cada fase (aplicarFase13 a aplicarFase17), se ejecutan una vez desde el editor; se copia a mano
+backend/Migraciones.gs  cambios en la hoja de cada fase (aplicarFase13 a aplicarFase17 y aplicarFase19), se ejecutan una vez desde el editor; se copia a mano
 backend/Veces.gs        acción veces y veces en registros (fase 17): recurrentes de varias veces al mes; se copia a mano
-backend/Ahorros.gs      acciones ahorros, ahorro, borrar_ahorro y objetivo (fase 16) y editar_ahorro (fase 18); se copia a mano
+backend/Ahorros.gs      acciones ahorros, ahorro, borrar_ahorro y objetivo (fase 16), editar_ahorro (fase 18) y lo programado (fase 19); se copia a mano
 backend/Guardar.gs      acción guardar_registro (fase 18.2): un solo «Guardar cambios» con Deshacer compuesto; se copia a mano
 backend/Previstos.gs    acción previsto (fase 14): comisiones previstas de un mes (Meses D); se copia a mano
 docs/                   capturas del README (generadas con datos inventados)
@@ -429,6 +429,65 @@ saldo inicial real, como estaba), y `probarRenombrar()`, `probarVeces()`, `proba
 desde «Deshacer» no deshace; un solo «Guardar cambios» con nombre + importe y nombre + veces (Barbero) deshechos de una vez;
 comisiones con Deshacer; nómina con mes y tipo fijos y arrastre sin campos; ahorro de «Tú» a «Pareja» cambia «Mes» y vuelve
 con Deshacer; saldo inicial solo con concepto e importe; bien en oscuro.
+
+**Fase 19 — Ahorro programado hasta un año vista, sin inflar el total (v2.14) — en pruebas.** Detalle en la sección
+«Fase 19». `?v=` 7.19.0. Probado en local: `aplicarFase19()` con «,» y «;» (I1:I4 con `"<="&TODAY()`, H11:I13, Guía; total
+3.150 + programado 100 = 3.250 = todas las filas; segunda vez sin cambios; se para si H11:I13 está ocupada o I1:I4 no son
+las de la 16; deshace si algo no da número; avisa si Meses no llega a un año vista) y, con el simulador ampliado (fórmulas
+de Objetivos evaluadas y 15 meses), `probarProgramados()`, `probarAhorros()` y `probarEditarAhorro()` todo ✅ con la hoja
+vacía, con datos y objetivo, y con Meses de solo 6 meses (rechazo por mes), y `probarArrastre()`, `probarIngresos()`,
+`probarPagos()`, `probarPrevistos()`, `probarVeces()`, `probarGuardarRegistro()` y `probarEditarIngreso()` en verde
+(`probarMes()`: `cuadra` ✅; las reglas reales no están en el simulador). Interfaz en el iPhone 13 simulado (claro y oscuro):
+línea «Programado», tramo en la barra, chip «programado», `max` en las fechas, explicación de la fecha futura y el rechazo
+del servidor dentro de la tarjeta.
+
+## Fase 19 — Ahorro programado hasta un año vista, sin inflar el total (v2.14)
+Programar aportaciones (y retiradas) hasta un año desde hoy. El problema que destapa: Objetivos I1:I4 sumaban todas las
+filas de Ahorros sin mirar la fecha, así que una aportación para dentro de 11 meses contaría ya como ahorrada. Decisiones
+(confirmadas por Pau, con las recomendaciones):
+- **Límite:** fecha ≤ el mismo día del año siguiente (el 29/02, el 28) al apuntar y al editar (`AHO_ANOS_FUTURO_`,
+  `unAnoDespues_`; mensaje «La fecha no puede ser de dentro de más de un año.»). Los ingresos siguen con 60 días.
+- **Total = lo ya ocurrido** (fecha ≤ `TODAY()` de la hoja, zona de Madrid): total, desglose, progreso, falta y cuota.
+  Al llegar su día, un movimiento pasa solo de programado a ahorrado, sin código.
+- **Lo programado, aparte:** «Programado» (todo lo de fecha > hoy, con signo) y «Con lo programado» (total + programado), y
+  el progreso del objetivo con lo programado.
+- **El mes:** lo mío programado ya resta del restante del mes de su fecha (E8 filtra por E2:E3; sin nómina, el periodo es
+  el mes natural). **Lo mío programado en un mes que no está en Meses → `rechazado`** («Ese mes aún no está en la pestaña
+  Meses…»), porque no restaría de ningún mes (`fueraDeMeses_`; solo fecha > hoy y `quien = yo`).
+- **El saldo no puede quedar en negativo en ninguna fecha** (mejor que «el total con lo programado», que dejaría retirar
+  hoy 300 € con 100 € en la cuenta y 500 € programados para junio). `saldoMinimo_` recorre los movimientos por fecha (los de
+  un mismo día juntos); `saldoNegativo_` rechaza al retirar, borrar o editar (importe y fecha) si el mínimo queda < 0 y
+  empeora (un descuadre previo hecho a mano no bloquea lo demás). Mensaje: «… el saldo quedaría en −50,00 € el 02/11/2026».
+  Ya no se compara con Objetivos!I1 (`totalAhorrado_` queda para las pruebas).
+- **El saldo inicial nunca es futuro** (es lo que ya hay; con el filtro desaparecería del total).
+- **Lista:** primero todos los programados (del más cercano al más lejano) y después los últimos 20 hechos; cada
+  movimiento trae `programado`. Se editan y eliminan igual.
+
+Hoja (`aplicarFase19()`, Migraciones.gs; mismas garantías que las anteriores): Objetivos I1:I4 = las de la fase 16 con
+`Ahorros!$B:$B, "<="&TODAY()` en cada `SUMIFS` (compara las fórmulas sin espacios y con «;» → «,»; si no son las de la 16 ni
+las nuevas, se para); H11 «Programado» = inicial + aportaciones − retiradas con `">"&TODAY()`, H12 «Con lo programado» =
+`I1+I11`, H13 «Progreso con lo programado» = `IF(I6>0, MAX(0, I12)/I6, "")` (se para si H11:I13 no está vacía). Comprueba
+después: números, I1 = suma de las filas con fecha ≤ hoy e I1 + I11 = I12 = suma de todas las filas; si no, restaura I1:I4 y
+vacía H11:I13. Guía: descripciones de Objetivos H1:I10 y Ahorros Importe, y filas nuevas Ahorros Fecha y Objetivos
+H11:I13. Al final dice hasta qué mes llega Meses (⚠️ si no llega a un año vista).
+
+Código:
+- `Ahorros.gs`: `OBJ_TOTALES_` = I1:I13; `leerAhorros_` con `programado`, `con_programado`, `progreso_con_programado` y el
+  orden nuevo; `validarAhorro_` con el año; `saldoMinimo_`, `saldoNegativo_`, `unAnoDespues_`, `fueraDeMeses_` y, para las
+  pruebas, `margenDesde_` (lo máximo que se puede retirar en una fecha) y `probarProgramados()`.
+- App: bajo el total, «Programado +X € · Con lo programado Y €» (solo si hay algo programado); en el objetivo, un tramo más
+  claro en la barra (`tramo-programado`) y «Con lo programado: X %»; chip «programado» (borde discontinuo); `max` = hoy + 1
+  año en «+ Movimiento» y en el editor (iOS no siempre lo respeta: manda el servidor); la explicación del formulario dice
+  qué pasa con una fecha futura.
+
+Pruebas: `probarProgramados()` (diferencias; vale con datos reales): fecha a un año aceptada y un día más rechazada, al
+apuntar y al editar; saldo inicial con fecha de mañana rechazado; aportación mía de 100 a 200 días → total igual,
+programado +100 y el «Ahorro del mes» de ese mes +100 (o rechazada si ese mes no está en Meses); la lista empieza por los
+programados en orden; retirada programada de más que lo que habría → rechazada; retirada de hoy que solo cabe contando lo
+programado → rechazada; retirada a 250 días de todo lo que habrá entonces y borrar o atrasar la aportación de la que
+depende → rechazado; aportación de hoy cuenta en el total y no en lo programado, su fecha a 90 días la pasa a programada y
+Deshacer la devuelve; progreso con lo programado ≥ progreso. Limpieza en `finally`. `probarAhorros()`: el caso de la fecha
+pasa a «más de un año»; «retirar casi todo» usa `margenDesde_`.
 
 ## Fase 18 — Notificación deslizable y editar todo con un solo botón (v2.13)
 Tres arreglos de uso diario. Decisiones (confirmadas por Pau, con las recomendaciones):
