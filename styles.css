@@ -558,6 +558,15 @@ input[type="checkbox"]:checked, input[type="radio"]:checked {
 /* En «Mes»: lo apartado a ahorro, entre las cifras y el Restante. */
 .mes-cifras .mes-ahorro { grid-column: 1 / -1; flex-direction: row; justify-content: space-between; align-items: baseline; }
 .mes-ahorro dd { font-size: 15px; }
+
+/* ---------- Ahorro programado (fase 19) ---------- */
+
+.ahorro-programado { margin: 10px 0 0; padding-top: 10px; border-top: 1px dashed var(--borde); font-size: 14px; color: var(--secundario); }
+.ahorro-programado strong { color: var(--texto); font-variant-numeric: tabular-nums; }
+.presupuesto-barra.con-programado { display: flex; }
+.presupuesto-barra.con-programado span:first-child { border-radius: 999px 0 0 999px; }
+.presupuesto-barra .tramo-programado { background: var(--degradado); opacity: 0.35; border-radius: 0 999px 999px 0; }
+.chip-programado { border-style: dashed; color: var(--primario-tinta); }
 #estado-movimiento, #estado-inicial { text-align: left; }
 .ahorro-objetivo .reparto-cambiar { align-self: flex-start; }
 

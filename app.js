@@ -1195,6 +1195,14 @@ function pintarAhorro() {
   $('ahorro-inicial').textContent = euros(a.inicial);
   $('ahorro-yo').textContent = euros(a.yo);
   $('ahorro-pareja').textContent = euros(a.pareja);
+  // Fase 19: lo programado (fecha futura) va aparte; el total solo cuenta lo que ya ha pasado.
+  const hayProgramado = a.programado != null && a.programado !== 0;
+  if (hayProgramado) {
+    $('ahorro-programado').replaceChildren('Programado ', crear('strong', null, conSigno(a.programado)),
+      ' · Con lo programado ', crear('strong', null, euros(a.con_programado)));
+  }
+  mostrar('ahorro-programado', hayProgramado);
+  $('ahorro-fecha').max = unAnoDespues(a.hoy);
   if (!editandoObjetivo) pintarObjetivo();
   mostrar('saldo-inicial', !a.hay_inicial);
   $('lista-ahorros').replaceChildren(...(a.movimientos.length
@@ -1226,7 +1234,20 @@ function pintarObjetivo() {
   const relleno = crear('span');
   relleno.style.width = Math.min(100, progreso) + '%';
   barra.append(relleno);
+  // Fase 19: lo programado, como un tramo más claro a continuación de lo ya ahorrado.
+  const conProgramado = o.progreso_con_programado;
+  const tramo = conProgramado != null && conProgramado > progreso ? Math.min(100, conProgramado) - Math.min(100, progreso) : 0;
+  if (tramo > 0) {
+    const programado = crear('span', 'tramo-programado');
+    programado.style.width = tramo + '%';
+    if (progreso <= 0) programado.style.borderRadius = '999px';   // sin nada ahorrado aún, el tramo empieza en el borde
+    barra.classList.add('con-programado');
+    barra.append(programado);
+  }
   const lineas = [progreso.toLocaleString('es-ES') + ' % · ' + (o.falta > 0 ? 'faltan ' + euros(o.falta) : '¡conseguido!')];
+  if (conProgramado != null && conProgramado !== progreso) {
+    lineas.push('Con lo programado: ' + conProgramado.toLocaleString('es-ES') + ' %');
+  }
   if (o.fecha && o.falta > 0) {
     lineas.push(o.al_mes != null ? euros(o.al_mes) + '/mes hasta el ' + fecha(o.fecha) : 'La fecha (' + fecha(o.fecha) + ') ya ha pasado');
   }
@@ -1296,6 +1317,18 @@ function explicarAhorro() {
     ? 'Lo de tu pareja no toca tu mes: solo cambia el total ahorrado.'
     : tipo === 'aportación' ? 'Sale de tu mes: baja el restante y no pasa al mes siguiente.'
       : 'Vuelve a tu mes: sube el restante.';
+  // Fase 19: con fecha futura queda programado.
+  if (datosAhorro && $('ahorro-fecha').value > datosAhorro.hoy) {
+    $('ahorro-explica').textContent += ' Con fecha futura queda programado: no suma al total hasta ese día' +
+      (quien === 'yo' ? ', pero ya cuenta en el mes de esa fecha.' : '.');
+  }
+}
+
+// Fase 19: el mismo día del año siguiente (el 29 de febrero, en un año no bisiesto, el 28). Igual que en el servidor.
+function unAnoDespues(iso) {
+  const ano = Number(iso.slice(0, 4)) + 1;
+  const bisiesto = (ano % 4 === 0 && ano % 100 !== 0) || ano % 400 === 0;
+  return ano + iso.slice(4, 8) + (iso.slice(5) === '02-29' && !bisiesto ? '28' : iso.slice(8, 10));
 }
 
 function abrirMovimiento() {
@@ -1354,6 +1387,7 @@ const NOMBRES_AHORRO = { inicial: 'Saldo inicial', 'aportación': 'Aportación',
 function tarjetaAhorro(m) {
   const chips = [crear('span', 'chip', fecha(m.fecha)), crear('span', 'chip chip-prim', NOMBRES_AHORRO[m.tipo] || m.tipo)];
   if (m.quien) chips.push(crear('span', 'chip chip-acento', m.quien === 'yo' ? 'Tú' : 'Pareja'));
+  if (m.programado) chips.push(crear('span', 'chip chip-programado', 'programado'));
   return tarjetaLista(m.id, m.concepto, m.tipo === 'retirada' ? -m.importe : m.importe, chips, () => editorAhorro(m), pintarAhorro);
 }
 
@@ -1393,6 +1427,7 @@ function editorAhorro(m) {
     editor.append(campoFijo('Fecha', fecha(m.fecha) + ' · no se cambia (no cuenta en ningún mes)'));
   } else {
     dia = entrada('date', m.fecha);
+    if (datosAhorro) dia.max = unAnoDespues(datosAhorro.hoy);
     quien = document.createElement('select');
     [['yo', 'Yo'], ['pareja', 'Pareja']].forEach(([v, t]) => {
       const o = crear('option', null, t);
@@ -1822,6 +1857,7 @@ $('nuevo-movimiento').addEventListener('toggle', abrirMovimiento);
 $('form-ahorro').addEventListener('submit', apuntarMovimiento);
 $('form-inicial').addEventListener('submit', apuntarInicial);
 document.querySelectorAll('input[name="ahorro-tipo"], input[name="ahorro-quien"]').forEach((r) => r.addEventListener('change', explicarAhorro));
+$('ahorro-fecha').addEventListener('input', explicarAhorro);
 $('form-ingreso').addEventListener('submit', apuntarIngreso);
 $('form-ingreso').addEventListener('change', (e) => {
   if (e.target.id === 'ingreso-fecha') proponerMes();
