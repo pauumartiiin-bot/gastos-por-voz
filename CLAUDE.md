@@ -430,7 +430,7 @@ desde «Deshacer» no deshace; un solo «Guardar cambios» con nombre + importe 
 comisiones con Deshacer; nómina con mes y tipo fijos y arrastre sin campos; ahorro de «Tú» a «Pareja» cambia «Mes» y vuelve
 con Deshacer; saldo inicial solo con concepto e importe; bien en oscuro.
 
-**Fase 19 — Ahorro programado hasta un año vista, sin inflar el total (v2.14) — en pruebas.** Detalle en la sección
+**Fase 19 — Ahorro programado hasta un año vista, sin inflar el total (v2.14) — hecha.** Detalle en la sección
 «Fase 19». `?v=` 7.19.0. Probado en local: `aplicarFase19()` con «,» y «;» (I1:I4 con `"<="&TODAY()`, H11:I13, Guía; total
 3.150 + programado 100 = 3.250 = todas las filas; segunda vez sin cambios; se para si H11:I13 está ocupada o I1:I4 no son
 las de la 16; deshace si algo no da número; avisa si Meses no llega a un año vista) y, con el simulador ampliado (fórmulas
@@ -440,6 +440,12 @@ vacía, con datos y objetivo, y con Meses de solo 6 meses (rechazo por mes), y `
 (`probarMes()`: `cuadra` ✅; las reglas reales no están en el simulador). Interfaz en el iPhone 13 simulado (claro y oscuro):
 línea «Programado», tramo en la barra, chip «programado», `max` en las fechas, explicación de la fecha futura y el rechazo
 del servidor dentro de la tarjeta.
+En la hoja real (2 nov): `aplicarFase19()` **a la primera** (I1:I4, H11:I13, Guía; Meses llega a noviembre de 2027) y la
+segunda vez sin cambios. Nueva versión publicada. En Apps Script X5–X7 OK: `probarProgramados()` todo ✅ con limpieza,
+`probarAhorros()` 13/13, `probarEditarAhorro()`, `probarMes()`, `probarArrastre()` y `probarIngresos()` ✅. En el iPhone Y1–Y6
+OK: aportación mía de 50 € el 01/11/2027 con el chip «programado» arriba de la lista, el total igual y «Programado +50,00 €»;
+«Apartado a ahorro −50,00 €» en noviembre de 2027; una fecha a más de un año, rechazada con el mensaje nuevo; tramo claro en
+la barra del objetivo y «Con lo programado: X %»; eliminar y Deshacer; bien en oscuro.
 
 ## Fase 19 — Ahorro programado hasta un año vista, sin inflar el total (v2.14)
 Programar aportaciones (y retiradas) hasta un año desde hoy. El problema que destapa: Objetivos I1:I4 sumaban todas las
