@@ -665,3 +665,119 @@ function aplicarFase17() {
   });
 }
 
+
+/**
+ * Fase 19: movimientos de ahorro programados (hasta un año vista). En Objetivos, el total y el desglose (I1:I4) pasan a
+ * sumar solo lo ya ocurrido (fecha ≤ TODAY(), con la zona de la hoja); con ellos, el progreso, lo que falta y la cuota
+ * (I8:I10). H11:I13: lo programado (fecha posterior a hoy), el total con lo programado y el progreso con él. Al llegar su
+ * día, un movimiento pasa solo de programado a ahorrado. Mismas garantías que las anteriores: separador de la hoja,
+ * comprobar antes y después y deshacer si algo no cuadra; la segunda vez no cambia nada.
+ */
+function aplicarFase19() {
+  const libro = libro_();   // v1
+  conBloqueo_(() => {       // v1
+    const obj = libro.getSheetByName('Objetivos');
+    const ahorros = libro.getSheetByName('Ahorros');
+    const guia = libro.getSheetByName('Guía');
+    if (!obj || !ahorros) return Logger.log('❌ Faltan las pestañas Ahorros u Objetivos (¿falta aplicarFase16?). No se ha cambiado nada.');
+    const sep = separadorDeHoja_(libro.getSheetByName('Resumen').getDataRange().getFormulas());
+    const local = (formula) => formula.replace(/,/g, sep);   // estas fórmulas no llevan comas dentro de textos
+    const norma = (f) => String(f).replace(/\s/g, '').replace(/;/g, ',').toUpperCase();
+    // fecha: '' (todas las filas, fase 16), '<=' (lo ya ocurrido) o '>' (lo programado).
+    const suma = (tipo, quien, fecha) => 'SUMIFS(Ahorros!$F:$F, Ahorros!$C:$C, "' + tipo + '"' +
+      (quien ? ', Ahorros!$D:$D, "' + quien + '"' : '') + (fecha ? ', Ahorros!$B:$B, "' + fecha + '"&TODAY()' : '') + ')';
+    const totales = (fecha) => [
+      '=' + suma('inicial', '', fecha) + '+' + suma('aportación', '', fecha) + '-' + suma('retirada', '', fecha),
+      '=' + suma('inicial', '', fecha),
+      '=' + suma('aportación', 'yo', fecha) + '-' + suma('retirada', 'yo', fecha),
+      '=' + suma('aportación', 'pareja', fecha) + '-' + suma('retirada', 'pareja', fecha)
+    ];
+    const de16 = totales('');
+    const de19 = totales('<=');
+    const nuevas = [
+      ['Programado', '=' + suma('inicial', '', '>') + '+' + suma('aportación', '', '>') + '-' + suma('retirada', '', '>')],
+      ['Con lo programado', '=I1+I11'],
+      ['Progreso con lo programado', '=IF(I6>0, MAX(0, I12)/I6, "")']
+    ];
+
+    // 1. Comprobaciones: nada se escribe si algo no cuadra.
+    const i1i4 = obj.getRange('I1:I4');
+    const antes = i1i4.getFormulas().map((f) => f[0]);
+    const yaTotales = antes.every((f, i) => norma(f) === norma(de19[i]));
+    if (!yaTotales && !antes.every((f, i) => norma(f) === norma(de16[i]))) {
+      return Logger.log('❌ Objetivos I1:I4 no son las fórmulas de la fase 16 (¿se han tocado a mano?). No se ha cambiado nada.\n' + antes.join('\n'));
+    }
+    const zona = obj.getRange('H11:I13');
+    const yaZona = zona.getValues().map((f) => f[0]).join('|') === nuevas.map((f) => f[0]).join('|');
+    const ocupada = zona.getValues().some((f) => f.some((v) => v !== '')) || zona.getFormulas().some((f) => f.some((v) => v !== ''));
+    if (!yaZona && ocupada) return Logger.log('❌ Objetivos H11:I13 no está vacía. No se ha cambiado nada.');
+    if (yaTotales && yaZona) Logger.log('· Objetivos ya estaba: solo se comprueba');
+
+    const deshacer = (motivo) => {
+      if (!yaTotales) i1i4.setFormulas(antes.map((f) => [f]));
+      if (!yaZona) zona.clearContent();
+      Logger.log('❌ ' + motivo + ' Se ha deshecho: no se ha cambiado nada (separador «' + sep + '»).');
+    };
+
+    // 2. Objetivos: I1:I4 con el filtro de fecha y H11:I13 nuevas.
+    if (!yaTotales) {
+      i1i4.setFormulas(de19.map((f) => [local(f)]));
+      Logger.log('✅ Objetivos I1:I4: el total y el desglose cuentan solo lo ya ocurrido (fecha ≤ hoy)');
+    }
+    if (!yaZona) {
+      obj.getRange('H11:H13').setValues(nuevas.map((f) => [f[0]])).setFontWeight('bold');
+      obj.getRange('I11:I13').setFormulas(nuevas.map((f) => [local(f[1])]));
+      obj.getRange('I11:I12').setNumberFormat('#,##0.00 "€"');
+      obj.getRange('I13').setNumberFormat('0.0%');
+      Logger.log('✅ Objetivos H11:I13: programado, con lo programado y progreso con lo programado');
+    }
+
+    // 3. Comprobación con la hoja recalculada: números, y lo ya ocurrido + lo programado = todas las filas.
+    SpreadsheetApp.flush();
+    const v = obj.getRange('I1:I13').getValues().map((f) => f[0]);
+    const mostrar = () => obj.getRange('I1:I13').getDisplayValues().map((f) => f[0]).join(' · ');
+    if (![0, 1, 2, 3, 10, 11].every((i) => typeof v[i] === 'number')) return deshacer('Los totales de Objetivos no dan números (' + mostrar() + ').');
+    if (v[5] > 0 ? typeof v[12] !== 'number' : v[12] !== '') return deshacer('El progreso con lo programado no da lo esperado (' + mostrar() + ').');
+    const zonaHoja = libro.getSpreadsheetTimeZone();
+    const hoy = Utilities.formatDate(new Date(), zonaHoja, 'yyyy-MM-dd');
+    const signo = { inicial: 1, 'aportación': 1, retirada: -1 };
+    const filas = ahorros.getLastRow() < 2 ? [] : ahorros.getRange(2, 2, ahorros.getLastRow() - 1, 5).getValues()
+      .filter((f) => signo[f[1]] && f[0] instanceof Date);
+    const sumar = (lista) => Math.round(lista.reduce((s, f) => s + signo[f[1]] * Number(f[4]), 0) * 100) / 100;
+    const hechas = sumar(filas.filter((f) => textoFecha_(f[0], zonaHoja) <= hoy));   // Mes.gs
+    const todas = sumar(filas);
+    const igual = (x, y) => Math.round(x * 100) === Math.round(y * 100);
+    if (!igual(v[0], hechas) || !igual(v[0] + v[10], todas) || !igual(v[11], todas)) {
+      return deshacer('Las cuentas no cuadran: total ' + v[0] + ' (esperado ' + hechas + ') · total + programado ' + (v[0] + v[10]) +
+                      ' · con lo programado ' + v[11] + ' (esperado ' + todas + ').');
+    }
+
+    // 4. Guía: H1:I10 dice que es lo ya ocurrido, la fila de Importe habla del saldo, y filas nuevas de Fecha y H11:I13.
+    const filasGuia = guia.getRange(1, 1, guia.getLastRow(), 3).getValues();
+    const textos = {
+      'Objetivos|H1:I10': 'Totales de lo ya ocurrido (fecha ≤ hoy): total ahorrado, inicial, lo tuyo neto, lo de la pareja neto y, del objetivo activo, progreso, lo que falta y cuánto ahorrar al mes hasta su fecha. Lo programado no cuenta hasta su día.',
+      'Ahorros|Importe': 'Euros, siempre positivo: la retirada resta por su tipo. El saldo no puede quedar en negativo en ninguna fecha (contando lo programado).'
+    };
+    let cambiadas = 0;
+    filasGuia.forEach((f, i) => {
+      const t = textos[f[0] + '|' + f[1]];
+      if (t && f[2] !== t) { guia.getRange(i + 1, 3).setValue(t); cambiadas++; }
+    });
+    const nuevasGuia = [
+      ['Ahorros', 'Fecha', 'Día del movimiento, hasta un año vista. Con fecha posterior a hoy es «programado»: no cuenta en el total hasta su día, pero si es tuyo ya resta en el mes de su fecha (ese mes tiene que estar en Meses). El saldo inicial, nunca en el futuro.', 'Fecha ≤ hoy + 1 año', '01/11/2027'],
+      ['Objetivos', 'H11:I13', 'Lo programado (aportaciones − retiradas con fecha posterior a hoy), el total con lo programado y el progreso del objetivo con él.', 'Solo fórmulas: no editar', '']
+    ].filter((n) => !filasGuia.some((f) => f[0] === n[0] && f[1] === n[1]));
+    if (nuevasGuia.length) guia.getRange(guia.getLastRow() + 1, 1, nuevasGuia.length, 5).setValues(nuevasGuia);
+    Logger.log(cambiadas || nuevasGuia.length ? '✅ Guía: ' + cambiadas + ' filas cambiadas y ' + nuevasGuia.length + ' nuevas' : '· Guía: ya estaba');
+
+    // 5. ¿Llega Meses a un año vista? Lo tuyo programado en un mes que no esté se rechaza (no restaría de ningún mes).
+    const meses = mesesDeLaHoja_(libro, zonaHoja);   // Mes.gs
+    const ultimo = meses[meses.length - 1];
+    const limite = unAnoDespues_(hoy);   // Ahorros.gs
+    Logger.log((ultimo && ultimo.periodo_fin >= limite ? '✅ ' : '⚠️ ') + 'Meses llega hasta «' + (ultimo ? ultimo.etiqueta : '—') +
+               '» (periodo hasta ' + (ultimo ? ultimo.periodo_fin : '—') + '); un año vista es ' + limite +
+               (ultimo && ultimo.periodo_fin >= limite ? '' : ': lo tuyo programado después se rechazará hasta que añadas esos meses'));
+    Logger.log('✅ Total ahorrado ' + v[0] + ' · programado ' + v[10] + ' · con lo programado ' + v[11] +
+               (v[5] > 0 ? ' · progreso ' + Math.round(v[7] * 1000) / 10 + ' % (con lo programado ' + Math.round(v[12] * 1000) / 10 + ' %)' : ''));
+  });
+}

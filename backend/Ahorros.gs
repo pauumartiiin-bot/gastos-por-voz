@@ -10,6 +10,10 @@
  *    primera celda vacía de la columna A, no tras getLastRow().
  * Lo que es mío (yo, no inicial) cuenta en el mes de su fecha: Resumen E8 «Ahorro del mes» lo resta del Restante (B6) y del
  * Restante real (E7). Lo de la pareja y el inicial solo suman al total. La app no calcula: lee lo que calcula la hoja.
+ *
+ * Fase 19: movimientos programados hasta un año vista. El total (Objetivos I1:I4 y, con él, el progreso, lo que falta y la
+ * cuota) solo cuenta lo que ya ha pasado (fecha ≤ TODAY()); lo programado va aparte (H11:I13). Al llegar su día, un
+ * movimiento pasa solo de programado a ahorrado. El saldo no puede quedar en negativo en ninguna fecha.
  */
 
 const AHO_HOJA_ = 'Ahorros';
@@ -18,10 +22,12 @@ const AHO_TIPOS_ = ['inicial', 'aportación', 'retirada'];
 const AHO_QUIEN_ = ['yo', 'pareja'];
 const AHO_MAX_ = 1000000;
 const AHO_MAX_CONCEPTO_ = 60;
-const AHO_DIAS_FUTURO_ = 60;
+const AHO_ANOS_FUTURO_ = 1;   // fase 19: fecha como mucho un año desde hoy (los ingresos siguen con 60 días)
 const AHO_ULTIMOS_ = 20;
 const AHO_FORMATOS_ = { 2: 'dd/mm/yyyy', 6: '#,##0.00 "€"', 8: 'dd/mm/yyyy hh:mm' };
-const OBJ_TOTALES_ = 'I1:I10';   // total, inicial, yo, pareja, nombre, importe, fecha, progreso, falta, al mes
+// Total, inicial, yo, pareja, nombre, importe, fecha, progreso, falta, al mes y (fase 19) programado, con lo programado y
+// progreso con lo programado.
+const OBJ_TOTALES_ = 'I1:I13';
 const OBJ_MAX_NOMBRE_ = 40;
 
 /** Acción "ahorros" (solo lectura): totales, desglose, objetivo activo con su progreso y los últimos movimientos. */
@@ -34,17 +40,25 @@ function leerAhorros_(libro) {
   const obj = libro.getSheetByName(OBJ_HOJA_);
   if (!obj) throw new Error('No existe la pestaña Objetivos (falta aplicarFase16).');
   const t = obj.getRange(OBJ_TOTALES_).getValues().map((f) => f[0]);
-  const lista = leerMovimientosAhorro_(libro.getSheetByName(AHO_HOJA_), zona);
+  const hoy = Utilities.formatDate(new Date(), zona, 'yyyy-MM-dd');
+  const lista = leerMovimientosAhorro_(libro.getSheetByName(AHO_HOJA_), zona)
+    .map((m) => Object.assign(m, { programado: m.fecha > hoy }));   // el mismo «hoy» que TODAY() en la hoja (su zona)
+  const numero = (x) => (typeof x === 'number' ? redondear2_(x) : null);   // sin aplicarFase19, I11:I13 están vacías
+  const porciento = (x) => (typeof x === 'number' ? Math.round(x * 1000) / 10 : null);   // la hoja da la fracción
+  // Primero todos los programados (del más cercano al más lejano) y después los últimos movimientos ya hechos.
+  const programados = lista.filter((m) => m.programado).sort((a, b) => a.fecha.localeCompare(b.fecha) || a.id.localeCompare(b.id));
+  const hechos = lista.filter((m) => !m.programado).sort((a, b) => b.fecha.localeCompare(a.fecha) || b.id.localeCompare(a.id));
   return {
-    hoy: Utilities.formatDate(new Date(), zona, 'yyyy-MM-dd'),
+    hoy: hoy,
     total: redondear2_(t[0]), inicial: redondear2_(t[1]), yo: redondear2_(t[2]), pareja: redondear2_(t[3]),   // Mes.gs
+    programado: numero(t[10]), con_programado: numero(t[11]),
     objetivo: String(t[4]).trim() ? {
       nombre: String(t[4]), importe: redondear2_(t[5]), fecha: t[6] instanceof Date ? textoFecha_(t[6], zona) : null,
-      progreso: typeof t[7] === 'number' ? Math.round(t[7] * 1000) / 10 : null,   // la hoja da la fracción; aquí, en %
-      falta: redondear2_(t[8]), al_mes: typeof t[9] === 'number' ? redondear2_(t[9]) : null
+      progreso: porciento(t[7]), falta: redondear2_(t[8]), al_mes: numero(t[9]),
+      progreso_con_programado: porciento(t[12])
     } : null,
     hay_inicial: lista.some((m) => m.tipo === 'inicial'),
-    movimientos: lista.sort((a, b) => b.fecha.localeCompare(a.fecha) || b.id.localeCompare(a.id)).slice(0, AHO_ULTIMOS_)
+    movimientos: programados.concat(hechos.slice(0, AHO_ULTIMOS_))
   };
 }
 
@@ -62,7 +76,9 @@ function apuntarAhorro_(p) {
   const concepto = String(p.concepto == null ? '' : p.concepto).replace(/\s+/g, ' ').trim() ||
                    conceptoAhorro_(tipo, quien, fecha);
   const hoy = Utilities.formatDate(new Date(), zona, 'yyyy-MM-dd');
-  const error = validarAhorro_(importe, fecha, concepto, hoy);
+  const error = validarAhorro_(importe, fecha, concepto, hoy) ||
+                (tipo === 'inicial' && fecha > hoy ? 'El saldo inicial es lo que ya hay en la cuenta: su fecha no puede ser futura.' : null) ||
+                fueraDeMeses_(libro, tipo, quien, fecha, hoy, zona);
   if (error) return { ok: false, error: 'rechazado', mensaje: error };
 
   const r = conBloqueo_(() => {   // v1: un acceso a la vez
@@ -75,11 +91,8 @@ function apuntarAhorro_(p) {
                '). Para cambiarlo, bórralo y vuelve a apuntarlo.' };
     }
     if (tipo === 'retirada') {
-      const total = totalAhorrado_(libro);
-      if (redondear2_(total - importe) < 0) {
-        return { ok: false, error: 'rechazado', mensaje: 'No puedes retirar ' + textoEuros_(importe) + ': en la cuenta hay ' +
-                 textoEuros_(total) + '.' };
-      }
+      const neg = saldoNegativo_(lista, lista.concat([{ fecha: fecha, tipo: tipo, importe: importe }]));
+      if (neg) return { ok: false, error: 'rechazado', mensaje: 'No puedes retirar ' + textoEuros_(importe) + ': ' + neg + '.' };
     }
     const id = siguienteId_(hoja, 'S');   // v1: S001, S002…
     // Fecha como número de serie (v1): un objeto Date podría mover el día por la zona horaria.
@@ -105,13 +118,10 @@ function borrarAhorro_(p) {
     if (fila < 0) return { ok: false, error: 'rechazado', mensaje: 'Ese movimiento ya no existe (¿se borró a mano?). Recarga la lista.' };
     const valores = hoja.getRange(fila, 1, 1, 8).getValues()[0];
     const tipo = String(valores[2]);
-    const importe = redondear2_(valores[5]);
     if (tipo !== 'retirada') {   // quitar algo que sumaba
-      const total = totalAhorrado_(libro);
-      if (redondear2_(total - importe) < 0) {
-        return { ok: false, error: 'rechazado', mensaje: 'No se puede borrar: el total ahorrado quedaría en ' +
-                 textoEuros_(redondear2_(total - importe)) + '. Borra antes alguna retirada.' };
-      }
+      const lista = leerMovimientosAhorro_(hoja, zona);
+      const neg = saldoNegativo_(lista, lista.filter((m) => m.id !== id));
+      if (neg) return { ok: false, error: 'rechazado', mensaje: 'No se puede borrar: ' + neg + '. Borra antes alguna retirada.' };
     }
     hoja.deleteRow(fila);
     // aJSON_ (v1) guarda las fechas como número de serie para que Deshacer las escriba igual.
@@ -179,10 +189,62 @@ function filasObjetivos_(hoja) {
   return fin < 0 ? valores : valores.slice(0, fin);
 }
 
-/** El total ahorrado tal como lo calcula la hoja (Objetivos!I1), con lo último escrito ya recalculado. */
+/** El total ahorrado tal como lo calcula la hoja (Objetivos!I1: lo ya ocurrido), con lo último escrito ya recalculado. */
 function totalAhorrado_(libro) {
   SpreadsheetApp.flush();
   return redondear2_(libro.getSheetByName(OBJ_HOJA_).getRange('I1').getValue());
+}
+
+/**
+ * Fase 19: el saldo más bajo de la cuenta a lo largo del tiempo, recorriendo los movimientos por fecha (los de un mismo
+ * día se suman juntos). Lista vacía → Infinity.
+ */
+function saldoMinimo_(lista) {
+  const porDia = {};
+  lista.forEach((m) => { porDia[m.fecha] = (porDia[m.fecha] || 0) + (m.tipo === 'retirada' ? -m.importe : m.importe); });
+  let saldo = 0;
+  let minimo = { saldo: Infinity, fecha: null };
+  Object.keys(porDia).sort().forEach((fecha) => {
+    saldo = redondear2_(saldo + porDia[fecha]);
+    if (saldo < minimo.saldo) minimo = { saldo: saldo, fecha: fecha };
+  });
+  return minimo;
+}
+
+/**
+ * Fase 19: «el saldo quedaría en −50,00 € el 02/11/2026» si el cambio deja la cuenta en negativo algún día, o null. Solo
+ * cuenta si el cambio lo empeora: un descuadre que ya estaba (tocando la hoja a mano) no bloquea lo demás.
+ */
+function saldoNegativo_(antes, despues) {
+  const a = saldoMinimo_(antes);
+  const d = saldoMinimo_(despues);
+  if (d.saldo >= 0 || d.saldo >= a.saldo) return null;
+  return 'el saldo quedaría en ' + textoEuros_(d.saldo) + ' el ' + d.fecha.split('-').reverse().join('/');   // Ingresos.gs
+}
+
+/**
+ * Fase 19 (para las pruebas): lo máximo que se puede retirar en una fecha, es decir, el saldo más bajo de esa fecha en
+ * adelante (lo de antes cuenta como si fuera de ese día).
+ */
+function margenDesde_(hoja, zona, desde) {
+  const lista = leerMovimientosAhorro_(hoja, zona).map((m) => (m.fecha < desde ? Object.assign({}, m, { fecha: desde }) : m));
+  return saldoMinimo_(lista.concat([{ fecha: desde, tipo: 'aportación', importe: 0 }])).saldo;   // el saldo de ese mismo día cuenta
+}
+
+/** Fase 19: el mismo día del año siguiente ("2026-11-02" → "2027-11-02"); el 29 de febrero, en un año no bisiesto, el 28. */
+function unAnoDespues_(iso) {
+  const ano = Number(iso.slice(0, 4)) + AHO_ANOS_FUTURO_;
+  const bisiesto = (ano % 4 === 0 && ano % 100 !== 0) || ano % 400 === 0;
+  return ano + iso.slice(4, 8) + (iso.slice(5) === '02-29' && !bisiesto ? '28' : iso.slice(8, 10));
+}
+
+/**
+ * Fase 19: algo mío programado tiene que caer en un mes de la pestaña Meses; si no, no restaría de ningún mes y nadie lo
+ * vería. Mensaje, o null. Lo de la pareja, el saldo inicial y lo que ya ha pasado no se comprueban.
+ */
+function fueraDeMeses_(libro, tipo, quien, fecha, hoy, zona) {
+  if (!cuentaEnMes_(tipo, quien) || fecha <= hoy || mesDeFecha_(libro, fecha, zona)) return null;
+  return 'Ese mes aún no está en la pestaña Meses: añádelo antes de programar algo tuyo en él.';
 }
 
 /** ¿Cuenta en mi mes? Solo lo mío y que no sea el saldo inicial. */
@@ -207,7 +269,7 @@ function validarAhorro_(importe, fecha, concepto, hoy) {
   if (!(importe > 0)) return 'Pon un importe mayor que 0.';
   if (importe > AHO_MAX_) return 'El importe parece demasiado alto (máximo ' + AHO_MAX_ + ' €).';
   if (!fechaValida_(fecha)) return 'Pon una fecha válida.';   // Ingresos.gs
-  if (fecha > sumarDias_(hoy, AHO_DIAS_FUTURO_)) return 'La fecha no puede ser de dentro de más de ' + AHO_DIAS_FUTURO_ + ' días.';
+  if (fecha > unAnoDespues_(hoy)) return 'La fecha no puede ser de dentro de más de un año.';
   if (concepto.length > AHO_MAX_CONCEPTO_) return 'El concepto puede tener como máximo ' + AHO_MAX_CONCEPTO_ + ' caracteres.';
   if (/^[=+\-@]/.test(concepto)) return 'El concepto no puede empezar por =, +, - ni @.';
   return null;
@@ -228,7 +290,7 @@ function validarObjetivo_(nombre, importe, fecha, hoy) {
 
 /**
  * Prueba desde el editor (fase 16). Los importes se comprueban como diferencias, así que vale con datos reales; el mes es
- * el de hoy (apuntarAhorro_ no acepta fechas a más de 60 días). Limpieza en finally: Ahorros, Objetivos y el Deshacer
+ * el de hoy (lo programado lo prueba probarProgramados, fase 19). Limpieza en finally: Ahorros, Objetivos y el Deshacer
  * pendiente como estaban.
  */
 function probarAhorros() {
@@ -247,7 +309,7 @@ function probarAhorros() {
     ['importe negativo', { tipo: 'aportación', quien: 'yo', importe: -5, fecha: hoy }, 'rechazado'],
     ['importe enorme', { tipo: 'aportación', quien: 'yo', importe: AHO_MAX_ + 1, fecha: hoy }, 'rechazado'],
     ['fecha imposible', { tipo: 'aportación', quien: 'yo', importe: 1, fecha: '2027-02-31' }, 'rechazado'],
-    ['fecha a más de 60 días', { tipo: 'aportación', quien: 'yo', importe: 1, fecha: sumarDias_(hoy, AHO_DIAS_FUTURO_ + 1) }, 'rechazado'],
+    ['fecha a más de un año', { tipo: 'aportación', quien: 'pareja', importe: 1, fecha: sumarDias_(unAnoDespues_(hoy), 1) }, 'rechazado'],
     ['concepto largo', { tipo: 'aportación', quien: 'yo', importe: 1, fecha: hoy, concepto: 'x'.repeat(AHO_MAX_CONCEPTO_ + 1) }, 'rechazado'],
     ['concepto con =', { tipo: 'aportación', quien: 'yo', importe: 1, fecha: hoy, concepto: '=1+1' }, 'rechazado']
   ];
@@ -354,7 +416,7 @@ function probarAhorros() {
     const d2 = deshacer(props.getProperty('TOKEN'));
     const vuelve = buscarFilaPorId_(hoja, ap.id) > 0;
     Logger.log((borrada && vuelve ? '✅ ' : '❌ ') + 'Borrar la aportación → ' + (b.desc || b.mensaje) + ' · Deshacer → ' + d2.desc);
-    const casiTodo = apuntar({ tipo: 'retirada', quien: 'yo', importe: redondear2_(totalAhorrado_(libro) - 10) });
+    const casiTodo = apuntar({ tipo: 'retirada', quien: 'yo', importe: redondear2_(margenDesde_(hoja, zona, hoy) - 10) });
     const negativo = borrarAhorro_({ id: ap.id });
     Logger.log((negativo.error === 'rechazado' ? '✅ ' : '❌ ') + 'Retirar casi todo (' + casiTodo.movimiento.importe +
                ') y borrar la aportación de 100 → ' + (negativo.mensaje || 'se borró (no debería)'));
@@ -377,7 +439,7 @@ function probarAhorros() {
  * Acción "editar_ahorro": { id, concepto?, importe?, fecha?, quien? } → cambia lo que llegue, con las validaciones de
  * apuntar y un Deshacer que lo devuelve todo (un paso «celda» por campo). El tipo no se cambia (de aportación a retirada
  * es otro movimiento); del saldo inicial solo el concepto y el importe (es único y no cuenta en ningún mes). El total
- * ahorrado nunca queda en negativo. La respuesta trae los meses afectados y los totales recalculados.
+ * ahorrado nunca queda en negativo (fase 19: en ninguna fecha). La respuesta trae los meses afectados y los totales recalculados.
  */
 function editarAhorro_(p) {
   const libro = libro_();
@@ -408,12 +470,14 @@ function editarAhorro_(p) {
     const cambia = Object.keys(antes).filter((k) => despues[k] !== antes[k]);
     if (!cambia.length) return { ok: false, error: 'rechazado', mensaje: 'No hay cambios que guardar.' };
     if (!despues.concepto) return { ok: false, error: 'rechazado', mensaje: 'Escribe el concepto.' };
-    const error = validarAhorro_(despues.importe, despues.fecha, despues.concepto, hoy);
+    const error = validarAhorro_(despues.importe, despues.fecha, despues.concepto, hoy) ||
+                  (cambia.indexOf('fecha') >= 0 || cambia.indexOf('quien') >= 0 ? fueraDeMeses_(libro, tipo, despues.quien, despues.fecha, hoy, zona) : null);
     if (error) return { ok: false, error: 'rechazado', mensaje: error };
-    // El total con el cambio: lo de antes sale y entra lo de ahora (una retirada resta).
-    const efecto = (importe) => (tipo === 'retirada' ? -importe : importe);
-    const total = redondear2_(totalAhorrado_(libro) - efecto(antes.importe) + efecto(despues.importe));
-    if (total < 0) return { ok: false, error: 'rechazado', mensaje: 'No se puede: el total ahorrado quedaría en ' + textoEuros_(total) + '.' };   // Ingresos.gs
+    // El saldo con el cambio (importe y fecha), día a día: no puede quedar en negativo en ninguna fecha.
+    const lista = leerMovimientosAhorro_(hoja, zona);
+    const conCambio = lista.map((m) => (m.id === id ? Object.assign({}, m, { fecha: despues.fecha, importe: despues.importe }) : m));
+    const neg = saldoNegativo_(lista, conCambio);
+    if (neg) return { ok: false, error: 'rechazado', mensaje: 'No se puede: ' + neg + '.' };
 
     const columnas = { fecha: 2, quien: 4, concepto: 5, importe: 6 };
     const pasos = cambia.map((k) => {
@@ -474,7 +538,7 @@ function probarEditarAhorro() {
     // El tipo no se cambia; sin cambios; un importe que dejaría el total en negativo.
     const t = editarAhorro_({ id: ap.id, tipo: 'retirada' });
     const s = editarAhorro_({ id: ap.id, concepto: 'Prueba 18' });
-    const re = apuntarAhorro_({ tipo: 'retirada', quien: 'yo', importe: redondear2_(totalAhorrado_(libro) - 10), fecha: hoy, concepto: 'Prueba 18' });
+    const re = apuntarAhorro_({ tipo: 'retirada', quien: 'yo', importe: redondear2_(margenDesde_(hoja, zona, hoy) - 10), fecha: hoy, concepto: 'Prueba 18' });
     ids.push(re.id);
     const neg = editarAhorro_({ id: ap.id, importe: 1 });
     log(t.error === 'rechazado' && s.error === 'rechazado' && neg.error === 'rechazado' && valor(ap.id, 6) === 100,
@@ -497,5 +561,119 @@ function probarEditarAhorro() {
     else props.setProperty('ULTIMO', ultimo);
     log(hoja.getLastRow() === filasAntes && props.getProperty('ULTIMO') === ultimo &&
         (!inicialReal || valor(inicialReal.id, 6) === importeInicialReal), 'Limpieza: Ahorros y el Deshacer pendiente como estaban');
+  }
+}
+
+/* ---------- Fase 19: movimientos programados ---------- */
+
+/**
+ * Prueba desde el editor (fase 19). Se comprueban diferencias, así que vale con datos reales. Limpieza en finally: Ahorros
+ * y el Deshacer pendiente como estaban.
+ */
+function probarProgramados() {
+  const libro = libro_();
+  const zona = libro.getSpreadsheetTimeZone();
+  const hoy = Utilities.formatDate(new Date(), zona, 'yyyy-MM-dd');
+  const hoja = libro.getSheetByName(AHO_HOJA_);
+  if (!hoja) return Logger.log('❌ Falta la pestaña Ahorros: ejecuta antes aplicarFase16().');
+  const props = PropertiesService.getScriptProperties();
+  const token = props.getProperty('TOKEN');
+  const ultimo = props.getProperty('ULTIMO');
+  const filasAntes = hoja.getLastRow();
+  const ids = [];
+  const log = (bien, texto) => Logger.log((bien ? '✅ ' : '❌ ') + texto);
+  const apuntar = (p) => { const r = apuntarAhorro_(Object.assign({ concepto: 'Prueba 19' }, p)); if (r.id) ids.push(r.id); return r; };
+  const leer = () => leerAhorros_(libro);
+  const limite = unAnoDespues_(hoy);
+  try {
+    const a0 = leer();
+    if (a0.programado === null) return Logger.log('❌ Objetivos!I11 está vacía: ejecuta antes aplicarFase19().');
+    Logger.log('== Hoy ' + hoy + ' · límite ' + limite + ' · total ' + a0.total + ' · programado ' + a0.programado);
+
+    // 1. El límite de un año, al apuntar y al editar (de la pareja: no depende de la pestaña Meses).
+    const enLimite = apuntar({ tipo: 'aportación', quien: 'pareja', importe: 1, fecha: limite });
+    const pasado = apuntarAhorro_({ tipo: 'aportación', quien: 'pareja', importe: 1, fecha: sumarDias_(limite, 1) });
+    const edPasado = enLimite.id ? editarAhorro_({ id: enLimite.id, fecha: sumarDias_(limite, 1) }) : {};
+    const edBien = enLimite.id ? editarAhorro_({ id: enLimite.id, fecha: sumarDias_(limite, -1) }) : {};
+    log(enLimite.ok !== false && pasado.error === 'rechazado' && edPasado.error === 'rechazado' && edBien.ok !== false,
+        'Fecha ' + limite + ' → ' + (enLimite.desc || enLimite.mensaje) + ' · un día más → ' + pasado.mensaje +
+        ' · editarla a un día más → ' + edPasado.mensaje + ' · a la víspera → ' + (edBien.desc || edBien.mensaje));
+
+    // 2. Saldo inicial con fecha futura → rechazado.
+    const ini = apuntarAhorro_({ tipo: 'inicial', importe: 1, fecha: sumarDias_(hoy, 1) });
+    log(ini.error === 'rechazado', 'Saldo inicial con fecha de mañana → ' + ini.mensaje);
+
+    // 3. Aportación mía de 100 a 200 días: el total no cambia, «Programado» +100 y el mes de su fecha +100.
+    const a1 = leer();
+    const fecha200 = sumarDias_(hoy, 200);
+    const mes200 = mesDeFecha_(libro, fecha200, zona);
+    let ap = null;
+    if (!mes200) {
+      const r = apuntarAhorro_({ tipo: 'aportación', quien: 'yo', importe: 100, fecha: fecha200 });
+      log(r.error === 'rechazado', 'Aportación mía el ' + fecha200 + ' (mes fuera de Meses) → ' + r.mensaje);
+    } else {
+      const c0 = mes_({ etiqueta: mes200 }).cabecera;   // Mes.gs
+      ap = apuntar({ tipo: 'aportación', quien: 'yo', importe: 100, fecha: fecha200 });
+      const c1 = mes_({ etiqueta: mes200 }).cabecera;
+      const m = ap.ahorros.movimientos.filter((x) => x.id === ap.id)[0];
+      log(ap.ahorros.total === a1.total && ap.ahorros.programado === redondear2_(a1.programado + 100) &&
+          ap.ahorros.con_programado === redondear2_(ap.ahorros.total + ap.ahorros.programado) && m && m.programado &&
+          ap.mes === mes200 && c1.ahorro_mes === redondear2_(c0.ahorro_mes + 100) && c1.restante === redondear2_(c0.restante - 100),
+          'Aportación mía de 100 el ' + fecha200 + ' → total ' + a1.total + ' → ' + ap.ahorros.total + ' · programado ' +
+          a1.programado + ' → ' + ap.ahorros.programado + ' · ' + mes200 + ': ahorro del mes ' + c0.ahorro_mes + ' → ' + c1.ahorro_mes);
+      const lista = ap.ahorros.movimientos;
+      const orden = lista.findIndex((x) => !x.programado);
+      const bienOrden = (orden < 0 ? lista : lista.slice(0, orden)).every((x, i, a) => x.programado && (!i || a[i - 1].fecha <= x.fecha)) &&
+                        (orden < 0 || lista.slice(orden).every((x) => !x.programado));
+      log(bienOrden, 'Lista: primero los programados, del más cercano al más lejano (' + lista.filter((x) => x.programado).length + '), y después los hechos');
+    }
+
+    // 4. Una retirada programada que dejaría la cuenta en negativo → rechazada. Y la regla nueva: una retirada de hoy que
+    //    solo «cabe» contando con una aportación futura → también rechazada (hasta esa fecha la cuenta estaría en negativo).
+    const a2 = leer();
+    const fut = apuntarAhorro_({ tipo: 'retirada', quien: 'pareja', importe: redondear2_(a2.con_programado + 1), fecha: sumarDias_(hoy, 300) });
+    log(fut.error === 'rechazado', 'Retirada de ' + redondear2_(a2.con_programado + 1) + ' a 300 días (con lo programado hay ' + a2.con_programado + ') → ' + fut.mensaje);
+    if (ap) {
+      const margen = margenDesde_(hoja, zona, hoy);
+      const hoyMas = apuntarAhorro_({ tipo: 'retirada', quien: 'pareja', importe: redondear2_(margen + 50), fecha: hoy });
+      log(hoyMas.error === 'rechazado', 'Retirada hoy de ' + redondear2_(margen + 50) + ' (con lo programado habría ' + a2.con_programado +
+          ', pero hoy solo ' + margen + ') → ' + hoyMas.mensaje);
+      // Retirada a 250 días que deja la cuenta a 0 desde entonces; borrar la aportación de 100 (o moverla a después) → rechazado.
+      const margen250 = margenDesde_(hoja, zona, sumarDias_(hoy, 250));
+      const todo = apuntar({ tipo: 'retirada', quien: 'pareja', importe: margen250, fecha: sumarDias_(hoy, 250) });
+      const borrar = borrarAhorro_({ id: ap.id });
+      const mover = editarAhorro_({ id: ap.id, fecha: sumarDias_(hoy, 260) });
+      log(todo.ok !== false && borrar.error === 'rechazado' && mover.error === 'rechazado',
+          'Retirada a 250 días de todo lo que hay entonces (' + margen250 + ') → ' + (todo.desc || todo.mensaje) + ' · borrar la aportación de 100 → ' +
+          borrar.mensaje + ' · moverla a 260 días → ' + mover.mensaje);
+      if (todo.id) { hoja.deleteRow(buscarFilaPorId_(hoja, todo.id)); ids.splice(ids.indexOf(todo.id), 1); }   // v1
+    }
+
+    // 5. Una aportación de hoy cuenta en el total, no en lo programado; editar su fecha a 3 meses → pasa a programada.
+    const a3 = leer();
+    const hoyAp = apuntar({ tipo: 'aportación', quien: 'pareja', importe: 10, fecha: hoy });
+    log(hoyAp.ahorros.total === redondear2_(a3.total + 10) && hoyAp.ahorros.programado === a3.programado,
+        'Aportación de hoy de 10 → total ' + a3.total + ' → ' + hoyAp.ahorros.total + ' · programado igual (' + hoyAp.ahorros.programado + ')');
+    const ed = editarAhorro_({ id: hoyAp.id, fecha: sumarDias_(hoy, 90) });
+    const m = ed.ahorros && ed.ahorros.movimientos.filter((x) => x.id === hoyAp.id)[0];
+    log(ed.ok !== false && ed.ahorros.total === a3.total && ed.ahorros.programado === redondear2_(a3.programado + 10) && m && m.programado,
+        'Su fecha a 90 días → ' + ed.desc + ' · total ' + ed.ahorros.total + ' · programado ' + ed.ahorros.programado);
+    const d = deshacer(token);   // v1
+    const a4 = leer();
+    log(a4.total === hoyAp.ahorros.total && a4.programado === a3.programado, 'Deshacer → ' + d.desc + ' · total ' + a4.total);
+
+    // 6. El objetivo (si hay uno): el progreso con lo programado es mayor o igual que el de hoy.
+    if (a4.objetivo) {
+      const g = a4.objetivo;
+      log(g.progreso_con_programado !== null && g.progreso_con_programado >= g.progreso,
+          'Objetivo «' + g.nombre + '»: progreso ' + g.progreso + ' % · con lo programado ' + g.progreso_con_programado + ' %');
+    } else {
+      Logger.log('· Sin objetivo activo: no se comprueba su progreso con lo programado');
+    }
+  } finally {
+    ids.slice().reverse().forEach((id) => { let f; while ((f = buscarFilaPorId_(hoja, id)) > 0) hoja.deleteRow(f); });
+    if (ultimo === null) props.deleteProperty('ULTIMO');
+    else props.setProperty('ULTIMO', ultimo);
+    log(hoja.getLastRow() === filasAntes && props.getProperty('ULTIMO') === ultimo, 'Limpieza: Ahorros y el Deshacer pendiente como estaban');
   }
 }
