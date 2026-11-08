@@ -64,6 +64,11 @@ function restaurarPersona_(antes) {
   USUARIO_PETICION_ = antes.usuario;
 }
 
+/** El nombre de la persona de la petición («pau» si no hay otra fijada). */
+function personaActual_() {
+  return USUARIO_PETICION_ || USU_TITULAR_;
+}
+
 /** La propiedad del Deshacer pendiente: ULTIMO para Pau (la de siempre) y ULTIMO:<nombre> para los demás. */
 function claveUltimo_() {
   return USUARIO_PETICION_ ? 'ULTIMO:' + USUARIO_PETICION_ : 'ULTIMO';
@@ -103,9 +108,10 @@ function bajaUsuario() {
   const nombre = String(props.getProperty('BAJA_USUARIO') || '').trim();
   if (!nombre) return Logger.log('❌ Pon en las propiedades del script BAJA_USUARIO = nombre.');
   try {
-    quitarUsuario(nombre);
+    const cuenta = quitarUsuario(nombre);
     props.deleteProperty('BAJA_USUARIO');
-    Logger.log('✅ «' + nombre + '» dado de baja: su token ya no vale. Su hoja sigue en su Drive, intacta.');
+    Logger.log('✅ «' + nombre + '» dado de baja: su token ya no vale. Su hoja sigue en su Drive, intacta.' +
+               (cuenta ? ' La cuenta conjunta «' + cuenta + '» también se ha quitado.' : ''));
   } catch (err) {
     Logger.log('❌ ' + err.message);
   }
@@ -153,7 +159,10 @@ function crearUsuario(nombre, idHoja) {
   return { nombre: nombre, hoja: idHoja, token: token, titulo: libro.getName() };
 }
 
-/** Quita a una persona: su token deja de valer al momento y su Deshacer pendiente se borra. Su hoja no se toca. */
+/**
+ * Quita a una persona: su token deja de valer al momento y su Deshacer pendiente se borra. Su hoja no se toca. Si estaba
+ * en una cuenta conjunta (fase 21), la cuenta se quita también; devuelve su nombre, o null.
+ */
 function quitarUsuario(nombre) {
   nombre = String(nombre == null ? '' : nombre).trim().toLowerCase();
   const usuarios = leerUsuarios_();
@@ -161,6 +170,10 @@ function quitarUsuario(nombre) {
   delete usuarios[nombre];
   guardarUsuarios_(usuarios);
   PropertiesService.getScriptProperties().deleteProperty('ULTIMO:' + nombre);
+  const cuentas = leerCuentas_();   // Conjunta.gs
+  const cuenta = Object.keys(cuentas).filter((c) => cuentas[c].miembros.indexOf(nombre) >= 0)[0];
+  if (cuenta) quitarCuentaConjunta(cuenta);
+  return cuenta || null;
 }
 
 /** Nombres y hojas (nunca los tokens), y si el servidor puede abrir cada una. */
