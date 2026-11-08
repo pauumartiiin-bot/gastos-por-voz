@@ -1195,6 +1195,11 @@ function pintarAhorro() {
   $('ahorro-inicial').textContent = euros(a.inicial);
   $('ahorro-yo').textContent = euros(a.yo);
   $('ahorro-pareja').textContent = euros(a.pareja);
+  // Fase 21: en una cuenta conjunta, la otra columna lleva el nombre de la otra persona y cada uno apunta lo suyo.
+  const conjunta = a.conjunta || null;
+  $('ahorro-pareja-nombre').textContent = conjunta ? conjunta.otro_visible : 'Pareja';
+  mostrar('ahorro-quien-campo', !conjunta);
+  if (conjunta) document.querySelector('input[name="ahorro-quien"][value="yo"]').checked = true;
   // Fase 19: lo programado (fecha futura) va aparte; el total solo cuenta lo que ya ha pasado.
   const hayProgramado = a.programado != null && a.programado !== 0;
   if (hayProgramado) {
@@ -1204,7 +1209,7 @@ function pintarAhorro() {
   mostrar('ahorro-programado', hayProgramado);
   $('ahorro-fecha').max = unAnoDespues(a.hoy);
   if (!editandoObjetivo) pintarObjetivo();
-  mostrar('saldo-inicial', !a.hay_inicial);
+  mostrar('saldo-inicial', !a.hay_inicial && (!conjunta || conjunta.titular));   // el saldo inicial es del titular
   $('lista-ahorros').replaceChildren(...(a.movimientos.length
     ? a.movimientos.map(tarjetaAhorro)
     : [crear('p', 'vacio', 'Todavía no hay movimientos de ahorro.')]));
@@ -1386,9 +1391,21 @@ const NOMBRES_AHORRO = { inicial: 'Saldo inicial', 'aportación': 'Aportación',
 // Movimiento de ahorro: la retirada se ve en negativo. Para corregirlo, se borra y se vuelve a apuntar.
 function tarjetaAhorro(m) {
   const chips = [crear('span', 'chip', fecha(m.fecha)), crear('span', 'chip chip-prim', NOMBRES_AHORRO[m.tipo] || m.tipo)];
-  if (m.quien) chips.push(crear('span', 'chip chip-acento', m.quien === 'yo' ? 'Tú' : 'Pareja'));
+  // Fase 21: con cuenta conjunta, el servidor dice de quién es cada movimiento («Tú» o su nombre).
+  const quien = m.quien_visible !== undefined ? m.quien_visible : (m.quien ? (m.quien === 'yo' ? 'Tú' : 'Pareja') : '');
+  if (quien) chips.push(crear('span', 'chip chip-acento', quien));
   if (m.programado) chips.push(crear('span', 'chip chip-programado', 'programado'));
-  return tarjetaLista(m.id, m.concepto, m.tipo === 'retirada' ? -m.importe : m.importe, chips, () => editorAhorro(m), pintarAhorro);
+  // Los IDs se repiten entre las dos hojas (S001 en cada una): la tarjeta abierta se recuerda con su dueño delante.
+  const clave = m.de ? m.de + ':' + m.id : m.id;
+  const editor = m.tuyo === false ? () => editorAjeno(m) : () => editorAhorro(m);
+  return tarjetaLista(clave, m.concepto, m.tipo === 'retirada' ? -m.importe : m.importe, chips, editor, pintarAhorro);
+}
+
+// Fase 21: un movimiento que apuntó la otra persona se ve, pero solo lo cambia o lo borra ella desde su app.
+function editorAjeno(m) {
+  const editor = crear('div', 'editor');
+  editor.append(crear('p', 'aviso', 'Lo apuntó ' + m.de_visible + ': solo lo puede cambiar o borrar desde su app.'));
+  return editor;
 }
 
 // Guardar o eliminar un movimiento de ahorro: la respuesta trae los totales nuevos; los meses, se vuelven a pedir.
@@ -1428,22 +1445,27 @@ function editorAhorro(m) {
   } else {
     dia = entrada('date', m.fecha);
     if (datosAhorro) dia.max = unAnoDespues(datosAhorro.hoy);
-    quien = document.createElement('select');
-    [['yo', 'Yo'], ['pareja', 'Pareja']].forEach(([v, t]) => {
-      const o = crear('option', null, t);
-      o.value = v;
-      o.selected = v === m.quien;
-      quien.append(o);
-    });
-    editor.append(campo('Fecha', dia), campo('Quién', quien),
-      crear('p', 'aviso', 'Si cambias la fecha o quién, cambia el mes al que resta: solo lo tuyo cuenta en tu mes.'));
+    if (datosAhorro && datosAhorro.conjunta) {
+      // Fase 21: en la cuenta conjunta cada uno apunta lo suyo; «quién» no se cambia.
+      editor.append(campo('Fecha', dia), crear('p', 'aviso', 'Si cambias la fecha, cambia el mes al que resta.'));
+    } else {
+      quien = document.createElement('select');
+      [['yo', 'Yo'], ['pareja', 'Pareja']].forEach(([v, t]) => {
+        const o = crear('option', null, t);
+        o.value = v;
+        o.selected = v === m.quien;
+        quien.append(o);
+      });
+      editor.append(campo('Fecha', dia), campo('Quién', quien),
+        crear('p', 'aviso', 'Si cambias la fecha o quién, cambia el mes al que resta: solo lo tuyo cuenta en tu mes.'));
+    }
   }
   editor.append(campoFijo('Tipo', (NOMBRES_AHORRO[m.tipo] || m.tipo) + ' · no se cambia'));
 
   const guardar = crear('button', 'btn-primario', 'Guardar cambios');
   guardar.type = 'button';
   guardar.addEventListener('click', () => accionAhorro(guardar, 'Guardando…', async () => {
-    const params = { id: m.id };
+    const params = m.de ? { id: m.id, de: m.de } : { id: m.id };   // fase 21: de quién es (los IDs se repiten)
     const c = concepto.value.replace(/\s+/g, ' ').trim();
     if (!c) throw new Error('Escribe el concepto.');
     if (c !== m.concepto) params.concepto = c;
@@ -1457,7 +1479,7 @@ function editorAhorro(m) {
   }));
   const eliminar = crear('button', 'btn-peligro', 'Eliminar');
   eliminar.type = 'button';
-  dosToques(eliminar, () => accionAhorro(eliminar, 'Eliminando…', () => api('borrar_ahorro', { id: m.id })));
+  dosToques(eliminar, () => accionAhorro(eliminar, 'Eliminando…', () => api('borrar_ahorro', m.de ? { id: m.id, de: m.de } : { id: m.id })));
   editor.append(guardar, eliminar);
   return editor;
 }
