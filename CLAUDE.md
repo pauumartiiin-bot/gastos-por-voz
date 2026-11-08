@@ -24,13 +24,18 @@ iPhone (esta app, GitHub Pages, instalada en pantalla de inicio)
 - **Sin frameworks ni build.** HTML, CSS y JavaScript sin dependencias, para que se sirva tal cual en GitHub Pages.
 - **No romper la v1.** En Apps Script, `doGet` y los archivos existentes (`Codigo.gs`, `Registros.gs`,
   `Prompt.gs`, `Validacion.gs`, `Index.html`, `Pruebas.gs`) no se modifican en esta fase. Lo nuevo va en
-  archivos nuevos.
+  archivos nuevos. **Única excepción (fase 20, confirmada por Pau):** 4 líneas de `Código.gs` para que la v1 trabaje
+  con la hoja de cada persona (`libro_`, `apuntarDeshacer_` y dos en `deshacer`; detalle en «Fase 20»). Nada más.
+- **Toda migración, en todas las hojas** (desde la fase 20). Una fase que cambie la hoja escribe su `aplicarFaseN()`
+  como siempre (con `libro_()`) y añade `function aplicarFaseNEnTodas() { enTodasLasHojas_(aplicarFaseN); }`
+  (`Usuarios.gs`): la ejecuta en la hoja de Pau, en la plantilla y en la de cada persona. Se ejecuta primero
+  `aplicarFaseN()` en la de Pau y, si va bien, la de «EnTodas» (que repite la de Pau sin cambiar nada).
 - **No añadir funciones no pedidas.** Si algo parece útil, se propone, no se implementa.
 - Peticiones al backend: `fetch` POST con `Content-Type: text/plain` (evita el preflight de CORS) y
   `redirect: 'follow'` (Apps Script responde con una redirección).
 - Interfaz en español. Comentarios del código en español, breves.
 
-## Contrato de la API (fases 6.1–19)
+## Contrato de la API (fases 6.1–20)
 Petición: un único `doPost` (en `backend/Api.gs`) que enruta por `accion`. Cuerpo JSON enviado como texto plano:
 ```json
 { "t": "<token>", "accion": "dictar", ...parámetros }
@@ -86,7 +91,10 @@ Errores: `{ "ok": false, "error": "...", "mensaje"?: "..." }`
 - `interno`: cualquier otra excepción → sin mensaje.
 
 Reglas:
-- El servidor comprueba el token **antes** de hacer nada más, con `tokenValido_` de la v1.
+- El servidor comprueba el token **antes** de hacer nada más. **El token decide la persona y su hoja** (fase 20,
+  `identificar_` en `Usuarios.gs`): el de siempre (`TOKEN`, comprobado con `tokenValido_` de la v1) es el de Pau y abre
+  `CONFIG.ID_HOJA`; los demás están en la propiedad `USUARIOS`. Un token que no está en ninguno → `token`. Mismas acciones
+  y mismas respuestas para todos; cada uno, con su hoja y su Deshacer.
 - Solo puede haber un `doPost` y un `respuesta_` en todo el proyecto de Apps Script (espacio global compartido).
 - `modelo` solo admite `whisper-large-v3` (por defecto) o `whisper-large-v3-turbo` (lista blanca en el servidor).
 - Rechazar audio vacío o de más de ~3 MB en base64.
@@ -120,6 +128,7 @@ backend/Veces.gs        acción veces y veces en registros (fase 17): recurrente
 backend/Ahorros.gs      acciones ahorros, ahorro, borrar_ahorro y objetivo (fase 16), editar_ahorro (fase 18) y lo programado (fase 19); se copia a mano
 backend/Guardar.gs      acción guardar_registro (fase 18.2): un solo «Guardar cambios» con Deshacer compuesto; se copia a mano
 backend/Previstos.gs    acción previsto (fase 14): comisiones previstas de un mes (Meses D); se copia a mano
+backend/Usuarios.gs     fase 20: la persona de cada petición, plantilla, altas y bajas, migraciones en todas las hojas; se copia a mano
 docs/                   capturas del README (generadas con datos inventados)
 CLAUDE.md               este archivo
 README.md               README de portfolio (fase 6.5)
@@ -446,6 +455,77 @@ segunda vez sin cambios. Nueva versión publicada. En Apps Script X5–X7 OK: `p
 OK: aportación mía de 50 € el 01/11/2027 con el chip «programado» arriba de la lista, el total igual y «Programado +50,00 €»;
 «Apartado a ahorro −50,00 €» en noviembre de 2027; una fecha a más de un año, rechazada con el mensaje nuevo; tramo claro en
 la barra del objetivo y «Con lo programado: X %»; eliminar y Deshacer; bien en oscuro.
+
+**Fase 20 — La app para dos personas: un servidor y una hoja para cada una (v2.15) — en pruebas.** Detalle en la sección
+«Fase 20». Sin cambios en la app del móvil (sin `?v=` nuevo). Probado en local con el simulador ampliado (varias hojas
+con su ID, `copy`, la papelera y la v1 con sus 4 líneas cambiadas): `crearPlantilla()` con datos en todas las pestañas
+(la plantilla, sin datos, con B7 = 0, las 9 categorías genéricas, «Aina» quitada y B1 en el mes actual; la hoja de Pau,
+intacta); `probarUsuarios()` todo ✅ (también con un Deshacer de Pau pendiente, que sigue igual); alta y baja con
+propiedades, `listarUsuarios()` sin tokens, una hoja con otra estructura rechazada con las diferencias, `enTodasLasHojas_`
+(sigue tras un fallo y deja la persona como estaba), la caché del vocabulario por hoja, y `registros` y `ahorro` por
+`doPost` con cada token en su hoja. `probarAhorros()`, `probarEditarAhorro()`, `probarProgramados()`,
+`probarGuardarRegistro()`, `probarIngresos()`, `probarArrastre()`, `probarEditarIngreso()`, `probarPagos()`,
+`probarPrevistos()`, `probarVeces()` y `probarRenombrar()` en verde (`probarMes()`: `cuadra` ✅; las reglas reales no están
+en el simulador).
+
+## Fase 20 — La app para dos personas: un servidor y una hoja para cada una (v2.15)
+La pareja de Pau usa la app en su móvil, con su hoja, su presupuesto y su token. Todo lo de Pau, separado. El ahorro
+conjunto será otra fase (`USUARIOS` guarda un objeto por persona: hay sitio para lo que haga falta). Decisiones
+(confirmadas por Pau, con las recomendaciones):
+- **Un servidor, una hoja por persona (B2).** Este Apps Script atiende a todos; el token decide la hoja. Descartado: una
+  copia del proyecto por persona (cada fase, dos veces). Su hoja vive en su Drive y la comparte con Pau como editora
+  (el servidor corre como Pau). Las claves de IA son las de Pau. La app del móvil no cambia: misma URL, su token.
+- **Los tokens:** el de siempre (`TOKEN`) es el de Pau («pau», `CONFIG.ID_HOJA`): su móvil no cambia. Los demás, en la
+  propiedad `USUARIOS` = `{ "<nombre>": { "token", "hoja" } }`. `identificar_` compara sin atajos (como la v1).
+- **`tokenValido_` no se toca.** Si aceptara otros tokens, abrirían también la app web antigua (`doGet` + `Index.html`),
+  que no fija la hoja y vería la de Pau. En su lugar, `doPost` identifica a la persona y pasa a las funciones de la v1 el
+  `TOKEN` del servidor (`tokenInterno_`; nunca sale de Apps Script): su `exigirToken_` queda como segundo cierre.
+- **La persona de cada petición:** `doPost` llama a `fijarPersona_` (rellena `HOJA_PETICION_` y `USUARIO_PETICION_`,
+  globales de `Usuarios.gs`) antes de enrutar (`atender_`) y la deja como estaba en un `finally`. En la app web cada
+  petición es una ejecución nueva, pero no se da por supuesto: en el editor una prueba llama a `doPost` varias veces en
+  la misma ejecución, y así tampoco se mezclan (lo comprueba `probarUsuarios`: Pau → ella → Pau).
+- **Cambios en la v1 (las únicas 4 líneas, todas en `Código.gs`):**
+  - `libro_`: `return SpreadsheetApp.getActive() || SpreadsheetApp.openById(CONFIG.ID_HOJA);` →
+    `return HOJA_PETICION_ ? SpreadsheetApp.openById(HOJA_PETICION_) : (SpreadsheetApp.getActive() || SpreadsheetApp.openById(CONFIG.ID_HOJA));`
+    (todo, de la v1 y nuestro, abre la hoja por `libro_()`: con esta línea cada persona trabaja en la suya).
+  - `deshacer`: `props.getProperty('ULTIMO')` → `props.getProperty(claveUltimo_())` y
+    `props.deleteProperty('ULTIMO')` → `props.deleteProperty(claveUltimo_())`.
+  - `apuntarDeshacer_`: `.setProperty('ULTIMO', …)` → `.setProperty(claveUltimo_(), …)`.
+  Sin tocar: `tokenValido_`, `exigirToken_`, `generarToken`, `mostrarToken`, `doGet` y `leerAjustes` (app web antigua, solo
+  de Pau). **Orden:** primero `Usuarios.gs`, después estas líneas (si no, `libro_` no encuentra `HOJA_PETICION_`).
+- **Por persona:** el Deshacer (`claveUltimo_`: `ULTIMO` para Pau, `ULTIMO:<nombre>` para los demás; lo usan la v1,
+  `Guardar.gs` y nada más en marcha; las `probar…()` siguen con `ULTIMO` porque trabajan con la hoja de Pau) y la caché del
+  vocabulario de Whisper (`claveVocabulario_`: la de siempre + `:<ID de la hoja>`). Del servidor, sin cambios:
+  `ANTHROPIC_API_KEY`, `GROQ_API_KEY`, `CARPETA_EVALUACION`, `TOKEN`, `GUARDAR_DIRECTO`. El bloqueo (`conBloqueo_`,
+  `LockService` del script) es uno para todos: solo ordena las peticiones (dos a la vez: una espera ~3 s).
+- **La plantilla (`crearPlantilla()`):** `Spreadsheet.copy()` de la hoja de Pau («Control de gastos — plantilla»).
+  Antes de vaciar nada comprueba que el ID de la copia no es el de ninguna hoja con datos. Vacía con `clearContent` (sin
+  borrar filas: Cálculo apunta a Recurrentes por fila) Recurrentes, Movimientos, Ingresos, Ahorros, Pagos, Evaluación y
+  Evaluación resumen, los objetivos (Objetivos A:E; H:I, intactas) y los previstos de Meses (C y D). Deja las 9
+  categorías genéricas (Formación, Financiación, Alimentación, Ocio, Suscripciones, Transporte, Salud, Cuidado personal y
+  Otros; las demás, fuera) y B1 en el mes actual. Comprueba: ningún dato, B7 = 0, las 9 categorías y la misma estructura
+  que la original. Guarda su ID en la propiedad `PLANTILLA` y registra el enlace, las pestañas y las descripciones de
+  las categorías (Haiku las lee: Pau revisa que no sean demasiado suyas).
+- **Estructura de referencia = la hoja de Pau** (`diferenciasDeEstructura_`): la fila 1 de Recurrentes, Movimientos,
+  Ingresos, Ahorros, Objetivos, Meses, Cálculo y Categorías, y Resumen D2:D8 y Objetivos H1:H13, solo donde la de Pau tiene
+  texto. Sin lista que mantener: una fase que añada columnas queda cubierta sola (si añade etiquetas fuera de esas
+  zonas, se amplía `USU_CELDAS_`).
+- **Altas y bajas (el editor no pasa argumentos a las funciones):** `altaUsuario()` lee la propiedad `ALTA_USUARIO` =
+  `nombre|ID de su hoja`, llama a `crearUsuario` (nombre de 2–20 minúsculas, único y distinto de «pau»; ni la hoja de
+  Pau, ni la plantilla, ni una ya usada; el servidor tiene que poder abrirla **y escribir** en ella, y con la estructura
+  de la de Pau), enseña el token una sola vez y borra la propiedad. `bajaUsuario()` lee `BAJA_USUARIO`: el token deja de
+  valer al momento y se borra su `ULTIMO:<nombre>`; su hoja no se toca. `listarUsuarios()`: nombres y hojas, nunca
+  tokens. `generarToken()` y `mostrarToken()` (v1) siguen siendo solo para el de Pau.
+- **Interfaz:** sin cambios. Con un token que ya no vale, la app ya borraba el token y volvía a pedirlo.
+
+Pruebas: `probarUsuarios()` (necesita la plantilla): copia la plantilla en una hoja de prueba y da de alta a «prueba20»;
+7 altas rechazadas (nombre vacío, «pau», repetido, la hoja de Pau, la plantilla, una hoja ya usada, un ID que no existe);
+`mes` con su token → su mes vacío, y con el de Pau antes y después → igual; `guardar` un gasto suyo (como el formulario)
+→ en su hoja, con `ULTIMO:prueba20`, y la hoja de Pau (filas de cada pestaña, B1 y B5) y su `ULTIMO`, igual; `deshacer`
+con el token de Pau (su `ULTIMO` se vacía antes y se devuelve después: no deshace nada suyo de verdad) → «No hay nada que
+deshacer» y el gasto sigue; `deshacer` con el suyo → se va; un token desconocido y, tras `quitarUsuario`, el suyo →
+`token`. Limpieza en `finally`: `USUARIOS`, los Deshacer y la hoja de prueba a la papelera (`DriveApp`: la primera vez,
+Google pide autorizar el acceso a Drive; si no se puede, lo dice y hay que borrarla a mano).
 
 ## Fase 19 — Ahorro programado hasta un año vista, sin inflar el total (v2.14)
 Programar aportaciones (y retiradas) hasta un año desde hoy. El problema que destapa: Objetivos I1:I4 sumaban todas las
