@@ -14,6 +14,10 @@
  * Fase 19: movimientos programados hasta un año vista. El total (Objetivos I1:I4 y, con él, el progreso, lo que falta y la
  * cuota) solo cuenta lo que ya ha pasado (fecha ≤ TODAY()); lo programado va aparte (H11:I13). Al llegar su día, un
  * movimiento pasa solo de programado a ahorrado. El saldo no puede quedar en negativo en ninguna fecha.
+ *
+ * Fase 21: con cuenta conjunta (Conjunta.gs), las acciones devuelven los ahorros de la cuenta (ahorrosDe_), cada uno
+ * apunta lo suyo (reglasCuenta_), el saldo se comprueba con las dos hojas (movimientosParaSaldo_), nadie toca lo del otro
+ * (deOtraPersona_) y el objetivo se guarda en la hoja del titular. Sin cuenta, todo como antes.
  */
 
 const AHO_HOJA_ = 'Ahorros';
@@ -32,7 +36,7 @@ const OBJ_MAX_NOMBRE_ = 40;
 
 /** Acción "ahorros" (solo lectura): totales, desglose, objetivo activo con su progreso y los últimos movimientos. */
 function ahorros_() {
-  return leerAhorros_(libro_());   // v1
+  return ahorrosDe_(libro_());   // v1; Conjunta.gs: los de la cuenta conjunta si la hay
 }
 
 function leerAhorros_(libro) {
@@ -68,7 +72,9 @@ function apuntarAhorro_(p) {
   const zona = libro.getSpreadsheetTimeZone();
   const tipo = String(p.tipo == null ? '' : p.tipo);
   if (AHO_TIPOS_.indexOf(tipo) < 0) return { ok: false, error: 'entrada' };
-  const quien = tipo === 'inicial' ? '' : String(p.quien == null ? '' : p.quien);   // el inicial no es de nadie
+  const cuenta = cuentaDe_(personaActual_());   // Conjunta.gs, Usuarios.gs
+  // El inicial no es de nadie; con cuenta conjunta, sin «quién», es lo propio.
+  const quien = tipo === 'inicial' ? '' : String(p.quien == null ? (cuenta ? 'yo' : '') : p.quien);
   if (tipo !== 'inicial' && AHO_QUIEN_.indexOf(quien) < 0) return { ok: false, error: 'entrada' };
 
   const fecha = String(p.fecha == null ? '' : p.fecha);
@@ -78,6 +84,7 @@ function apuntarAhorro_(p) {
   const hoy = Utilities.formatDate(new Date(), zona, 'yyyy-MM-dd');
   const error = validarAhorro_(importe, fecha, concepto, hoy) ||
                 (tipo === 'inicial' && fecha > hoy ? 'El saldo inicial es lo que ya hay en la cuenta: su fecha no puede ser futura.' : null) ||
+                reglasCuenta_(cuenta, tipo, quien, fecha) ||   // Conjunta.gs
                 fueraDeMeses_(libro, tipo, quien, fecha, hoy, zona);
   if (error) return { ok: false, error: 'rechazado', mensaje: error };
 
@@ -91,7 +98,8 @@ function apuntarAhorro_(p) {
                '). Para cambiarlo, bórralo y vuelve a apuntarlo.' };
     }
     if (tipo === 'retirada') {
-      const neg = saldoNegativo_(lista, lista.concat([{ fecha: fecha, tipo: tipo, importe: importe }]));
+      const saldo = movimientosParaSaldo_(cuenta, lista, zona);   // Conjunta.gs: con cuenta, las dos hojas
+      const neg = saldoNegativo_(saldo, saldo.concat([{ fecha: fecha, tipo: tipo, importe: importe }]));
       if (neg) return { ok: false, error: 'rechazado', mensaje: 'No puedes retirar ' + textoEuros_(importe) + ': ' + neg + '.' };
     }
     const id = siguienteId_(hoja, 'S');   // v1: S001, S002…
@@ -104,7 +112,7 @@ function apuntarAhorro_(p) {
   if (r.ok === false) return r;
   // El mes que cambia (para que la app lo vuelva a pedir) y los totales ya recalculados: un viaje en vez de dos.
   return Object.assign(r, { mes: cuentaEnMes_(tipo, quien) ? mesDeFecha_(libro, fecha, zona) : null,
-                            ahorros: leerAhorros_(libro) });
+                            ahorros: ahorrosDe_(libro) });
 }
 
 /** Acción "borrar_ahorro": { id } → borra la fila; Deshacer la vuelve a añadir. El total no puede quedar en negativo. */
@@ -112,6 +120,9 @@ function borrarAhorro_(p) {
   const libro = libro_();
   const zona = libro.getSpreadsheetTimeZone();
   const id = String(p.id == null ? '' : p.id);
+  const cuenta = cuentaDe_(personaActual_());
+  const ajeno = deOtraPersona_(cuenta, p.de);   // Conjunta.gs: los IDs se repiten entre hojas
+  if (ajeno) return { ok: false, error: 'rechazado', mensaje: ajeno };
   const r = conBloqueo_(() => {
     const hoja = libro.getSheetByName(AHO_HOJA_);
     const fila = hoja ? buscarFilaPorId_(hoja, id) : -1;   // v1
@@ -119,7 +130,7 @@ function borrarAhorro_(p) {
     const valores = hoja.getRange(fila, 1, 1, 8).getValues()[0];
     const tipo = String(valores[2]);
     if (tipo !== 'retirada') {   // quitar algo que sumaba
-      const lista = leerMovimientosAhorro_(hoja, zona);
+      const lista = movimientosParaSaldo_(cuenta, leerMovimientosAhorro_(hoja, zona), zona);
       const neg = saldoNegativo_(lista, lista.filter((m) => m.id !== id));
       if (neg) return { ok: false, error: 'rechazado', mensaje: 'No se puede borrar: ' + neg + '. Borra antes alguna retirada.' };
     }
@@ -130,7 +141,7 @@ function borrarAhorro_(p) {
              mes: cuentaEnMes_(tipo, String(valores[3])) ? mesDeFecha_(libro, textoFecha_(valores[1], zona), zona) : null };
   });
   if (r.ok === false) return r;
-  return Object.assign(r, { ahorros: leerAhorros_(libro) });
+  return Object.assign(r, { ahorros: ahorrosDe_(libro) });
 }
 
 /**
@@ -147,9 +158,11 @@ function objetivo_(p) {
   const error = validarObjetivo_(nombre, p.importe, fecha, hoy);
   if (error) return { ok: false, error: 'rechazado', mensaje: error };
   const importe = Math.round(Number(String(p.importe).replace(',', '.')) * 100) / 100;
+  const cuenta = cuentaDe_(personaActual_());
+  const libroObjetivo = cuenta ? libroDe_(cuenta.titular) : libro;   // Conjunta.gs: el objetivo es de la cuenta
 
   const anterior = conBloqueo_(() => {
-    const hoja = libro.getSheetByName(OBJ_HOJA_);
+    const hoja = libroObjetivo.getSheetByName(OBJ_HOJA_);
     if (!hoja) throw new Error('No existe la pestaña Objetivos (falta aplicarFase16).');
     const filas = filasObjetivos_(hoja);
     let antes = null;
@@ -166,7 +179,7 @@ function objetivo_(p) {
     return antes;
   });
   return { anterior: anterior, objetivo: { nombre: nombre, importe: importe, fecha: fecha || null },
-           ahorros: leerAhorros_(libro) };
+           ahorros: ahorrosDe_(libro) };
 }
 
 /* ---------- Ayudantes ---------- */
@@ -293,7 +306,8 @@ function validarObjetivo_(nombre, importe, fecha, hoy) {
  * el de hoy (lo programado lo prueba probarProgramados, fase 19). Limpieza en finally: Ahorros, Objetivos y el Deshacer
  * pendiente como estaban.
  */
-function probarAhorros() {
+function probarAhorros() { sinCuenta_(probarAhorros_); }   // fase 21: la lógica de una sola hoja (Conjunta.gs)
+function probarAhorros_() {
   const libro = libro_();
   const zona = libro.getSpreadsheetTimeZone();
   const hoy = Utilities.formatDate(new Date(), zona, 'yyyy-MM-dd');
@@ -446,6 +460,9 @@ function editarAhorro_(p) {
   const zona = libro.getSpreadsheetTimeZone();
   const id = String(p.id == null ? '' : p.id);
   const hoy = Utilities.formatDate(new Date(), zona, 'yyyy-MM-dd');
+  const cuenta = cuentaDe_(personaActual_());
+  const ajeno = deOtraPersona_(cuenta, p.de);   // Conjunta.gs
+  if (ajeno) return { ok: false, error: 'rechazado', mensaje: ajeno };
   const r = conBloqueo_(() => {   // v1
     const hoja = libro.getSheetByName(AHO_HOJA_);
     const fila = hoja ? buscarFilaPorId_(hoja, id) : -1;   // v1
@@ -471,10 +488,11 @@ function editarAhorro_(p) {
     if (!cambia.length) return { ok: false, error: 'rechazado', mensaje: 'No hay cambios que guardar.' };
     if (!despues.concepto) return { ok: false, error: 'rechazado', mensaje: 'Escribe el concepto.' };
     const error = validarAhorro_(despues.importe, despues.fecha, despues.concepto, hoy) ||
-                  (cambia.indexOf('fecha') >= 0 || cambia.indexOf('quien') >= 0 ? fueraDeMeses_(libro, tipo, despues.quien, despues.fecha, hoy, zona) : null);
+                  (cambia.indexOf('fecha') >= 0 || cambia.indexOf('quien') >= 0
+                    ? reglasCuenta_(cuenta, tipo, despues.quien, despues.fecha) || fueraDeMeses_(libro, tipo, despues.quien, despues.fecha, hoy, zona) : null);
     if (error) return { ok: false, error: 'rechazado', mensaje: error };
     // El saldo con el cambio (importe y fecha), día a día: no puede quedar en negativo en ninguna fecha.
-    const lista = leerMovimientosAhorro_(hoja, zona);
+    const lista = movimientosParaSaldo_(cuenta, leerMovimientosAhorro_(hoja, zona), zona);
     const conCambio = lista.map((m) => (m.id === id ? Object.assign({}, m, { fecha: despues.fecha, importe: despues.importe }) : m));
     const neg = saldoNegativo_(lista, conCambio);
     if (neg) return { ok: false, error: 'rechazado', mensaje: 'No se puede: ' + neg + '.' };
@@ -499,14 +517,15 @@ function editarAhorro_(p) {
     return { id: id, desc: '«' + despues.concepto + '»: ' + cambia.map((k) => textos[k]()).join(' · '), meses: meses };
   });
   if (r.ok === false) return r;
-  return Object.assign(r, { ahorros: leerAhorros_(libro) });
+  return Object.assign(r, { ahorros: ahorrosDe_(libro) });
 }
 
 /**
  * Prueba desde el editor (fase 18.3). Mes de hoy; se comprueban diferencias, así que vale con datos reales. Limpieza en
  * finally: Ahorros (también el importe del saldo inicial real, si lo hay) y el Deshacer pendiente como estaban.
  */
-function probarEditarAhorro() {
+function probarEditarAhorro() { sinCuenta_(probarEditarAhorro_); }
+function probarEditarAhorro_() {
   const libro = libro_();
   const zona = libro.getSpreadsheetTimeZone();
   const hoy = Utilities.formatDate(new Date(), zona, 'yyyy-MM-dd');
@@ -570,7 +589,8 @@ function probarEditarAhorro() {
  * Prueba desde el editor (fase 19). Se comprueban diferencias, así que vale con datos reales. Limpieza en finally: Ahorros
  * y el Deshacer pendiente como estaban.
  */
-function probarProgramados() {
+function probarProgramados() { sinCuenta_(probarProgramados_); }
+function probarProgramados_() {
   const libro = libro_();
   const zona = libro.getSpreadsheetTimeZone();
   const hoy = Utilities.formatDate(new Date(), zona, 'yyyy-MM-dd');

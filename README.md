@@ -285,6 +285,10 @@ pareja, y eso decide el modelo:
   borrar o editar.
 - **Objetivo con el modelo preparado para varios:** nombre, importe y fecha opcional, con su progreso y cuánto ahorrar
   al mes hasta la fecha. Cambiarlo no borra el anterior: queda inactivo.
+- **Ahorro conjunto entre dos personas de la app.** Cada uno apunta lo suyo en su propia hoja y lo suyo resta de su
+  mes; el servidor junta las dos para lo que es de la cuenta: el mismo total, el mismo objetivo y la misma lista para
+  los dos, con quién apuntó cada movimiento. Nadie toca lo del otro, y el saldo nunca queda en negativo sumando las dos
+  hojas. Una fecha de corte evita contar dos veces lo que antes apuntaba yo como «pareja».
 - Como en el resto de la app, **la hoja calcula y la app enseña**: los totales, el progreso y el «ahorro del mes» son
   fórmulas. En «Mes» aparece la línea «Apartado a ahorro» entre las cifras y el restante.
 
@@ -331,6 +335,7 @@ acabaría en «Aina»; por eso la frase solo nombra la categoría elegida.
 | El arrastre del restante se guarda como una fila de Ingresos al apuntar la nómina, con un botón «Recalcular» | Una fórmula que encadene los meses, o calcularlo en la app | La hoja calcula un solo mes a la vez (el de `B1`): no puede encadenarlos. Guardarlo es una foto (un dato derivado *materializado*): rápido de leer y con el precio de que puede quedarse viejo, por eso se puede recalcular. El cálculo sigue en la hoja; el servidor solo lo copia |
 | El ahorro en pestañas propias («Ahorros» y «Objetivos») | Una categoría de gastos «Ahorro» | No se mezcla con los gastos, no ocupa uno de los 12 huecos del Resumen y una retirada no es un «gasto negativo» |
 | Cuenta conjunta: solo lo mío cuenta en mi mes | Contar todo lo que entra en la cuenta | Lo que pone mi pareja no sale de mi dinero; si contara, el restante del mes mentiría |
+| Ahorro conjunto: cada uno en su hoja y el servidor suma las dos | Una hoja compartida con `IMPORTRANGE` | Con una hoja compartida, cada movimiento se escribiría en una tercera hoja y el Deshacer (que actúa sobre la hoja de quien pide) no podría quitarlo. Sumando, cada hoja sigue calculando su parte y su mes; el precio es que el progreso del objetivo, que depende del total conjunto, se calcula en el código con las mismas fórmulas que la hoja |
 | Un servidor y una hoja por persona: el token decide la hoja | Una copia del proyecto de Apps Script para cada persona | Cada fase se hace una vez y sirve para todos. Todo abre la hoja por una sola función (`libro_()`), así que repartir la app entre dos hojas fue una línea más un token por persona. Su hoja es suya y la comparte conmigo como editora, porque el servidor corre como yo |
 | El total ahorrado solo cuenta lo que ya ha pasado (fecha ≤ hoy); lo programado, aparte | Contar todas las filas, como al principio | Con aportaciones a un año vista, el total y el progreso del objetivo dirían que tengo un dinero que aún no está en la cuenta. La pregunta de la pestaña es «¿cuánto tengo de verdad?» |
 | Ni una fórmula en la pestaña «Ahorros»; los totales, en «Objetivos» | Totales al pie de la propia pestaña | La v1 escribe cada fila nueva tras la última ocupada: una fórmula debajo la desplazaría (la misma lección de la fase 13) |
@@ -368,6 +373,9 @@ visto es instantáneo gracias a la caché, que se actualiza por detrás.
 - **El servidor comprueba el token antes de hacer nada.**
 - **Un token por persona, y el token decide la hoja.** Con el suyo, nadie abre la hoja de otro. Quitarle el acceso a
   alguien es borrar su token del servidor: deja de valer al momento.
+- **En el ahorro conjunto solo se comparte el ahorro.** De la hoja de la otra persona el servidor solo lee sus pestañas
+  de ahorro, nunca sus gastos, ingresos ni su mes. Lo garantiza el código, no los permisos de Google: el servidor corre
+  como yo y es editor de las dos hojas.
 - **Validación en el servidor**: no se confía en lo que llega del navegador ni en lo que devuelve el modelo.
 - **La salida del modelo se pinta con `textContent`**, nunca con `innerHTML`.
 - **Los errores no exponen claves, trazas ni las respuestas de Groq o Anthropic.**

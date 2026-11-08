@@ -35,7 +35,7 @@ iPhone (esta app, GitHub Pages, instalada en pantalla de inicio)
   `redirect: 'follow'` (Apps Script responde con una redirección).
 - Interfaz en español. Comentarios del código en español, breves.
 
-## Contrato de la API (fases 6.1–20)
+## Contrato de la API (fases 6.1–21)
 Petición: un único `doPost` (en `backend/Api.gs`) que enruta por `accion`. Cuerpo JSON enviado como texto plano:
 ```json
 { "t": "<token>", "accion": "dictar", ...parámetros }
@@ -59,15 +59,15 @@ Petición: un único `doPost` (en `backend/Api.gs`) que enruta por `accion`. Cue
 | `ingreso` | `tipo` (no `arrastre`), `importe`, `fecha`, `mes`, `concepto?` | `apuntarIngreso_` (nuevo) con `conBloqueo_`, `siguienteId_`, `escribirFila_`, `fechaSerial_`, `ahoraSerial_` y `apuntarDeshacer_` | `id`, `desc`, `ingreso`, `arrastre` (`{ id, importe, desde, concepto }` o `null`), `motivo_arrastre` (fase 15) |
 | `borrar_ingreso` | `id` | `borrarIngreso_` (nuevo) con `conBloqueo_`, `buscarFilaPorId_`, `aJSON_` y `apuntarDeshacer_` | `id`, `desc`, `arrastre_borrado` (fase 15) |
 | `previsto` | `etiqueta`, `tipo` (`nómina` \| `comisiones`), `importe` (≥ 0; 0 lo quita), `siguientes?` (solo nómina: también los meses de después) | `previsto_` (nuevo, `backend/Previstos.gs`) con `libro_`, `conBloqueo_` y `mes_` | `etiqueta`, `tipo`, `anterior`, `importe`, `meses_cambiados`, `mes` (el mes ya recalculado; detalle en «Fase 14») |
-| `ahorros` | — | `ahorros_` (nuevo, `backend/Ahorros.gs`) con `libro_` | `hoy`, `total`, `inicial`, `yo`, `pareja` (lo ya ocurrido), `programado`, `con_programado` (fase 19), `objetivo` (`nombre`, `importe`, `fecha`, `progreso` en %, `falta`, `al_mes`, `progreso_con_programado`) o `null`, `hay_inicial`, `movimientos` (todos los programados y los últimos 20 hechos; cada uno con `programado`) (detalle en «Fase 16» y «Fase 19») |
-| `ahorro` | `tipo` (`inicial` \| `aportación` \| `retirada`), `quien` (`yo` \| `pareja`; no en `inicial`), `importe`, `fecha` (hasta un año desde hoy; el inicial, no futuro), `concepto?` | `apuntarAhorro_` (nuevo) con `conBloqueo_`, `siguienteId_`, `escribirFila_`, `fechaSerial_`, `ahoraSerial_` y `apuntarDeshacer_` | `id`, `desc`, `movimiento`, `mes` (el mes que cambia, o `null`), `ahorros` |
-| `borrar_ahorro` | `id` | `borrarAhorro_` (nuevo) con `conBloqueo_`, `buscarFilaPorId_`, `aJSON_` y `apuntarDeshacer_` | `id`, `desc`, `mes`, `ahorros` |
+| `ahorros` | — | `ahorros_` (nuevo, `backend/Ahorros.gs`) con `libro_` | `hoy`, `total`, `inicial`, `yo`, `pareja` (lo ya ocurrido), `programado`, `con_programado` (fase 19), `objetivo` (`nombre`, `importe`, `fecha`, `progreso` en %, `falta`, `al_mes`, `progreso_con_programado`) o `null`, `hay_inicial`, `movimientos` (todos los programados y los últimos 20 hechos; cada uno con `programado`) (detalle en «Fase 16» y «Fase 19»). Con cuenta conjunta (fase 21): los de la cuenta, `yo`/`pareja` = lo de cada persona, cada movimiento con `de`, `de_visible`, `tuyo` y `quien_visible`, y `conjunta` (`nombre`, `tu`, `otro`, `otro_visible`, `titular`, `titular_visible`, `corte`) |
+| `ahorro` | `tipo` (`inicial` \| `aportación` \| `retirada`), `quien` (`yo` \| `pareja`; no en `inicial`; con cuenta conjunta, opcional = `yo`), `importe`, `fecha` (hasta un año desde hoy; el inicial, no futuro), `concepto?` | `apuntarAhorro_` (nuevo) con `conBloqueo_`, `siguienteId_`, `escribirFila_`, `fechaSerial_`, `ahoraSerial_` y `apuntarDeshacer_` | `id`, `desc`, `movimiento`, `mes` (el mes que cambia, o `null`), `ahorros` |
+| `borrar_ahorro` | `id`, `de?` (fase 21: de quién es; solo lo propio) | `borrarAhorro_` (nuevo) con `conBloqueo_`, `buscarFilaPorId_`, `aJSON_` y `apuntarDeshacer_` | `id`, `desc`, `mes`, `ahorros` |
 | `objetivo` | `nombre`, `importe`, `fecha?` | `objetivo_` (nuevo) con `conBloqueo_` y `fechaSerial_` | `anterior` (o `null`), `objetivo`, `ahorros` |
 | `veces` | `id`, `veces` (entero 1–10), `conservar_deshacer?` (sin su propio Deshacer: lo usa «+ Nuevo gasto») | `veces_` (nuevo, `backend/Veces.gs`) con `libro_`, `conBloqueo_`, `buscarFilaPorId_`, `COL` y `apuntarDeshacer_` | `id`, `veces`, `anterior`, `desc` (detalle en «Fase 17») |
 | `arrastre` | `etiqueta` (el mes que recibe el arrastre) | `arrastre_` (nuevo, `backend/Ingresos.gs`) con `libro_`, `conBloqueo_`, `enMes_`, `siguienteId_`, `escribirFila_` y `mes_` | `etiqueta`, `id` (o `null` si da 0), `desde`, `concepto`, `anterior`, `importe`, `mes` (detalle en «Fase 15») |
 | `guardar_registro` | `hoja` (`Recurrentes` \| `Movimientos`), `id`, `concepto?`, `cambios?: { importe?, categoria?, modo?, desde? }` (los de `editar`), `veces?` (solo mensuales que no son presupuesto) | `guardarRegistro_` (nuevo, `backend/Guardar.gs`): `editarRegistro` (v1), `renombrar_` y `veces_`, con un solo `apuntarDeshacer_` al final | `id`, `id_nuevo` (la regla nueva tras un cambio de precio, o `null`), `desc` (detalle en «Fase 18») |
 | `editar_ingreso` | `id`, `concepto?`, `importe?`, `fecha?`, `mes?` (no en nómina; el tipo y los arrastres no se editan) | `editarIngreso_` (nuevo, `backend/Ingresos.gs`) con `conBloqueo_`, `buscarFilaPorId_`, `fechaSerial_`, `aJSON_` y `apuntarDeshacer_` | `id`, `desc`, `aviso` (arrastre que puede haber cambiado, o `null`) |
-| `editar_ahorro` | `id`, `concepto?`, `importe?`, `fecha?`, `quien?` (en el saldo inicial, solo concepto e importe; el tipo no se edita) | `editarAhorro_` (nuevo, `backend/Ahorros.gs`) con `conBloqueo_`, `buscarFilaPorId_`, `fechaSerial_`, `aJSON_` y `apuntarDeshacer_` | `id`, `desc`, `meses` (los que cambian), `ahorros` |
+| `editar_ahorro` | `id`, `de?` (fase 21), `concepto?`, `importe?`, `fecha?`, `quien?` (en el saldo inicial, solo concepto e importe; el tipo no se edita) | `editarAhorro_` (nuevo, `backend/Ahorros.gs`) con `conBloqueo_`, `buscarFilaPorId_`, `fechaSerial_`, `aJSON_` y `apuntarDeshacer_` | `id`, `desc`, `meses` (los que cambian), `ahorros` |
 
 - En `dictar` con `corrige`, lo dictado es el cambio pedido y `frase` es la frase original (así lo espera `interpretar`).
 - `ms_interpretar` incluye leer el contexto de la hoja + Haiku + validación.
@@ -129,6 +129,7 @@ backend/Ahorros.gs      acciones ahorros, ahorro, borrar_ahorro y objetivo (fase
 backend/Guardar.gs      acción guardar_registro (fase 18.2): un solo «Guardar cambios» con Deshacer compuesto; se copia a mano
 backend/Previstos.gs    acción previsto (fase 14): comisiones previstas de un mes (Meses D); se copia a mano
 backend/Usuarios.gs     fase 20: la persona de cada petición, plantilla, altas y bajas, migraciones en todas las hojas; se copia a mano
+backend/Conjunta.gs     fase 21: ahorro conjunto entre dos personas (la cuenta, sus reglas, altas y bajas); se copia a mano
 docs/                   capturas del README (generadas con datos inventados)
 CLAUDE.md               este archivo
 README.md               README de portfolio (fase 6.5)
@@ -478,6 +479,60 @@ con su token, «Mes» vacío y su nómina prevista; un gasto dictado por ella so
 toca lo suyo; tras `bajaUsuario()`, su app vuelve a pedir el token.
 **Propuesta sin implementar:** que `crearUsuario` acepte también el enlace entero de la hoja (saca el ID con una
 expresión regular) y que el error distinga «eso no es un ID ni un enlace de hoja» de «no tengo permiso para editarla».
+
+**Fase 21 — Ahorro conjunto entre dos personas (v2.16) — en pruebas.** Detalle en la sección «Fase 21». `?v=` 7.20.0. Sin
+cambios en la hoja (sin migración). Probado en local con el simulador de la fase 20 (más `Conjunta.gs`):
+`probarAhorroConjunto()` todo ✅ a la primera (crear la cuenta se para con un «pareja» programado y con un movimiento de B
+anterior al corte; aportaciones de B 100 y A 200 → total 1.350 para los dos y cada mes resta solo lo suyo; desglose A «tú
+200 · B 150» y B «tú 150 · A 200»; las 4 reglas; retirada de B de 300 con 100 en su hoja → vale por la cuenta, de 1.400 →
+rechazada, Deshacer de B solo lo suyo; A no borra ni edita el S001 de B aunque su «Saldo inicial» también es S001; objetivo
+de 5.000 puesto por B, guardado en la hoja de A, 27 % para los dos; quitar la cuenta → B ve solo lo suyo; limpieza). Las 13
+pruebas de siempre en verde sin cuenta y **con la cuenta «pau+aina» creada** (las de una sola hoja corren «sin cuenta»).
+Interfaz en el iPhone 13 simulado como Aina, como Pau y sin cuenta (claro y oscuro): desglose con el nombre, chips de
+quién, sin «Yo/Pareja», «+ Saldo inicial» solo para el titular, lo ajeno de solo lectura y `de` al borrar.
+
+## Fase 21 — Ahorro conjunto entre dos personas (v2.16)
+Pau y Aina tienen una cuenta de ahorro conjunta. Hasta ahora Pau la llevaba en su hoja (lo suyo «yo», lo de Aina «pareja»).
+Con la fase 20 Aina tiene su app: cada uno apunta lo suyo desde su móvil, lo suyo resta de su mes, los dos ven el mismo
+total, objetivo y lista, y solo se comparte el ahorro. Decisiones (confirmadas por Pau, con las recomendaciones):
+- **Opción B: cada uno apunta en su propia pestaña «Ahorros» y el servidor junta las dos.** Descartada A (una hoja
+  compartida con `IMPORTRANGE`): además de lenta y frágil, cada movimiento se escribiría en una tercera hoja y el Deshacer
+  de la v1 (que actúa sobre `libro_()`, la hoja de quien pide, sin decir en qué hoja) no podría quitarlo. Con B, cada uno
+  escribe en su hoja y el Deshacer no cambia. Sin cambios en la hoja: E8, B6 y E7 siguen igual («lo mío» = `Quién = yo`).
+- **La hoja calcula, el servidor suma:** el total, el inicial, lo de cada uno, lo programado y con lo programado son la
+  suma de Objetivos I1:I4, I11 e I12 de cada hoja. El progreso, lo que falta y la cuota del objetivo (I8:I10 e I13)
+  dependen del total, así que con cuenta se calculan en el código (`objetivoConjunto_`) con las mismas fórmulas: es la única
+  lógica duplicada (README, Decisiones).
+- **Configuración:** propiedad `CUENTAS` = `{ "pau+aina": { miembros, titular, corte } }`; `altaCuentaConjunta()` lee
+  `ALTA_CUENTA` = `titular|otra persona[|yyyy-MM-dd]` (sin fecha, el corte es hoy) y `bajaCuentaConjunta()` `BAJA_CUENTA`;
+  `listarCuentas()`. Una cuenta es de dos personas; cada persona, en una sola. `quitarUsuario` quita también su cuenta.
+- **El titular guarda el saldo inicial y el objetivo** (en su hoja). **El saldo inicial solo lo toca el titular** (su
+  Deshacer va con su hoja); **el objetivo, los dos** (no tiene Deshacer: la notificación dice el antes y el después).
+- **IDs con dueño:** los IDs se repiten entre hojas (S001 en las dos). Cada movimiento lleva `de`; `editar_ahorro` y
+  `borrar_ahorro` rechazan lo que no es de la persona de la petición (`deOtraPersona_`). La app manda `de` y enseña lo
+  ajeno de solo lectura.
+- **Fecha de corte, para no contar nada dos veces** (`reglasCuenta_`): lo que el titular apuntó como «pareja» antes del
+  corte es el historial de la otra persona y cuenta en el total (y en su columna del desglose); desde el corte no hay
+  «pareja» nuevo en la hoja del titular; la otra persona no apunta nada anterior al corte. `crearCuentaConjunta` no crea
+  la cuenta si el titular tiene «pareja» desde el corte (también programado, fase 19) o si la otra persona tiene
+  movimientos anteriores al corte o un saldo inicial: los lista para que se decida.
+- **Saldo nunca en negativo, con las dos hojas** (`movimientosParaSaldo_`: los de la otra con su nombre delante del ID),
+  dentro de `conBloqueo_` (un bloqueo para todos desde la fase 20).
+- **Privacidad:** de la hoja de la otra persona solo se leen Ahorros y los totales de Objetivos (I1:I13). Lo garantiza el
+  código, no los permisos de Google (desde la fase 20 el servidor es editor de las dos hojas).
+- **Pruebas de una sola hoja:** `probarAhorros()`, `probarEditarAhorro()` y `probarProgramados()` corren dentro de
+  `sinCuenta_` (como si no hubiera cuenta), para seguir probando la lógica de las fases 16–19 aunque exista la real.
+
+Código: `backend/Conjunta.gs` (nuevo): `cuentaDe_`, `ahorrosDe_`, `leerAhorrosConjunto_`, `objetivoConjunto_`,
+`reglasCuenta_`, `deOtraPersona_`, `movimientosParaSaldo_`, `libroDe_`, `crearCuentaConjunta`, `quitarCuentaConjunta`,
+`listarCuentas`, `altaCuentaConjunta`, `bajaCuentaConjunta`, `sinCuenta_` y `probarAhorroConjunto()`. `Ahorros.gs`: las cinco
+acciones pasan por la cuenta si la hay (sin ella, igual que antes). `Usuarios.gs`: `personaActual_` y `quitarUsuario` con la
+cuenta. App: desglose «Inicial · Tú · Aina» (o «Pau» en el móvil de Aina), chip de quién en cada movimiento, sin «Yo/Pareja»,
+«+ Saldo inicial» solo para el titular, `editorAjeno` y clave de la tarjeta abierta con su dueño.
+
+Pruebas: `probarAhorroConjunto()` (necesita la plantilla): dos hojas de prueba y dos usuarios («prueba21a» titular y
+«prueba21b»), todo por `doPost` con sus tokens; los casos de la línea de estado. Limpieza en `finally`: `CUENTAS`, `USUARIOS`,
+los Deshacer y las dos hojas a la papelera; la hoja de Pau, igual.
 
 ## Fase 20 — La app para dos personas: un servidor y una hoja para cada una (v2.15)
 La pareja de Pau usa la app en su móvil, con su hoja, su presupuesto y su token. Todo lo de Pau, separado. El ahorro

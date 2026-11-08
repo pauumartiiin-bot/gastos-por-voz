@@ -30,7 +30,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800&display=swap">
   <!-- ?v= obliga al navegador a descargar los archivos nuevos en cada versión -->
-  <link rel="stylesheet" href="styles.css?v=7.19.0">
+  <link rel="stylesheet" href="styles.css?v=7.20.0">
 </head>
 <body>
   <div class="halo halo-a" aria-hidden="true"></div>
@@ -240,7 +240,7 @@
         <dl class="ahorro-desglose">
           <div><dt>Inicial</dt><dd id="ahorro-inicial">—</dd></div>
           <div><dt>Tú</dt><dd id="ahorro-yo">—</dd></div>
-          <div><dt>Pareja</dt><dd id="ahorro-pareja">—</dd></div>
+          <div><dt id="ahorro-pareja-nombre">Pareja</dt><dd id="ahorro-pareja">—</dd></div>
         </dl>
         <p id="ahorro-programado" class="ahorro-programado oculto"></p>
       </div>
@@ -254,7 +254,7 @@
             <label><input type="radio" name="ahorro-tipo" value="aportación" checked><span>Aportación</span></label>
             <label><input type="radio" name="ahorro-tipo" value="retirada"><span>Retirada</span></label>
           </fieldset>
-          <fieldset class="segmentado segmentado-2" aria-label="Quién">
+          <fieldset id="ahorro-quien-campo" class="segmentado segmentado-2" aria-label="Quién">
             <label><input type="radio" name="ahorro-quien" value="yo" checked><span>Yo</span></label>
             <label><input type="radio" name="ahorro-quien" value="pareja"><span>Pareja</span></label>
           </fieldset>
@@ -344,7 +344,7 @@
     </button>
   </nav>
 
-  <script src="config.js?v=7.19.0"></script>
-  <script src="app.js?v=7.19.0"></script>
+  <script src="config.js?v=7.20.0"></script>
+  <script src="app.js?v=7.20.0"></script>
 </body>
 </html>
