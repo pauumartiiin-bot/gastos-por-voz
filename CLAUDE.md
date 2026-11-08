@@ -480,7 +480,7 @@ toca lo suyo; tras `bajaUsuario()`, su app vuelve a pedir el token.
 **Propuesta sin implementar:** que `crearUsuario` acepte también el enlace entero de la hoja (saca el ID con una
 expresión regular) y que el error distinga «eso no es un ID ni un enlace de hoja» de «no tengo permiso para editarla».
 
-**Fase 21 — Ahorro conjunto entre dos personas (v2.16) — en pruebas.** Detalle en la sección «Fase 21». `?v=` 7.20.0. Sin
+**Fase 21 — Ahorro conjunto entre dos personas (v2.16) — hecha.** Detalle en la sección «Fase 21». `?v=` 7.20.0. Sin
 cambios en la hoja (sin migración). Probado en local con el simulador de la fase 20 (más `Conjunta.gs`):
 `probarAhorroConjunto()` todo ✅ a la primera (crear la cuenta se para con un «pareja» programado y con un movimiento de B
 anterior al corte; aportaciones de B 100 y A 200 → total 1.350 para los dos y cada mes resta solo lo suyo; desglose A «tú
@@ -490,6 +490,13 @@ de 5.000 puesto por B, guardado en la hoja de A, 27 % para los dos; quitar la cu
 pruebas de siempre en verde sin cuenta y **con la cuenta «pau+aina» creada** (las de una sola hoja corren «sin cuenta»).
 Interfaz en el iPhone 13 simulado como Aina, como Pau y sin cuenta (claro y oscuro): desglose con el nombre, chips de
 quién, sin «Yo/Pareja», «+ Saldo inicial» solo para el titular, lo ajeno de solo lectura y `de` al borrar.
+En Apps Script (8 nov; Nueva versión publicada) AC1–AC7 OK: `Conjunta.gs` y los cambios de `Ahorros.gs` y `Usuarios.gs`;
+`probarAhorroConjunto()` todo ✅ con limpieza; `probarAhorros()`, `probarEditarAhorro()`, `probarProgramados()` y
+`probarUsuarios()` en verde; `altaCuentaConjunta()` con `pau|aina` → cuenta «pau+aina» (titular Pau) y `listarCuentas()` sin
+tokens; `probarAhorros()` sigue en verde ya con la cuenta (corre «sin cuenta»). En los móviles AM1–AM8 OK: desglose «Inicial ·
+Tú · Aina» en el de Pau y «Inicial · Tú · Pau» en el de Aina, mismo total y objetivo, sin «Yo/Pareja» ni (en el de Aina)
+«+ Saldo inicial»; la aportación de cada uno sube el total de los dos y solo resta de su «Mes»; lo de la otra persona, de solo
+lectura; el objetivo cambiado por Aina se ve igual en el de Pau; cada Deshacer solo quita lo suyo; bien en oscuro.
 
 ## Fase 21 — Ahorro conjunto entre dos personas (v2.16)
 Pau y Aina tienen una cuenta de ahorro conjunta. Hasta ahora Pau la llevaba en su hoja (lo suyo «yo», lo de Aina «pareja»).
