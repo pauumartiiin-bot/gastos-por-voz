@@ -366,6 +366,8 @@ visto es instantáneo gracias a la caché, que se actualiza por detrás.
 - **Ningún secreto en el repositorio.** Las claves de Groq y Anthropic viven en las propiedades del script.
   El token de acceso se introduce en el móvil la primera vez y se guarda solo en ese dispositivo.
 - **El servidor comprueba el token antes de hacer nada.**
+- **Un token por persona, y el token decide la hoja.** Con el suyo, nadie abre la hoja de otro. Quitarle el acceso a
+  alguien es borrar su token del servidor: deja de valer al momento.
 - **Validación en el servidor**: no se confía en lo que llega del navegador ni en lo que devuelve el modelo.
 - **La salida del modelo se pinta con `textContent`**, nunca con `innerHTML`.
 - **Los errores no exponen claves, trazas ni las respuestas de Groq o Anthropic.**
