@@ -149,7 +149,7 @@ function otroMiembro_(cuenta, nombre) {
   return cuenta.miembros.filter((m) => m !== nombre)[0];
 }
 
-/** «ana» → «Ana». */
+/** «aina» → «Aina». */
 function visible_(nombre) {
   return nombre ? nombre.charAt(0).toUpperCase() + nombre.slice(1) : '';
 }
@@ -182,7 +182,7 @@ function sinCuenta_(fn) {
 function altaCuentaConjunta() {
   const props = PropertiesService.getScriptProperties();
   const partes = String(props.getProperty('ALTA_CUENTA') || '').split('|').map((s) => s.trim());
-  if (partes.length < 2) return Logger.log('❌ Pon en las propiedades del script ALTA_CUENTA = titular|otra persona (p. ej. pau|ana).');
+  if (partes.length < 2) return Logger.log('❌ Pon en las propiedades del script ALTA_CUENTA = titular|otra persona (p. ej. pau|aina).');
   try {
     const c = crearCuentaConjunta(partes[0], partes[1], partes[2] || '');
     props.deleteProperty('ALTA_CUENTA');
