@@ -456,7 +456,7 @@ OK: aportación mía de 50 € el 01/11/2027 con el chip «programado» arriba d
 «Apartado a ahorro −50,00 €» en noviembre de 2027; una fecha a más de un año, rechazada con el mensaje nuevo; tramo claro en
 la barra del objetivo y «Con lo programado: X %»; eliminar y Deshacer; bien en oscuro.
 
-**Fase 20 — La app para dos personas: un servidor y una hoja para cada una (v2.15) — en pruebas.** Detalle en la sección
+**Fase 20 — La app para dos personas: un servidor y una hoja para cada una (v2.15) — hecha.** Detalle en la sección
 «Fase 20». Sin cambios en la app del móvil (sin `?v=` nuevo). Probado en local con el simulador ampliado (varias hojas
 con su ID, `copy`, la papelera y la v1 con sus 4 líneas cambiadas): `crearPlantilla()` con datos en todas las pestañas
 (la plantilla, sin datos, con B7 = 0, las 9 categorías genéricas, «Aina» quitada y B1 en el mes actual; la hoja de Pau,
@@ -467,6 +467,17 @@ propiedades, `listarUsuarios()` sin tokens, una hoja con otra estructura rechaza
 `probarGuardarRegistro()`, `probarIngresos()`, `probarArrastre()`, `probarEditarIngreso()`, `probarPagos()`,
 `probarPrevistos()`, `probarVeces()` y `probarRenombrar()` en verde (`probarMes()`: `cuadra` ✅; las reglas reales no están
 en el simulador).
+En Apps Script (8 nov; Nueva versión publicada) Z1–Z6 OK: `Usuarios.gs`, los 5 archivos nuestros y las 4 líneas de
+`Código.gs`; `crearPlantilla()` limpia (B7 = 0, «Aina» quitada, la hoja de Pau intacta); `probarUsuarios()` todo ✅ (7/7 altas
+rechazadas; «Mes» de la hoja de prueba vacío de verdad, ingreso 0 y total 0, y el de Pau igual antes y después, 1.697,14;
+gasto suyo y los dos Deshacer; token desconocido y quitado; limpieza y papelera, con Drive autorizado); `probarMes()`,
+`probarIngresos()`, `probarAhorros()`, `probarPagos()`, `probarVeces()` y `probarGuardarRegistro()` en verde. Instalación
+para su pareja Z7–Z9 OK (la 1.ª alta falló porque `ALTA_USUARIO` llevaba el enlace entero en vez del ID: «Illegal
+spreadsheet id»; con el ID, bien). En los móviles U1–U5 OK: el iPhone de Pau, igual sin volver a meter el token; el suyo,
+con su token, «Mes» vacío y su nómina prevista; un gasto dictado por ella solo en su hoja y su «Mes»; cada Deshacer solo
+toca lo suyo; tras `bajaUsuario()`, su app vuelve a pedir el token.
+**Propuesta sin implementar:** que `crearUsuario` acepte también el enlace entero de la hoja (saca el ID con una
+expresión regular) y que el error distinga «eso no es un ID ni un enlace de hoja» de «no tengo permiso para editarla».
 
 ## Fase 20 — La app para dos personas: un servidor y una hoja para cada una (v2.15)
 La pareja de Pau usa la app en su móvil, con su hoja, su presupuesto y su token. Todo lo de Pau, separado. El ahorro
