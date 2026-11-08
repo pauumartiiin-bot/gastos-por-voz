@@ -28,7 +28,7 @@ function renombrar_(p) {
     // v1: deshacer devuelve la celda a su valor anterior.
     apuntarDeshacer_('«' + concepto + '» vuelve a llamarse «' + actual + '»',
       [{ op: 'celda', hoja: p.hoja, id: id, col: col, valor: actual }]);
-    CacheService.getScriptCache().remove(VOCAB_CLAVE_CACHE_);   // el vocabulario de Whisper incluye conceptos
+    CacheService.getScriptCache().remove(claveVocabulario_());   // el vocabulario de Whisper incluye conceptos
 
     return { id: id, concepto: concepto, desc: '«' + actual + '» → «' + concepto + '»' };
   });

@@ -331,6 +331,7 @@ acabaría en «Aina»; por eso la frase solo nombra la categoría elegida.
 | El arrastre del restante se guarda como una fila de Ingresos al apuntar la nómina, con un botón «Recalcular» | Una fórmula que encadene los meses, o calcularlo en la app | La hoja calcula un solo mes a la vez (el de `B1`): no puede encadenarlos. Guardarlo es una foto (un dato derivado *materializado*): rápido de leer y con el precio de que puede quedarse viejo, por eso se puede recalcular. El cálculo sigue en la hoja; el servidor solo lo copia |
 | El ahorro en pestañas propias («Ahorros» y «Objetivos») | Una categoría de gastos «Ahorro» | No se mezcla con los gastos, no ocupa uno de los 12 huecos del Resumen y una retirada no es un «gasto negativo» |
 | Cuenta conjunta: solo lo mío cuenta en mi mes | Contar todo lo que entra en la cuenta | Lo que pone mi pareja no sale de mi dinero; si contara, el restante del mes mentiría |
+| Un servidor y una hoja por persona: el token decide la hoja | Una copia del proyecto de Apps Script para cada persona | Cada fase se hace una vez y sirve para todos. Todo abre la hoja por una sola función (`libro_()`), así que repartir la app entre dos hojas fue una línea más un token por persona. Su hoja es suya y la comparte conmigo como editora, porque el servidor corre como yo |
 | El total ahorrado solo cuenta lo que ya ha pasado (fecha ≤ hoy); lo programado, aparte | Contar todas las filas, como al principio | Con aportaciones a un año vista, el total y el progreso del objetivo dirían que tengo un dinero que aún no está en la cuenta. La pregunta de la pestaña es «¿cuánto tengo de verdad?» |
 | Ni una fórmula en la pestaña «Ahorros»; los totales, en «Objetivos» | Totales al pie de la propia pestaña | La v1 escribe cada fila nueva tras la última ocupada: una fórmula debajo la desplazaría (la misma lección de la fase 13) |
 | Varias veces al mes como un valor en la regla y la clave «R011#2» solo cuando hay más de una vez | Un día concreto por vez, o una fila de Pagos por vez siempre | Sin días, el modelo es un número; con la clave nueva solo donde hace falta, las marcas antiguas siguen valiendo sin migrarlas |
@@ -365,6 +366,8 @@ visto es instantáneo gracias a la caché, que se actualiza por detrás.
 - **Ningún secreto en el repositorio.** Las claves de Groq y Anthropic viven en las propiedades del script.
   El token de acceso se introduce en el móvil la primera vez y se guarda solo en ese dispositivo.
 - **El servidor comprueba el token antes de hacer nada.**
+- **Un token por persona, y el token decide la hoja.** Con el suyo, nadie abre la hoja de otro. Quitarle el acceso a
+  alguien es borrar su token del servidor: deja de valer al momento.
 - **Validación en el servidor**: no se confía en lo que llega del navegador ni en lo que devuelve el modelo.
 - **La salida del modelo se pinta con `textContent`**, nunca con `innerHTML`.
 - **Los errores no exponen claves, trazas ni las respuestas de Groq o Anthropic.**
@@ -421,14 +424,41 @@ backend/Veces.gs        acción veces: recurrentes que se cobran varias veces al
 backend/Guardar.gs      acción guardar_registro: un solo «Guardar cambios» con Deshacer compuesto
 backend/Migraciones.gs  cambios en la hoja de cada fase (se ejecutan una vez desde el editor)
 backend/Latencia.gs     medirLatencia(): cronometra cada tramo del dictado
+backend/Usuarios.gs     varias personas: el token decide la hoja; plantilla, altas, bajas y migraciones en todas
 docs/                   capturas del README
 ```
 
 1. **Apps Script** (sobre el proyecto de la v1): crea un archivo por cada `.gs` de `backend/` con su contenido,
-   ejecuta una vez desde el editor las migraciones de `Migraciones.gs` (`aplicarFase13` a `aplicarFase17`) y añade en las propiedades del script `GROQ_API_KEY`, junto a las de la v1
+   ejecuta una vez desde el editor las migraciones de `Migraciones.gs` (`aplicarFase13` a `aplicarFase19`) y añade en las propiedades del script `GROQ_API_KEY`, junto a las de la v1
    (`TOKEN`, `ANTHROPIC_API_KEY`). Crea una implementación nueva como aplicación web.
 2. **Frontend:** pon la URL `/exec` de la implementación en `config.js` y publica el repositorio con GitHub Pages.
 3. **iPhone:** abre la página en Safari → Compartir → *Añadir a la pantalla de inicio*, y pega el token la
    primera vez.
 4. **Evaluación (opcional):** crea `Evaluacion.gs`, sube los audios `01`…`30` a una carpeta de Drive, guarda
    su ID en la propiedad `CARPETA_EVALUACION` y ejecuta `evaluarAudios()`.
+
+### Instalar para otra persona
+
+La app es la misma para todos: misma URL de GitHub Pages y mismo servidor de Apps Script. Cada persona tiene su hoja y
+su token, y el token decide en qué hoja trabaja ([`backend/Usuarios.gs`](backend/Usuarios.gs)).
+
+1. **Plantilla (tú):** en el editor de Apps Script, ejecuta `crearPlantilla()`. Hace una copia de tu hoja sin ningún
+   dato tuyo y te da su enlace. Revisa las descripciones de las categorías que salen en el registro (Haiku las lee
+   para clasificar) y comparte la plantilla con ella **solo con permiso de lectura**.
+2. **Su hoja (ella):** abre la plantilla → Archivo → *Hacer una copia*, en su Drive, con el nombre «Control de gastos
+   — <su nombre>». Después la comparte contigo **como editora**: el servidor corre como tú y tiene que escribir en ella.
+3. **Alta (tú):** en Configuración del proyecto → Propiedades del script, añade `ALTA_USUARIO` = `<su nombre>|<ID de
+   su hoja>` (el ID es lo que va entre `/d/` y `/edit` en su enlace) y ejecuta `altaUsuario()`. Comprueba que el
+   servidor puede escribir en su hoja y que tiene la estructura de la tuya, y enseña su token **una sola vez**:
+   guárdalo en tu llavero.
+4. **El token, de forma segura:** por AirDrop o con una contraseña compartida del llavero de iCloud. Nunca por
+   WhatsApp ni por un chat. Ella lo guarda en su llavero.
+5. **Su iPhone (ella):** abre en Safari la misma URL de la app → Compartir → *Añadir a la pantalla de inicio*, y pega
+   su token.
+6. **Lo suyo (ella, en la app):** su nómina prevista («Mes» → toca el Ingreso → «Cambiar previsto», con «También los
+   meses siguientes»), sus categorías y sus gastos recurrentes.
+7. **Prueba:** un gasto por voz → aparece en su hoja y no en la tuya.
+
+Para quitarle el acceso, `BAJA_USUARIO` = `<su nombre>` y `bajaUsuario()`: su token deja de valer al momento y su
+hoja no se toca. Desde esta fase, **toda migración se aplica en todas las hojas** (`enTodasLasHojas_`, en la tuya, en
+la plantilla y en la de cada persona).

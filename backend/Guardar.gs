@@ -30,7 +30,8 @@ function guardarRegistro_(p, token) {
 
   // 2. Escribir: la v1 primero; después el nombre (también en la regla nueva de un cambio de precio) y las veces.
   const props = PropertiesService.getScriptProperties();
-  const pasosDe = () => { const u = JSON.parse(props.getProperty('ULTIMO') || 'null'); return u && u.pasos ? u.pasos : []; };
+  // Fase 20: el Deshacer es de cada persona (claveUltimo_, Usuarios.gs).
+  const pasosDe = () => { const u = JSON.parse(props.getProperty(claveUltimo_()) || 'null'); return u && u.pasos ? u.pasos : []; };
   const tandas = [];   // los pasos de deshacer de cada escritura, en el orden en que se hicieron
   const partes = [];
   let idNuevo = null;

@@ -2,12 +2,13 @@
  * Api.gs — Fase 6.1: API para la app externa (GitHub Pages).
  * Archivo nuevo. doPost es un enrutador: comprueba el token y llama a las
  * funciones que ya existen en la v1 (Código.gs, Registros.gs) sin modificarlas.
+ * Fase 20: el token decide la persona y su hoja (Usuarios.gs); doPost la fija para toda la petición.
  *
  * Petición: { "t": token, "accion": "...", ...parámetros }
  * Respuesta: { "ok": true, ... } o { "ok": false, "error": "...", "mensaje"?: "..." }
  */
 
-// Cada acción recibe los parámetros de la petición y el token (ya comprobado).
+// Cada acción recibe los parámetros de la petición y el token de siempre (la persona ya está identificada).
 const ACCIONES_ = {
   transcribir: (p) => transcribirConVocabulario_(p),
   dictar: (p, t) => dictar_(p, t),
@@ -47,13 +48,32 @@ function doPost(e) {
       return respuesta_({ ok: false, error: 'entrada' });
     }
 
-    // El token se comprueba antes de cualquier otra cosa (comparador de la v1).
-    if (!tokenValido_(p.t)) return respuesta_({ ok: false, error: 'token' });
+    // Fase 20: el token decide la persona y su hoja (Usuarios.gs). Se comprueba antes de cualquier otra cosa.
+    const persona = identificar_(p.t);
+    if (!persona) return respuesta_({ ok: false, error: 'token' });
+    // La persona se fija para toda la petición (libro_ abre su hoja, el Deshacer es el suyo) y al final se deja
+    // como estaba: en el editor, una prueba puede llamar a doPost varias veces en la misma ejecución.
+    const antes = fijarPersona_(persona);
+    try {
+      return respuesta_(atender_(p, inicio));
+    } finally {
+      restaurarPersona_(antes);
+    }
+  } catch (err) {
+    console.error(err); // queda en el registro de ejecuciones
+    return respuesta_(clasificarError_(err));
+  }
+}
 
+/** La petición de una persona ya identificada: enruta y devuelve el objeto de la respuesta. */
+function atender_(p, inicio) {
+  try {
     const accion = ACCIONES_[p.accion];
-    if (!accion) return respuesta_({ ok: false, error: 'entrada' });
+    if (!accion) return { ok: false, error: 'entrada' };
 
-    const resultado = accion(p, p.t);
+    // Las funciones de la v1 exigen el token de siempre (exigirToken_). La persona ya está identificada y su hoja
+    // fijada, así que reciben el del servidor, que nunca sale de Apps Script (fase 20).
+    const resultado = accion(p, tokenInterno_());
     // Fase 11.3: un gasto borrado no puede dejar marcas en Pagos que heredaría el siguiente con su ID (Pagos.gs).
     if (resultado.ok !== false && (p.accion === 'eliminar' || p.accion === 'deshacer')) limpiarPagosTrasBorrar_();
     // Fase 17: un cambio de precio (v1) crea la regla nueva copiando 13 columnas, sin las veces al mes (Veces.gs).
@@ -63,10 +83,10 @@ function doPost(e) {
     // Fase B.1: tiempo dentro de doPost. El móvil lo resta del total para ver la red y el arranque de Apps Script.
     if (p.accion === 'dictar') resultado.ms_servidor = Date.now() - inicio;
     // Las funciones de la v1 no siempre devuelven "ok": se añade aquí.
-    return respuesta_(resultado.ok === false ? resultado : Object.assign({ ok: true }, resultado));
+    return resultado.ok === false ? resultado : Object.assign({ ok: true }, resultado);
   } catch (err) {
     console.error(err); // queda en el registro de ejecuciones
-    return respuesta_(clasificarError_(err));
+    return clasificarError_(err);
   }
 }
 

@@ -40,7 +40,7 @@ function crearCategoria_(p) {
 
     // v1: deshacer borra la fila cuya primera columna es el nombre.
     apuntarDeshacer_('Categoría «' + nombre + '» eliminada', [{ op: 'borrar', hoja: 'Categorías', id: nombre }]);
-    CacheService.getScriptCache().remove(VOCAB_CLAVE_CACHE_);   // el vocabulario de Whisper incluye categorías
+    CacheService.getScriptCache().remove(claveVocabulario_());   // el vocabulario de Whisper incluye categorías
 
     return { nombre: nombre, desc: 'Categoría «' + nombre + '» creada', huecos_libres: huecos - existentes.length - 1 };
   });
