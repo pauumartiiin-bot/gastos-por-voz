@@ -14,11 +14,11 @@ const VOCAB_ULTIMOS_MOVIMIENTOS_ = 50;
 /** Devuelve el vocabulario desde la caché o, si no está, lo construye y lo guarda. */
 function vocabulario_() {
   const cache = CacheService.getScriptCache();
-  const guardado = cache.get(VOCAB_CLAVE_CACHE_);
+  const guardado = cache.get(claveVocabulario_());   // fase 20: uno por hoja (Usuarios.gs)
   if (guardado !== null) return guardado;
 
   const texto = construirVocabulario_();
-  cache.put(VOCAB_CLAVE_CACHE_, texto, VOCAB_SEGUNDOS_CACHE_);
+  cache.put(claveVocabulario_(), texto, VOCAB_SEGUNDOS_CACHE_);
   return texto;
 }
 
