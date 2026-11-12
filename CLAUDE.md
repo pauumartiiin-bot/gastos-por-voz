@@ -498,7 +498,7 @@ Tú · Aina» en el de Pau y «Inicial · Tú · Pau» en el de Aina, mismo tota
 «+ Saldo inicial»; la aportación de cada uno sube el total de los dos y solo resta de su «Mes»; lo de la otra persona, de solo
 lectura; el objetivo cambiado por Aina se ve igual en el de Pau; cada Deshacer solo quita lo suyo; bien en oscuro.
 
-**Fase 22 — Editar cualquier gasto desde «Mes», también la fecha de un puntual (v2.17) — en pruebas.** Detalle en la sección
+**Fase 22 — Editar cualquier gasto desde «Mes», también la fecha de un puntual (v2.17) — hecha.** Detalle en la sección
 «Fase 22». `?v=` 7.21.0. Sin cambios en la hoja ni en la v1. Probado en local con un simulador nuevo que carga el código real
 de la v1 (bajado del proyecto de Apps Script en Drive: `Código.gs`, `Validacion.gs`, `Registros.gs`) y nuestros `.gs`:
 `probarGuardarRegistro()` todo ✅ (validaciones 11/11, con las cinco de la fecha y la de fuera de Meses; solo la fecha y
@@ -509,6 +509,13 @@ de 44 × 44 que no marca la casilla y la línea que sí; editor del puntual con 
 escrito; guardar envía solo lo que cambia, la notificación dice «movido a» y el aviso, y el mes se pide otra vez; la «2.ª
 vez» abre la regla y el cambio de precio propone el día 1 del mes visto; la barra abre el presupuesto; un editor a la vez;
 cambiar de mes lo cierra; Fecha también en «Mis registros».
+En Apps Script (12 nov; Nueva versión publicada) D1–D4 OK: `probarGuardarRegistro()` con las validaciones de la fecha y todas
+las líneas ✅ (solo la fecha, a otro mes «pendiente», fecha + nombre + importe, eliminar con aviso) y limpieza ✅;
+`probarMes()`, `probarPagos()` y `probarArrastre()` en verde. En los móviles E1–E8 OK: el importe de un puntual antiguo desde su
+lápiz cambia el total; su fecha a otro mes lo mueve con «movido a …»; el lápiz no marca la casilla y la línea sí; la «2.ª vez»
+del Barbero abre la regla con «Desde» el día 1 del mes visto; el lápiz de la barra de Ocio cambia el presupuesto; el aviso de
+«Recalcular» en un mes con arrastre; Deshacer; bien en oscuro y en el móvil de Aina.
+**Propuesta sin implementar:** el aviso de arrastre también al «Dar de baja» con una fecha pasada (hoy no lo da).
 
 ## Fase 22 — Editar cualquier gasto desde «Mes», también la fecha de un puntual (v2.17)
 «Mis registros» enseña los últimos 20 puntuales (`listarRegistros` de la v1): los antiguos o programados a meses vista no se
