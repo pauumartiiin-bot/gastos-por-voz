@@ -7,9 +7,12 @@
  * Primero se valida todo lo que se puede sin escribir; después va la v1 (la única que aún puede rechazar algo, como las
  * fechas de un cambio de precio) y, si falla, no se ha tocado nada. Si algo fallara a mitad, se deshace lo hecho.
  * Cada función toma su propio conBloqueo_ (no se anidan bloqueos).
+ * Fase 22: también la fecha de un gasto puntual (la v1 no la edita), con el mismo rango que al crearlo (LIMITES de la v1)
+ * y en un mes que esté en Meses. La respuesta dice en qué mes estaba y en cuál queda, y si algún arrastre puede haber
+ * cambiado (son fotos, fase 15).
  */
 
-/** Acción "guardar_registro": { hoja, id, concepto?, cambios?: { importe?, categoria?, modo?, desde? }, veces? }. */
+/** Acción "guardar_registro": { hoja, id, concepto?, cambios?: { importe?, categoria?, modo?, desde?, fecha? }, veces? }. */
 function guardarRegistro_(p, token) {
   const hoja = String(p.hoja == null ? '' : p.hoja);
   if (hoja !== 'Recurrentes' && hoja !== 'Movimientos') return { ok: false, error: 'entrada' };
@@ -24,9 +27,11 @@ function guardarRegistro_(p, token) {
   const nombreActual = String(actual[C.CONCEPTO - 1]);
 
   // 1. Qué cambia, y validarlo todo antes de escribir nada.
-  const plan = planGuardado_(p, esRec, actual, C);
+  const zona = libro.getSpreadsheetTimeZone();
+  const meses = mesesDeLaHoja_(libro, zona);   // Mes.gs
+  const plan = planGuardado_(p, esRec, actual, C, meses, zona);
   if (plan.error) return { ok: false, error: 'rechazado', mensaje: plan.error };
-  if (!plan.nombre && !plan.editar && !plan.veces) return { ok: false, error: 'rechazado', mensaje: 'No hay cambios que guardar.' };
+  if (!plan.nombre && !plan.editar && !plan.veces && !plan.fecha) return { ok: false, error: 'rechazado', mensaje: 'No hay cambios que guardar.' };
 
   // 2. Escribir: la v1 primero; después el nombre (también en la regla nueva de un cambio de precio) y las veces.
   const props = PropertiesService.getScriptProperties();
@@ -45,6 +50,12 @@ function guardarRegistro_(p, token) {
       }
       if (plan.editar.categoria) partes.push(String(actual[C.CATEGORIA - 1]) + ' → ' + plan.editar.categoria);
       if (plan.editar.modo === 'cambioPrecio') idNuevo = reglaNuevaTrasCambio_(libro, id);
+    }
+    if (plan.fecha) {
+      tandas.push(cambiarFecha_(id, plan.fecha));
+      const f = plan.fecha;
+      partes.push(textoDia_(f.antes) + ' → ' + textoDia_(f.nueva) +
+                  (f.mesNuevo !== f.mesAntes ? ' · movido a ' + f.mesNuevo.split(' (')[0] : ''));
     }
     if (plan.nombre) {
       [id, idNuevo].filter((x) => x).forEach((x) => {
@@ -72,14 +83,93 @@ function guardarRegistro_(p, token) {
   // 3. Un solo Deshacer con todos los pasos, del último al primero.
   const final = plan.nombre || nombreActual;
   apuntarDeshacer_('Deshechos los cambios de «' + final + '»', [].concat(...tandas.slice().reverse()));   // v1
-  return { id: id, id_nuevo: idNuevo, desc: '«' + final + '»: ' + partes.join(' · ') };
+  const mesAntes = esRec ? null : mesDeFecha_(meses, textoFecha_(actual[COLM.FECHA - 1], zona));   // Mes.gs
+  const mesNuevo = plan.fecha ? plan.fecha.mesNuevo : mesAntes;
+  return { id: id, id_nuevo: idNuevo, desc: '«' + final + '»: ' + partes.join(' · '),
+           mes_anterior: mesAntes, mes_nuevo: mesNuevo, aviso: avisoTrasGuardar_(libro, meses, plan, esRec, actual, mesAntes, mesNuevo) };
+}
+
+/** Lo que cuenta en el mes es el importe, las veces y la fecha: el nombre y la categoría no cambian el restante. */
+function avisoTrasGuardar_(libro, meses, plan, esRec, actual, mesAntes, mesNuevo) {
+  const cuenta = (plan.editar && plan.editar.importe != null) || plan.veces || plan.fecha;
+  if (!cuenta) return null;
+  const desde = plan.editar && plan.editar.modo === 'cambioPrecio' ? plan.editar.desde : null;
+  return avisoArrastreDe_(libro, meses, esRec, actual, [mesAntes, mesNuevo], desde);
+}
+
+/** Fase 22: escribe la fecha nueva de un gasto puntual y devuelve su paso de Deshacer (la de antes, como número de serie). */
+function cambiarFecha_(id, f) {
+  return conBloqueo_(() => {   // v1
+    const h = libro_().getSheetByName('Movimientos');
+    const fila = buscarFilaPorId_(h, id);   // v1
+    if (fila < 0) throw new Error('Ese gasto ya no existe.');
+    const celda = h.getRange(fila, COLM.FECHA);
+    const anterior = aJSON_(celda.getValue());   // v1
+    celda.setValue(fechaSerial_(f.nueva)).setNumberFormat('dd/mm/yyyy');   // v1
+    return [{ op: 'celda', hoja: 'Movimientos', id: id, col: COLM.FECHA, valor: anterior }];
+  });
+}
+
+/**
+ * Fase 22: «Eliminar» de la v1 (eliminarRegistro, sin tocar) y, si el gasto contaba en algún mes cerrado, el aviso de
+ * arrastre. La fila se lee antes de borrarla: después ya no se sabe su fecha ni desde cuándo contaba.
+ */
+function eliminarConAviso_(p, token) {
+  let previo = null;
+  if (p.hoja === 'Recurrentes' || p.hoja === 'Movimientos') {
+    const h = libro_().getSheetByName(p.hoja);
+    const fila = buscarFilaPorId_(h, String(p.id == null ? '' : p.id));   // v1
+    if (fila > 0) previo = h.getRange(fila, 1, 1, p.hoja === 'Recurrentes' ? COL.REG : COLM.REG).getValues()[0];   // v1
+  }
+  const r = eliminarRegistro(token, p.hoja, p.id);   // v1: valida la hoja y el ID y lanza un Error si no puede
+  if (previo) {
+    const libro = libro_();
+    const zona = libro.getSpreadsheetTimeZone();
+    const meses = mesesDeLaHoja_(libro, zona);
+    const esRec = p.hoja === 'Recurrentes';
+    const mes = esRec ? null : mesDeFecha_(meses, textoFecha_(previo[COLM.FECHA - 1], zona));
+    r.aviso = avisoArrastreDe_(libro, meses, esRec, previo, [mes], null);
+  }
+  return r;
+}
+
+/** El mes de Meses cuyo periodo (fase 13) contiene la fecha; sin periodo, el mes natural. null si no está en ninguno. */
+function mesDeFecha_(meses, fecha) {
+  if (!fecha) return null;
+  const m = meses.filter((x) => (x.periodo_inicio || x.inicio) <= fecha &&
+                                fecha <= (x.periodo_fin || x.inicio.slice(0, 8) + '31'))[0];
+  return m ? m.etiqueta : null;
+}
+
+/** "2026-11-03" → "03/11/2026" */
+function textoDia_(iso) {
+  return iso.split('-').reverse().join('/');
+}
+
+/**
+ * Fase 22: arrastres que un cambio puede haber dejado viejos (avisoArrastre_, Ingresos.gs; son fotos, fase 15). Un gasto
+ * puntual toca sus meses (mesesPuntual: el de antes y, si se mueve, el nuevo); una regla, todos los meses desde que empieza
+ * (o desde la fecha de un cambio de precio) hasta el de hoy. Texto para la notificación, o null.
+ */
+function avisoArrastreDe_(libro, meses, esRec, fila, mesesPuntual, desde) {
+  let tocados;
+  if (esRec) {
+    const zona = libro.getSpreadsheetTimeZone();
+    const inicio = String(desde || textoFecha_(fila[COL.INICIO - 1], zona)).slice(0, 7);
+    const hoy = Utilities.formatDate(new Date(), zona, 'yyyy-MM-dd');
+    tocados = meses.filter((m) => m.inicio.slice(0, 7) >= inicio && m.inicio <= hoy).map((m) => m.etiqueta);
+  } else {
+    tocados = mesesPuntual.filter((x, i, a) => x && a.indexOf(x) === i);
+  }
+  if (!tocados.length) return null;
+  return avisoArrastre_(libro.getSheetByName(ING_HOJA_), meses.map((m) => m.etiqueta), tocados, false);   // Ingresos.gs
 }
 
 /**
  * Lo que hay que hacer, ya validado: { nombre?, editar?: cambios para editarRegistro (v1), veces? } o { error }.
  * Los mensajes son los de la v1, renombrar y veces, para que digan lo mismo por cualquier camino.
  */
-function planGuardado_(p, esRec, actual, C) {
+function planGuardado_(p, esRec, actual, C, meses, zona) {
   const plan = {};
   if (p.concepto != null) {
     const concepto = String(p.concepto).replace(/\s+/g, ' ').trim();
@@ -111,6 +201,10 @@ function planGuardado_(p, esRec, actual, C) {
     }
     plan.editar = editar;
   }
+  if (c.fecha != null && c.fecha !== '') {
+    const error = planFecha_(plan, c.fecha, esRec, actual, meses, zona);
+    if (error) return { error: error };
+  }
   if (p.veces != null) {
     if (!esRec) return { error: 'Los gastos puntuales no tienen veces al mes.' };
     const veces = p.veces;
@@ -128,6 +222,28 @@ function planGuardado_(p, esRec, actual, C) {
   return plan;
 }
 
+/**
+ * Fase 22: la fecha nueva de un gasto puntual, con las reglas de la v1 al crearlo (fechaValida y LIMITES, ±730 días desde
+ * hoy) y en un mes de Meses (si no, no saldría en ningún «Mes»). La de un recurrente no se edita aquí. Devuelve el error
+ * o rellena plan.fecha = { nueva, antes, mesAntes, mesNuevo }.
+ */
+function planFecha_(plan, valor, esRec, actual, meses, zona) {
+  if (esRec) return 'La fecha de un gasto recurrente no se edita: usa «Cambio de precio» o «Dar de baja».';
+  const nueva = fechaValida(String(valor));   // v1
+  if (!nueva) return 'Fecha no válida: ' + valor;
+  const hoy = Utilities.formatDate(new Date(), CONFIG.ZONA, 'yyyy-MM-dd');   // v1: el mismo «hoy» que al crear
+  const dif = diasEntre(hoy, nueva);   // v1
+  if (dif < -LIMITES.diasPasado || dif > LIMITES.diasFuturo) {   // v1
+    return 'Fecha fuera de rango: ' + textoDia_(nueva) + ' (como mucho dos años antes o después de hoy).';
+  }
+  const antes = textoFecha_(actual[COLM.FECHA - 1], zona);   // Mes.gs
+  if (nueva === antes) return null;
+  const mesNuevo = mesDeFecha_(meses, nueva);
+  if (!mesNuevo) return 'Ese mes aún no está en la pestaña Meses: el gasto no saldría en «Mes».';
+  plan.fecha = { nueva: nueva, antes: antes, mesAntes: mesDeFecha_(meses, antes), mesNuevo: mesNuevo };
+  return null;
+}
+
 /** La regla que acaba de crear un cambio de precio de la v1: la última con la nota «Cambio de precio: sustituye a R011 …». */
 function reglaNuevaTrasCambio_(libro, id) {
   const rec = libro.getSheetByName('Recurrentes');
@@ -141,7 +257,9 @@ function reglaNuevaTrasCambio_(libro, id) {
 
 /**
  * Prueba desde el editor (fase 18.2), con una regla mensual de prueba (10 €, desde el último mes de Meses, sin fin) y un
- * gasto puntual de prueba (5 €, hoy). Limpieza en finally: Recurrentes, Movimientos, Cálculo, Pagos y ULTIMO como estaban.
+ * gasto puntual de prueba (5 €, hoy). Fase 22: la fecha del gasto (validaciones, moverlo a otro mes con su marca
+ * «pendiente», fecha + nombre + importe con un solo Deshacer, y eliminar con aviso).
+ * Limpieza en finally: Recurrentes, Movimientos, Cálculo, Pagos y ULTIMO como estaban.
  */
 function probarGuardarRegistro() {
   const libro = libro_();
@@ -175,19 +293,35 @@ function probarGuardarRegistro() {
                   FORMATOS_MOV);   // v1
     ids.push(gasto);
 
-    // Validaciones: sin cambios, el mismo nombre, veces en un puntual, importe no válido con un nombre válido.
+    // Fase 22: el mes de hoy y el siguiente (para mover el gasto), y una fecha fuera de Meses si cabe en el rango de la v1.
+    const iHoy = meses.findIndex((m) => m.etiqueta === mesDeFecha_(meses, hoy));
+    const mesHoy = meses[iHoy];
+    const mesSig = meses[iHoy + 1];
+    const ultimoFin = meses[meses.length - 1].periodo_fin || sumarDias_(mes.inicio, 27);
+    const fueraDeMeses = sumarDias_(ultimoFin, 1);
+    const fechaGasto = () => { const f = buscarFilaPorId_(movs, gasto); return f > 0 ? textoFecha_(movs.getRange(f, COLM.FECHA).getValue(), zona) : null; };
+
+    // Validaciones: sin cambios, el mismo nombre, veces en un puntual, importe no válido con un nombre válido y, fase 22,
+    // las fechas (en un recurrente, no válida, fuera de rango, fuera de Meses y no válida junto a un nombre válido).
     const casos = [
       ['sin cambios', { hoja: 'Movimientos', id: gasto }],
       ['el mismo nombre y el mismo importe', { hoja: 'Movimientos', id: gasto, concepto: 'Prueba 18 gasto', cambios: { importe: 5 } }],
       ['veces en un gasto puntual', { hoja: 'Movimientos', id: gasto, veces: 2 }],
       ['nombre válido + importe no válido', { hoja: 'Recurrentes', id: regla, concepto: 'No debería', cambios: { importe: -5 } }],
-      ['nombre válido + categoría inventada', { hoja: 'Recurrentes', id: regla, concepto: 'No debería', cambios: { categoria: 'Inventada' } }]
-    ];
+      ['nombre válido + categoría inventada', { hoja: 'Recurrentes', id: regla, concepto: 'No debería', cambios: { categoria: 'Inventada' } }],
+      ['fecha en un recurrente', { hoja: 'Recurrentes', id: regla, cambios: { fecha: hoy } }],
+      ['fecha que no existe (30 de febrero)', { hoja: 'Movimientos', id: gasto, cambios: { fecha: '2027-02-30' } }],
+      ['fecha a más de dos años', { hoja: 'Movimientos', id: gasto, cambios: { fecha: sumarDias_(hoy, LIMITES.diasFuturo + 1) } }],
+      ['fecha de hace más de dos años', { hoja: 'Movimientos', id: gasto, cambios: { fecha: sumarDias_(hoy, -LIMITES.diasPasado - 1) } }],
+      ['nombre válido + fecha no válida', { hoja: 'Movimientos', id: gasto, concepto: 'No debería', cambios: { fecha: 'mañana' } }]
+    ].concat(diasEntre(hoy, fueraDeMeses) <= LIMITES.diasFuturo
+      ? [['fecha fuera de Meses (' + fueraDeMeses + ')', { hoja: 'Movimientos', id: gasto, cambios: { fecha: fueraDeMeses } }]] : []);
     let ok = 0;
     casos.forEach(([caso, params]) => {
       const antes = props.getProperty('ULTIMO');
       const r = guardarRegistro_(params, token);
       const bien = r.ok === false && r.error === 'rechazado' && valor(rec, regla, COL.CONCEPTO) === 'Prueba 18' &&
+                   valor(movs, gasto, COLM.CONCEPTO) === 'Prueba 18 gasto' && fechaGasto() === hoy &&
                    props.getProperty('ULTIMO') === antes;
       if (bien) ok++;
       log(bien, caso + ' → ' + (r.mensaje || r.error || 'se guardó (no debería)'));
@@ -229,6 +363,49 @@ function probarGuardarRegistro() {
     log(e1.join() === 'Prueba 18 E,11,2' && e2[0] && e2[1] === 'Prueba 18' && e2[2] === '',
         'Cambio de precio con nombre → ' + e.desc + ' · regla nueva ' + nueva + ': ' + e1.join(' · ') + ' · Deshacer → ' + deE.desc +
         ' (nueva borrada: ' + e2[0] + ', nombre «' + e2[1] + '», sin fin: ' + (e2[2] === '') + ')');
+
+    // Fase 22: fechas de un gasto puntual.
+    if (!mesHoy || !mesSig) {
+      log(false, 'Fecha: hoy (' + hoy + ') no está en Meses o es su último mes: no se puede probar el cambio de mes');
+    } else {
+      // Solo la fecha, dentro del mismo mes → cambia, mes_nuevo = mes_anterior; Deshacer la devuelve.
+      const mismoMes = hoy === mesHoy.periodo_inicio ? sumarDias_(hoy, 1) : sumarDias_(hoy, -1);
+      const f = guardarRegistro_({ hoja: 'Movimientos', id: gasto, cambios: { fecha: mismoMes } }, token);
+      const f1 = fechaGasto();
+      deshacer(token);   // v1
+      log(f1 === mismoMes && f.mes_nuevo === mesHoy.etiqueta && f.mes_anterior === mesHoy.etiqueta && fechaGasto() === hoy,
+          'Solo la fecha → ' + f.desc + ' · mes ' + String(f.mes_nuevo).split(' (')[0] + ' · Deshacer → ' + fechaGasto());
+
+      // A otro mes con la marca «pendiente» → sale en el mes nuevo, pendiente, y no en el de antes; Deshacer lo devuelve.
+      pagar_({ etiqueta: mesHoy.etiqueta, id: gasto, pagado: false });   // Pagos.gs
+      const destino = mesSig.periodo_inicio || mesSig.inicio;
+      const g = guardarRegistro_({ hoja: 'Movimientos', id: gasto, cambios: { fecha: destino } }, token);
+      const buscar = (m) => [].concat(...m.categorias.map((k) => k.movimientos)).filter((x) => x.id === gasto)[0] || null;
+      const enSig = buscar(mes_({ etiqueta: mesSig.etiqueta }));   // Mes.gs
+      const enHoy = buscar(mes_({ etiqueta: mesHoy.etiqueta }));
+      deshacer(token);
+      log(g.mes_anterior === mesHoy.etiqueta && g.mes_nuevo === mesSig.etiqueta && /movido a/.test(g.desc) &&
+          enSig && enSig.pagado === false && !enHoy && fechaGasto() === hoy,
+          'A otro mes → ' + g.desc + ' · en ' + mesSig.etiqueta.split(' (')[0] + ': ' + (enSig ? (enSig.pagado ? 'pagado' : 'pendiente') : 'no sale') +
+          ' · en ' + mesHoy.etiqueta.split(' (')[0] + ': ' + (enHoy ? 'sigue (no debería)' : 'ya no sale') + ' · aviso: ' + (g.aviso || 'ninguno') +
+          ' · Deshacer → ' + fechaGasto());
+      pagar_({ etiqueta: mesHoy.etiqueta, id: gasto, pagado: true });   // vuelve a lo normal (sin fila en Pagos)
+
+      // Fecha + nombre + importe → los tres; un solo Deshacer los devuelve todos.
+      const h = guardarRegistro_({ hoja: 'Movimientos', id: gasto, concepto: 'Prueba 22', cambios: { importe: 7.5, fecha: mismoMes } }, token);
+      const h1 = [valor(movs, gasto, COLM.CONCEPTO), valor(movs, gasto, COLM.IMPORTE), fechaGasto()];
+      deshacer(token);
+      const h2 = [valor(movs, gasto, COLM.CONCEPTO), valor(movs, gasto, COLM.IMPORTE), fechaGasto()];
+      log(h1.join() === ['Prueba 22', 7.5, mismoMes].join() && h2.join() === ['Prueba 18 gasto', 5, hoy].join(),
+          'Fecha + nombre + importe → ' + h.desc + ' · tras Deshacer: ' + h2.join(' · '));
+    }
+
+    // Fase 22: eliminar (v1) devuelve el aviso de arrastre (texto o null) y el Deshacer de la v1 lo recupera.
+    const el = eliminarConAviso_({ hoja: 'Movimientos', id: gasto }, token);
+    const borrado = buscarFilaPorId_(movs, gasto) < 0;
+    deshacer(token);
+    log(borrado && 'aviso' in el && buscarFilaPorId_(movs, gasto) > 0,
+        'Eliminar con aviso → ' + el.desc + ' · aviso: ' + (el.aviso || 'ninguno') + ' · Deshacer → vuelve');
   } finally {
     rec.getRange(2, 1, Math.max(rec.getLastRow() - 1, 1), COL.NOTAS).getValues().forEach((f) => {
       if (ids.length && String(f[COL.NOTAS - 1]).indexOf('sustituye a ' + ids[0] + ' ') >= 0 && ids.indexOf(String(f[0])) < 0) ids.push(String(f[0]));
