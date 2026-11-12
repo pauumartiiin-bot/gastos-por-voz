@@ -35,7 +35,7 @@ iPhone (esta app, GitHub Pages, instalada en pantalla de inicio)
   `redirect: 'follow'` (Apps Script responde con una redirección).
 - Interfaz en español. Comentarios del código en español, breves.
 
-## Contrato de la API (fases 6.1–21)
+## Contrato de la API (fases 6.1–22)
 Petición: un único `doPost` (en `backend/Api.gs`) que enruta por `accion`. Cuerpo JSON enviado como texto plano:
 ```json
 { "t": "<token>", "accion": "dictar", ...parámetros }
@@ -50,7 +50,7 @@ Petición: un único `doPost` (en `backend/Api.gs`) que enruta por `accion`. Cue
 | `registros` | — | `listarRegistros` + `conVeces_` (fase 17) | `recurrentes` (con `veces`: número en los mensuales que no son presupuesto, si no `null`), `movimientos`, `categorias`, `hoy` |
 | `editar` | `hoja`, `id`, `cambios` | `editarRegistro` | `desc` |
 | `baja` | `id`, `fecha_fin` | `darDeBaja` | `desc` |
-| `eliminar` | `hoja`, `id` | `eliminarRegistro` | `desc` |
+| `eliminar` | `hoja`, `id` | `eliminarRegistro` (vía `eliminarConAviso_`, fase 22) | `desc`, `aviso` (arrastre que puede haber cambiado, o `null`) |
 | `mes` | `etiqueta?` (sin ella, el mes por defecto) | `mes_` (nuevo, `backend/Mes.gs`) con `libro_` y `conBloqueo_` | `etiqueta`, `mes_inicio`, `por_defecto`, `meses`, `cabecera` (con `desglose`, fase 14, y `ahorro_mes`, fase 16), `categorias`, `cuadra`, `ingresos`, `ms` (detalle en «Fase 7», «Fase 12» y «Fase 14») |
 | `categoria` | `nombre`, `descripcion` | `crearCategoria_` (nuevo, `backend/Categorias.gs`) con `libro_`, `conBloqueo_`, `normalizar` y `apuntarDeshacer_` | `nombre`, `desc`, `huecos_libres` (detalle en «Fase 7b») |
 | `renombrar` | `hoja` (`Recurrentes` \| `Movimientos`), `id`, `concepto` | `renombrar_` (nuevo, `backend/Renombrar.gs`) con `libro_`, `conBloqueo_`, `buscarFilaPorId_`, `COL`/`COLM` y `apuntarDeshacer_` | `id`, `concepto`, `desc` (detalle en «Fase 8») |
@@ -65,7 +65,7 @@ Petición: un único `doPost` (en `backend/Api.gs`) que enruta por `accion`. Cue
 | `objetivo` | `nombre`, `importe`, `fecha?` | `objetivo_` (nuevo) con `conBloqueo_` y `fechaSerial_` | `anterior` (o `null`), `objetivo`, `ahorros` |
 | `veces` | `id`, `veces` (entero 1–10), `conservar_deshacer?` (sin su propio Deshacer: lo usa «+ Nuevo gasto») | `veces_` (nuevo, `backend/Veces.gs`) con `libro_`, `conBloqueo_`, `buscarFilaPorId_`, `COL` y `apuntarDeshacer_` | `id`, `veces`, `anterior`, `desc` (detalle en «Fase 17») |
 | `arrastre` | `etiqueta` (el mes que recibe el arrastre) | `arrastre_` (nuevo, `backend/Ingresos.gs`) con `libro_`, `conBloqueo_`, `enMes_`, `siguienteId_`, `escribirFila_` y `mes_` | `etiqueta`, `id` (o `null` si da 0), `desde`, `concepto`, `anterior`, `importe`, `mes` (detalle en «Fase 15») |
-| `guardar_registro` | `hoja` (`Recurrentes` \| `Movimientos`), `id`, `concepto?`, `cambios?: { importe?, categoria?, modo?, desde? }` (los de `editar`), `veces?` (solo mensuales que no son presupuesto) | `guardarRegistro_` (nuevo, `backend/Guardar.gs`): `editarRegistro` (v1), `renombrar_` y `veces_`, con un solo `apuntarDeshacer_` al final | `id`, `id_nuevo` (la regla nueva tras un cambio de precio, o `null`), `desc` (detalle en «Fase 18») |
+| `guardar_registro` | `hoja` (`Recurrentes` \| `Movimientos`), `id`, `concepto?`, `cambios?: { importe?, categoria?, modo?, desde?, fecha? }` (los de `editar`; `fecha`, fase 22, solo en Movimientos), `veces?` (solo mensuales que no son presupuesto) | `guardarRegistro_` (nuevo, `backend/Guardar.gs`): `editarRegistro` (v1), `cambiarFecha_`, `renombrar_` y `veces_`, con un solo `apuntarDeshacer_` al final | `id`, `id_nuevo` (la regla nueva tras un cambio de precio, o `null`), `desc`, `mes_anterior` y `mes_nuevo` (por periodo; `null` en Recurrentes), `aviso` (detalle en «Fase 18» y «Fase 22») |
 | `editar_ingreso` | `id`, `concepto?`, `importe?`, `fecha?`, `mes?` (no en nómina; el tipo y los arrastres no se editan) | `editarIngreso_` (nuevo, `backend/Ingresos.gs`) con `conBloqueo_`, `buscarFilaPorId_`, `fechaSerial_`, `aJSON_` y `apuntarDeshacer_` | `id`, `desc`, `aviso` (arrastre que puede haber cambiado, o `null`) |
 | `editar_ahorro` | `id`, `de?` (fase 21), `concepto?`, `importe?`, `fecha?`, `quien?` (en el saldo inicial, solo concepto e importe; el tipo no se edita) | `editarAhorro_` (nuevo, `backend/Ahorros.gs`) con `conBloqueo_`, `buscarFilaPorId_`, `fechaSerial_`, `aJSON_` y `apuntarDeshacer_` | `id`, `desc`, `meses` (los que cambian), `ahorros` |
 
@@ -126,7 +126,7 @@ backend/Latencia.gs     medirLatencia() (fase B.1): cronometra libro_, leerConte
 backend/Migraciones.gs  cambios en la hoja de cada fase (aplicarFase13 a aplicarFase17 y aplicarFase19), se ejecutan una vez desde el editor; se copia a mano
 backend/Veces.gs        acción veces y veces en registros (fase 17): recurrentes de varias veces al mes; se copia a mano
 backend/Ahorros.gs      acciones ahorros, ahorro, borrar_ahorro y objetivo (fase 16), editar_ahorro (fase 18) y lo programado (fase 19); se copia a mano
-backend/Guardar.gs      acción guardar_registro (fase 18.2): un solo «Guardar cambios» con Deshacer compuesto; se copia a mano
+backend/Guardar.gs      acción guardar_registro (fase 18.2): un solo «Guardar cambios» con Deshacer compuesto, y la fecha de un puntual y eliminar con aviso (fase 22); se copia a mano
 backend/Previstos.gs    acción previsto (fase 14): comisiones previstas de un mes (Meses D); se copia a mano
 backend/Usuarios.gs     fase 20: la persona de cada petición, plantilla, altas y bajas, migraciones en todas las hojas; se copia a mano
 backend/Conjunta.gs     fase 21: ahorro conjunto entre dos personas (la cuenta, sus reglas, altas y bajas); se copia a mano
@@ -497,6 +497,48 @@ tokens; `probarAhorros()` sigue en verde ya con la cuenta (corre «sin cuenta»)
 Tú · Aina» en el de Pau y «Inicial · Tú · Pau» en el de Aina, mismo total y objetivo, sin «Yo/Pareja» ni (en el de Aina)
 «+ Saldo inicial»; la aportación de cada uno sube el total de los dos y solo resta de su «Mes»; lo de la otra persona, de solo
 lectura; el objetivo cambiado por Aina se ve igual en el de Pau; cada Deshacer solo quita lo suyo; bien en oscuro.
+
+**Fase 22 — Editar cualquier gasto desde «Mes», también la fecha de un puntual (v2.17) — en pruebas.** Detalle en la sección
+«Fase 22». `?v=` 7.21.0. Sin cambios en la hoja ni en la v1. Probado en local con un simulador nuevo que carga el código real
+de la v1 (bajado del proyecto de Apps Script en Drive: `Código.gs`, `Validacion.gs`, `Registros.gs`) y nuestros `.gs`:
+`probarGuardarRegistro()` todo ✅ (validaciones 11/11, con las cinco de la fecha y la de fuera de Meses; solo la fecha y
+Deshacer; a otro mes con la marca «pendiente», que sale pendiente en el mes nuevo y ya no en el de antes; fecha + nombre +
+importe con un solo Deshacer; eliminar con aviso y Deshacer; limpieza) y, con un arrastre en diciembre, el aviso al mover y
+al borrar un gasto de noviembre; `probarPagos()` en verde. Interfaz en el iPhone 13 simulado (claro y oscuro), 18/18: lápiz
+de 44 × 44 que no marca la casilla y la línea que sí; editor del puntual con Fecha; una actualización del mes no borra lo
+escrito; guardar envía solo lo que cambia, la notificación dice «movido a» y el aviso, y el mes se pide otra vez; la «2.ª
+vez» abre la regla y el cambio de precio propone el día 1 del mes visto; la barra abre el presupuesto; un editor a la vez;
+cambiar de mes lo cierra; Fecha también en «Mis registros».
+
+## Fase 22 — Editar cualquier gasto desde «Mes», también la fecha de un puntual (v2.17)
+«Mis registros» enseña los últimos 20 puntuales (`listarRegistros` de la v1): los antiguos o programados a meses vista no se
+podían corregir, y la fecha de un gasto no se podía cambiar en ningún sitio. «Mes» ya es un índice de todos los gastos.
+Decisiones (confirmadas por Pau, con las recomendaciones):
+- **Un lápiz en cada línea de «Mes»** que despliega debajo el mismo `editorRegistro` de «Mis registros»: el puntual (nombre,
+  importe, categoría, **fecha** y Eliminar) y la regla (también desde cada «1.ª vez / 2.ª vez» y desde la barra de un
+  presupuesto). Un cambio de precio propone «Desde» = el día 1 del mes visto. La regla sale de `registros.recurrentes` (solo
+  las activas: una que ya terminó lo dice en una línea), que se piden al tocar el primer lápiz (no al abrir «Mes»).
+- **El lápiz va fuera del `<label>`** de la casilla (`conLapiz`, `.linea-editable`): tocarlo no marca nada. 44 × 44 px con
+  márgenes negativos, para no alargar las líneas.
+- **Un editor a la vez** (`editorMes`). Mientras está abierto, `pintarMes` actualiza las cifras pero no las tarjetas
+  (`repintarMesPendiente`), como «Cambiar previsto» en la 14; cambiar de mes o de pestaña, o Deshacer, lo cierra. Al guardar o
+  eliminar: se cierra, se vacía la caché de la 8.4 y la lista de «Mis registros» (`registros = null`) y se pide el mes.
+- **`editorRegistro` y `ejecutarRegistro` con un destino** (`destinoRegistros` o `destinoMes()`): dónde salen los mensajes
+  (en «Mes», dentro del editor, sin borrar lo escrito) y qué se hace al terminar. El campo Fecha sale también en «Mis
+  registros». `pedirRegistros()` separado de `cargarRegistros()`.
+- **La fecha de un puntual** (`cambios.fecha` en `guardar_registro`): el mismo rango que al crear (`fechaValida` y `LIMITES`
+  de la v1: ±730 días desde hoy en `CONFIG.ZONA`), y en un mes que esté en Meses (si no, no saldría en ningún «Mes»). La de un
+  recurrente → `rechazado` (es un cambio de precio o una baja). La escribe `cambiarFecha_` dentro de `conBloqueo_`, con su paso
+  `celda` en el Deshacer compuesto. `mes_anterior`/`mes_nuevo` por el periodo de la fase 13 (`mesDeFecha_`); la notificación
+  dice «movido a Diciembre 2026». La marca de Pagos le sigue sola: los puntuales van por ID (fase 13).
+- **Aviso de arrastre** (`avisoArrastreDe_` con `avisoArrastre_` de la 18.3) al guardar si cambia el importe, las veces o la
+  fecha (un puntual: su mes y el nuevo; una regla: desde que empieza, o desde el cambio de precio, hasta hoy) y al eliminar:
+  `eliminar` pasa por `eliminarConAviso_`, que lee la fila antes de llamar a `eliminarRegistro` (v1, sin tocar).
+- «Mis registros» sigue con los últimos 20. Multiusuario: cada uno en su hoja, sin migración.
+
+Pruebas: `probarGuardarRegistro()` ampliada (línea de estado). En el iPhone: E1–E8 (importe de un puntual antiguo; fecha a
+otro mes; el lápiz no marca y la línea sí; «2.ª vez» del Barbero y cambio de precio desde el día 1; barra de Ocio; aviso de
+Recalcular en un mes cerrado; Deshacer; oscuro y el móvil de Aina).
 
 ## Fase 21 — Ahorro conjunto entre dos personas (v2.16)
 Pau y Aina tienen una cuenta de ahorro conjunta. Hasta ahora Pau la llevaba en su hoja (lo suyo «yo», lo de Aina «pareja»).
