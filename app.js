@@ -36,6 +36,7 @@ function mostrar(id, visible) {
 }
 
 function irA(vista) {
+  cerrarEditorMes(false);   // fase 22: el editor abierto en «Mes» no sobrevive a un cambio de pestaña
   mostrar('vista-dictar', vista === 'dictar');
   mostrar('vista-mes', vista === 'mes');
   mostrar('vista-ahorro', vista === 'ahorro');
@@ -782,6 +783,7 @@ async function cargarMes(etiqueta) {
 // Flechas y «Hoy»: el título (o el mes entero, si está en la caché) cambia al instante y la petición
 // sale al dejar de tocar.
 function irAMes(etiqueta) {
+  cerrarEditorMes(false);
   peticionMes++; // la respuesta que esté en camino ya no es la del mes que quieres ver
   mesDestino = etiqueta;
   const guardado = cacheMes.get(etiqueta);
@@ -865,9 +867,16 @@ function pintarMes(origen) {
   $('mes-restante').classList.toggle('negativo', c.restante < 0);
   pintarReparto(r);
 
-  $('mes-categorias').replaceChildren(...(r.categorias.length
-    ? r.categorias.map(tarjetaCategoria)
-    : [crear('p', 'vacio', 'Este mes no tiene gastos previstos.')]));
+  // Fase 22: con un editor abierto en este mes, las tarjetas no se repintan (borrarían lo que escribes): se repintan al
+  // cerrarlo. Las cifras sí se actualizan.
+  if (editorMes && editorMes.etiqueta !== r.etiqueta) cerrarEditorMes(false);
+  if (editorMes) {
+    repintarMesPendiente = origen;
+  } else {
+    $('mes-categorias').replaceChildren(...(r.categorias.length
+      ? r.categorias.map(tarjetaCategoria)
+      : [crear('p', 'vacio', 'Este mes no tiene gastos previstos.')]));
+  }
 
   $('mes-pruebas').textContent = (origen === 'caché' ? 'desde caché' : 'del servidor') + ' · ' + r.ms + ' ms · cuadra ' +
     (r.cuadra ? '✅' : '❌');
@@ -1060,15 +1069,135 @@ function tarjetaCategoria(k) {
   t.append(cab);
 
   // Las reglas de presupuesto no son un cargo: se ven como barra, no como línea, y no se marcan.
-  k.reglas.filter((g) => g.tipo !== 'presupuesto').forEach((g) => t.append(
-    lineaPagable(g, g.fecha_cargo ? fechaCorta(g.fecha_cargo) : (g.vez ? '' : 'semanal'), textoVez(g))));
-  if (k.presupuesto > 0) t.append(barraPresupuesto(k));
+  // Fase 22: cada línea lleva su lápiz; las de una misma regla («1.ª vez», «2.ª semana») abren el editor de la regla.
+  k.reglas.filter((g) => g.tipo !== 'presupuesto').forEach((g) => t.append(conLapiz(
+    lineaPagable(g, g.fecha_cargo ? fechaCorta(g.fecha_cargo) : (g.vez ? '' : 'semanal'), textoVez(g)),
+    [['Editar ' + g.concepto, g.id, () => editorReglaMes(g.base || g.id)]])));
+  // El lápiz de la barra abre el editor de su regla de presupuesto (normalmente una por categoría).
+  const presupuestos = k.reglas.filter((g) => g.tipo === 'presupuesto');
+  if (k.presupuesto > 0) {
+    t.append(conLapiz(barraPresupuesto(k), presupuestos.map((g) =>
+      ['Editar el presupuesto ' + g.concepto, g.id, () => editorReglaMes(g.id)])));
+  }
   if (k.movimientos.length) {
     const movs = crear('div', 'movimientos-mes');
-    k.movimientos.forEach((m) => movs.append(lineaPagable(m, fechaCorta(m.fecha), '')));
+    k.movimientos.forEach((m) => movs.append(conLapiz(lineaPagable(m, fechaCorta(m.fecha), ''),
+      [['Editar ' + m.concepto, m.id, () => editorRegistro({ id: m.id, concepto: m.concepto, importe: m.importe,
+        categoria: k.nombre, fecha: m.fecha }, 'Movimientos', destinoMes())]])));
     t.append(movs);
   }
   return t;
+}
+
+/* ---------- Editar desde «Mes» (fase 22) ---------- */
+
+// Cualquier gasto se corrige desde su mes: el lápiz despliega debajo el mismo editor de «Mis registros». Un editor a la
+// vez; mientras está abierto, una actualización del mes no repinta las tarjetas. Al guardar se pide el mes otra vez.
+let editorMes = null;             // { etiqueta, id (de la línea), caja, lapiz, mensaje }
+let repintarMesPendiente = null;  // el origen del último pintado que se saltó mientras se editaba
+
+// La línea (o la barra) y, a su derecha, un lápiz por cada [etiqueta accesible, id, crearEditor]. El lápiz va fuera del
+// <label>: tocarlo nunca marca la casilla.
+function conLapiz(contenido, editores) {
+  const fila = crear('div', 'linea-editable');
+  const lapices = crear('div', 'lapices');
+  editores.forEach(([texto, id, crearEditor]) => {
+    const lapiz = crear('button', 'linea-editar');
+    lapiz.type = 'button';
+    lapiz.setAttribute('aria-label', texto);
+    lapiz.setAttribute('aria-expanded', String(!!editorMes && editorMes.id === id));
+    lapiz.append(iconoLapiz());
+    lapiz.addEventListener('click', () => abrirEditorMes(id, fila, lapiz, crearEditor));
+    lapices.append(lapiz);
+  });
+  fila.append(contenido, lapices);
+  return fila;
+}
+
+function iconoLapiz() {
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('aria-hidden', 'true');
+  const trazo = document.createElementNS(ns, 'path');
+  trazo.setAttribute('d', 'M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4');
+  svg.append(trazo);
+  return svg;
+}
+
+async function abrirEditorMes(id, fila, lapiz, crearEditor) {
+  if (editorMes && editorMes.id === id) return cerrarEditorMes();   // el mismo lápiz otra vez: se cierra (y se repinta si llegó algo)
+  cerrarEditorMes(false);   // otro abierto: se cambia por este sin repintar (la fila de este lápiz tiene que seguir en pantalla)
+  const caja = crear('div', 'editor-mes');
+  const mensaje = crear('p', 'estado editor-mes-estado');
+  fila.after(caja);
+  lapiz.setAttribute('aria-expanded', 'true');
+  editorMes = { etiqueta: mesDatos.etiqueta, id, caja, lapiz, mensaje };
+  // El editor necesita las categorías, el «hoy» del servidor y los datos de las reglas: los de «Mis registros».
+  if (!registros) {
+    caja.append(crear('p', 'estado', 'Cargando…'));
+    try {
+      await pedirRegistros();
+    } catch (err) {
+      if (editorMes && editorMes.caja === caja) caja.replaceChildren(crear('p', 'estado error', err.message));
+      return;
+    }
+    if (!editorMes || editorMes.caja !== caja) return;   // se cerró mientras cargaba
+  }
+  caja.replaceChildren(crearEditor(), mensaje);
+}
+
+// repintar = false cuando enseguida se va a pintar otra cosa (otro editor, otro mes, otra pestaña).
+function cerrarEditorMes(repintar = true) {
+  if (!editorMes) return;
+  editorMes.caja.remove();
+  editorMes.lapiz.setAttribute('aria-expanded', 'false');
+  editorMes = null;
+  if (repintar && repintarMesPendiente && mesDatos) {
+    const origen = repintarMesPendiente;
+    repintarMesPendiente = null;
+    pintarMes(origen);
+  }
+}
+
+// La regla con sus datos de siempre (importe de cada vez, veces, categoría), los de «Mis registros». Un cambio de precio
+// propone empezar el día 1 del mes que se está viendo. Una regla que ya terminó no está en esa lista: no se edita aquí.
+function editorReglaMes(id) {
+  const regla = registros.recurrentes.filter((x) => x.id === id)[0];
+  if (!regla) {
+    const aviso = crear('div', 'editor');
+    aviso.append(crear('p', 'aviso', 'Esta regla ya terminó: solo se editan aquí las que siguen activas. Para cambiarla, ' +
+      'búscala en la pestaña Recurrentes de la hoja.'));
+    return aviso;
+  }
+  return editorRegistro(regla, 'Recurrentes', destinoMes(), { desde: mesDatos.mes_inicio });
+}
+
+// Dónde avisa y qué hace el editor al terminar, en «Mes»: los mensajes, dentro del editor (lo escrito no se borra); al
+// guardar o eliminar, se cierra y se pide el mes otra vez. Las reglas cambian también otros meses: la caché de la 8.4 se
+// vacía entera, y la lista de «Mis registros» se vuelve a pedir la próxima vez.
+function destinoMes() {
+  return {
+    estado(texto, esError = false) {
+      if (!editorMes) return;
+      editorMes.mensaje.textContent = texto;
+      editorMes.mensaje.classList.toggle('error', esError);
+    },
+    async hecho(x) {
+      cerrarEditorMes(false);
+      repintarMesPendiente = null;
+      registros = null;
+      cacheMes.clear();
+      notificar(x.desc, true);
+      await cargarMes(mesDestino);
+    }
+  };
+}
+
+// "2026-11-12" + 3 → "2026-11-15" (días de calendario, sin zona horaria).
+function sumarDias(iso, dias) {
+  const [a, m, d] = iso.split('-').map(Number);
+  return new Date(Date.UTC(a, m - 1, d + dias)).toISOString().slice(0, 10);
 }
 
 function lineaMes(concepto, cuando, importe, veces, etiqueta = 'div') {
@@ -1494,11 +1623,16 @@ function estadoRegistros(mensaje, esError = false) {
   $('estado-registros').classList.toggle('error', esError);
 }
 
+// Los gastos, las categorías y los ingresos: para «Mis registros» y para editar desde «Mes» (fase 22).
+async function pedirRegistros() {
+  const [r, i] = await Promise.all([api('registros'), api('ingresos')]);
+  registros = Object.assign(r, { ingresos: i.ingresos, meses: i.meses });
+}
+
 async function cargarRegistros() {
   estadoRegistros('Cargando…');
   try {
-    const [r, i] = await Promise.all([api('registros'), api('ingresos')]);
-    registros = Object.assign(r, { ingresos: i.ingresos, meses: i.meses });
+    await pedirRegistros();
     estadoRegistros('');
     pintarRegistros();
   } catch (err) {
@@ -1653,8 +1787,9 @@ function opcion(nombre, valor, titulo, ayuda, marcada) {
   return { label, radio };
 }
 
-// Panel de edición de un registro desplegado.
-function editorRegistro(r, hoja) {
+// Panel de edición de un registro desplegado. destino: dónde avisa y qué hace al terminar («Mis registros» o «Mes»).
+// opciones.desde: la fecha que propone un cambio de precio (hoy, o el día 1 del mes visto en «Mes»).
+function editorRegistro(r, hoja, destino = destinoRegistros, opciones = {}) {
   const esRec = hoja === 'Recurrentes';
   const editor = crear('div', 'editor');
 
@@ -1685,6 +1820,16 @@ function editorRegistro(r, hoja) {
   });
   editor.append(campo('Importe (€)', importe), campo('Categoría', categoria));
 
+  // Fase 22: la fecha de un gasto puntual (la de un recurrente es un cambio de precio o una baja). El mismo rango que al
+  // crearlo (dos años antes o después de hoy); si cae en otro mes, el gasto pasa a ese mes.
+  let fecha = null;
+  if (!esRec && r.fecha) {
+    fecha = entrada('date', r.fecha);
+    fecha.min = sumarDias(registros.hoy, -730);
+    fecha.max = sumarDias(registros.hoy, 730);
+    editor.append(campo('Fecha', fecha), crear('small', 'ayuda-veces', 'Si la cambias a otro mes, el gasto pasa a ese mes.'));
+  }
+
   // Recurrentes: un cambio de importe puede ser una corrección o un cambio de precio desde una fecha.
   let esCambioPrecio = () => false;
   let desde = null;
@@ -1695,7 +1840,7 @@ function editorRegistro(r, hoja) {
       'El importe siempre fue este; cambia también los meses pasados.', true);
     const cambio = opcion('modo-' + r.id, 'cambioPrecio', 'Cambio de precio',
       'Desde una fecha; los meses anteriores se quedan como estaban.', false);
-    desde = entrada('date', registros.hoy);
+    desde = entrada('date', opciones.desde || registros.hoy);
     const campoDesde = campo('Desde', desde);
     campoDesde.classList.add('oculto');
     grupo.addEventListener('change', () => campoDesde.classList.toggle('oculto', !cambio.radio.checked));
@@ -1720,13 +1865,15 @@ function editorRegistro(r, hoja) {
       cambios.modo = 'cambioPrecio';
       cambios.desde = desde.value;
     }
+    if (fecha && fecha.value && fecha.value !== r.fecha) cambios.fecha = fecha.value;
     if (Object.keys(cambios).length) params.cambios = cambios;
     if (veces && Number(veces.value) !== r.veces) params.veces = Number(veces.value);
     if (!params.concepto && !params.cambios && !params.veces) throw new Error('No hay cambios que guardar.');
     const x = await api('guardar_registro', params);
-    cacheMes.clear();   // el nombre, el importe o las veces salen en «Mes»
+    cacheMes.clear();   // el nombre, el importe, las veces o la fecha salen en «Mes»
+    if (x.aviso) x.desc += ' · ' + x.aviso;   // un arrastre que puede haber cambiado (fase 22)
     return x;
-  }));
+  }, destino));
   editor.append(guardar);
 
   const acciones = crear('div', 'fila');
@@ -1736,13 +1883,16 @@ function editorRegistro(r, hoja) {
     const baja = crear('button', 'btn-borde', 'Dar de baja');
     baja.type = 'button';
     dosToques(baja, () => ejecutarRegistro(baja, 'Dando de baja…',
-      () => api('baja', { id: r.id, fecha_fin: fechaBaja.value })));
+      () => api('baja', { id: r.id, fecha_fin: fechaBaja.value }), destino));
     acciones.append(baja);
   }
   const eliminar = crear('button', 'btn-peligro', 'Eliminar');
   eliminar.type = 'button';
-  dosToques(eliminar, () => ejecutarRegistro(eliminar, 'Eliminando…',
-    () => api('eliminar', { hoja, id: r.id })));
+  dosToques(eliminar, () => ejecutarRegistro(eliminar, 'Eliminando…', async () => {
+    const x = await api('eliminar', { hoja, id: r.id });
+    if (x.aviso) x.desc += ' · ' + x.aviso;   // fase 22
+    return x;
+  }, destino));
   acciones.append(eliminar);
   editor.append(acciones);
   return editor;
@@ -1769,17 +1919,25 @@ function dosToques(boton, accion) {
   });
 }
 
-async function ejecutarRegistro(btn, mensajeEspera, fn) {
-  btn.disabled = true;
-  estadoRegistros(mensajeEspera);
-  try {
-    const r = await fn();
+// Fase 22: el mismo editor sirve en «Mis registros» y en «Mes»; el destino dice dónde avisa y qué hace al terminar.
+const destinoRegistros = {
+  estado: estadoRegistros,
+  async hecho(r) {
     abierto = null;
-    estadoRegistros('');
     notificar(r.desc, true);
     await cargarRegistros();
+  }
+};
+
+async function ejecutarRegistro(btn, mensajeEspera, fn, destino = destinoRegistros) {
+  btn.disabled = true;
+  destino.estado(mensajeEspera);
+  try {
+    const r = await fn();
+    destino.estado('');
+    await destino.hecho(r);
   } catch (err) {
-    estadoRegistros(err.message, true);
+    destino.estado(err.message, true);
     btn.disabled = false;
   }
 }
@@ -1830,7 +1988,11 @@ $('deshacer').addEventListener('click', async (e) => {
     const r = await api('deshacer');
     notificar('↩︎ Deshecho: ' + r.desc, false);
     if (!$('vista-registros').classList.contains('oculto')) await cargarRegistros();
-    if (!$('vista-mes').classList.contains('oculto')) await cargarMes(mesDatos && mesDatos.etiqueta);
+    if (!$('vista-mes').classList.contains('oculto')) {
+      cerrarEditorMes(false);   // fase 22: sus datos ya no valen
+      repintarMesPendiente = null;
+      await cargarMes(mesDatos && mesDatos.etiqueta);
+    }
     if (!$('vista-ahorro').classList.contains('oculto')) await cargarAhorro();
   } catch (err) {
     notificar(err.message, true, true); // se puede reintentar

@@ -527,6 +527,23 @@ input[type="checkbox"]:checked, input[type="radio"]:checked {
 .presupuesto.pasado .presupuesto-barra span { background: var(--acento); }
 .presupuesto.pasado .presupuesto-texto { color: var(--acento-tinta); font-weight: 600; }
 
+/* Editar desde «Mes» (fase 22): un lápiz a la derecha de cada línea y de cada barra, fuera del <label> de la casilla.
+   La zona de toque es de 44 × 44 px, pero los márgenes negativos no alargan las líneas. */
+.linea-editable { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px; }
+.lapices { display: flex; flex-direction: column; }
+.linea-editar { display: grid; place-items: center; width: 44px; height: 44px; margin: -12px -12px -12px -4px; padding: 0;
+  border: none; border-radius: 999px; background: transparent; color: var(--secundario); cursor: pointer;
+  -webkit-tap-highlight-color: transparent; }
+.linea-editar svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8;
+  stroke-linecap: round; stroke-linejoin: round; }
+.linea-editar[aria-expanded="true"] { color: var(--primario-tinta); }
+.linea-editar[aria-expanded="true"] svg { background: var(--primario-suave); border-radius: 999px; padding: 6px; width: 30px; height: 30px; }
+.editor-mes { margin: 2px -18px 4px; }
+.editor-mes .editor { padding: 14px 18px 4px; border-bottom: 1px solid var(--borde); }
+.editor-mes > .estado { padding: 0 18px; }
+.editor-mes-estado { margin: 8px 0 0; text-align: left; }
+.editor-mes-estado:empty { display: none; }
+
 /* ---------- Ahorro (fase 16) ---------- */
 
 .segmentado-2 { grid-template-columns: repeat(2, 1fr); }

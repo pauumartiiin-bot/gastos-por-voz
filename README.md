@@ -170,6 +170,11 @@ de la siguiente. Sin nómina apuntada, es el mes natural. Los gastos puntuales v
 recurrentes siguen por mes natural, porque casi todos se cobran el día 1. Un gasto puntual puede cambiar de mes al
 apuntar la nómina, así que su marca de «pendiente» va con el gasto y no con el mes.
 
+**Cada gasto se corrige desde su mes.** Cada línea lleva un lápiz (fuera de la zona que marca la casilla) que despliega
+el mismo editor de «Mis registros». Así se llega a cualquier gasto, también a los antiguos o los programados que ya no
+salen en «Mis registros». Ahí se puede cambiar además la fecha de un gasto puntual, con el mismo rango que al crearlo; si
+cae en otro mes, el gasto pasa a ese mes y su marca de «pendiente» lo sigue.
+
 ## Categorías: la descripción también es un prompt
 
 Desde la pestaña «Crear» se puede añadir una categoría con **nombre y descripción**
@@ -340,6 +345,7 @@ acabaría en «Aina»; por eso la frase solo nombra la categoría elegida.
 | El total ahorrado solo cuenta lo que ya ha pasado (fecha ≤ hoy); lo programado, aparte | Contar todas las filas, como al principio | Con aportaciones a un año vista, el total y el progreso del objetivo dirían que tengo un dinero que aún no está en la cuenta. La pregunta de la pestaña es «¿cuánto tengo de verdad?» |
 | Ni una fórmula en la pestaña «Ahorros»; los totales, en «Objetivos» | Totales al pie de la propia pestaña | La v1 escribe cada fila nueva tras la última ocupada: una fórmula debajo la desplazaría (la misma lección de la fase 13) |
 | Varias veces al mes como un valor en la regla y la clave «R011#2» solo cuando hay más de una vez | Un día concreto por vez, o una fila de Pagos por vez siempre | Sin días, el modelo es un número; con la clave nueva solo donde hace falta, las marcas antiguas siguen valiendo sin migrarlas |
+| Editar cualquier gasto desde su línea en «Mes», con el mismo editor | Alargar «Mis registros» o ponerle un buscador | «Mes» ya es un índice de todos los gastos, cada uno en su mes: cualquiera queda a dos toques, sin una pantalla nueva que mantener |
 | Gasto con formulario que reutiliza el guardado de los dictados | Una acción nueva en el servidor, o pasar el texto por Haiku | Una sola validación para todo; sin LLM, lo escrito no se reinterpreta |
 
 ## Latencia
