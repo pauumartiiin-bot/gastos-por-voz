@@ -75,10 +75,15 @@ function atender_(p, inicio) {
     // fijada, así que reciben el del servidor, que nunca sale de Apps Script (fase 20).
     const resultado = accion(p, tokenInterno_());
     // Fase 11.3: un gasto borrado no puede dejar marcas en Pagos que heredaría el siguiente con su ID (Pagos.gs).
-    if (resultado.ok !== false && (p.accion === 'eliminar' || p.accion === 'deshacer')) limpiarPagosTrasBorrar_();
+    if (resultado.ok !== false && (p.accion === 'eliminar' || p.accion === 'deshacer')) {
+      limpiarPagosTrasBorrar_();
+      limpiarExcepcionesTrasBorrar_();   // Fase 23: las excepciones de reglas que ya no existen (Excepciones.gs)
+    }
     // Fase 17: un cambio de precio (v1) crea la regla nueva copiando 13 columnas, sin las veces al mes (Veces.gs).
     if (resultado.ok !== false && p.accion === 'editar' && p.hoja === 'Recurrentes' && p.cambios && p.cambios.modo === 'cambioPrecio') {
-      copiarVecesTrasCambioDePrecio_(String(p.id));
+      const id = String(p.id);
+      copiarVecesTrasCambioDePrecio_(id);
+      moverExcepcionesTrasCambioDePrecio_(libro_(), id, reglaNuevaTrasCambio_(libro_(), id));   // Fase 23 (Excepciones.gs, Guardar.gs)
     }
     // Fase B.1: tiempo dentro de doPost. El móvil lo resta del total para ver la red y el arranque de Apps Script.
     if (p.accion === 'dictar') resultado.ms_servidor = Date.now() - inicio;
