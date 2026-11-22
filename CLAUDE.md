@@ -35,7 +35,7 @@ iPhone (esta app, GitHub Pages, instalada en pantalla de inicio)
   `redirect: 'follow'` (Apps Script responde con una redirección).
 - Interfaz en español. Comentarios del código en español, breves.
 
-## Contrato de la API (fases 6.1–22)
+## Contrato de la API (fases 6.1–23)
 Petición: un único `doPost` (en `backend/Api.gs`) que enruta por `accion`. Cuerpo JSON enviado como texto plano:
 ```json
 { "t": "<token>", "accion": "dictar", ...parámetros }
@@ -51,7 +51,7 @@ Petición: un único `doPost` (en `backend/Api.gs`) que enruta por `accion`. Cue
 | `editar` | `hoja`, `id`, `cambios` | `editarRegistro` | `desc` |
 | `baja` | `id`, `fecha_fin` | `darDeBaja` | `desc` |
 | `eliminar` | `hoja`, `id` | `eliminarRegistro` (vía `eliminarConAviso_`, fase 22) | `desc`, `aviso` (arrastre que puede haber cambiado, o `null`) |
-| `mes` | `etiqueta?` (sin ella, el mes por defecto) | `mes_` (nuevo, `backend/Mes.gs`) con `libro_` y `conBloqueo_` | `etiqueta`, `mes_inicio`, `por_defecto`, `meses`, `cabecera` (con `desglose`, fase 14, y `ahorro_mes`, fase 16), `categorias`, `cuadra`, `ingresos`, `ms` (detalle en «Fase 7», «Fase 12» y «Fase 14») |
+| `mes` | `etiqueta?` (sin ella, el mes por defecto) | `mes_` (nuevo, `backend/Mes.gs`) con `libro_` y `conBloqueo_` | `etiqueta`, `mes_inicio`, `por_defecto`, `meses`, `cabecera` (con `desglose`, fase 14, y `ahorro_mes`, fase 16), `categorias` (fase 23: las reglas mensuales que no son presupuesto traen `veces_normales` y `excepcion`, y una con 0 veces ese mes sale con `sin_cargo: true` e importe 0), `cuadra`, `ingresos`, `ms` (detalle en «Fase 7», «Fase 12», «Fase 14» y «Fase 23») |
 | `categoria` | `nombre`, `descripcion` | `crearCategoria_` (nuevo, `backend/Categorias.gs`) con `libro_`, `conBloqueo_`, `normalizar` y `apuntarDeshacer_` | `nombre`, `desc`, `huecos_libres` (detalle en «Fase 7b») |
 | `renombrar` | `hoja` (`Recurrentes` \| `Movimientos`), `id`, `concepto` | `renombrar_` (nuevo, `backend/Renombrar.gs`) con `libro_`, `conBloqueo_`, `buscarFilaPorId_`, `COL`/`COLM` y `apuntarDeshacer_` | `id`, `concepto`, `desc` (detalle en «Fase 8») |
 | `pagar` | `etiqueta`, `id` (regla R…, «R011#2» para una vez de una regla de varias — fase 17 —, o gasto puntual M…), `pagado` (`true` \| `false`) | `pagar_` (nuevo, `backend/Pagos.gs`) con `libro_`, `conBloqueo_`, `buscarFilaPorId_`, `COL` y `COLM` | `etiqueta`, `id`, `pagado`, `pagado_el` (detalle en «Fase 8» y «Fase 11») |
@@ -65,7 +65,7 @@ Petición: un único `doPost` (en `backend/Api.gs`) que enruta por `accion`. Cue
 | `objetivo` | `nombre`, `importe`, `fecha?` | `objetivo_` (nuevo) con `conBloqueo_` y `fechaSerial_` | `anterior` (o `null`), `objetivo`, `ahorros` |
 | `veces` | `id`, `veces` (entero 1–10), `conservar_deshacer?` (sin su propio Deshacer: lo usa «+ Nuevo gasto») | `veces_` (nuevo, `backend/Veces.gs`) con `libro_`, `conBloqueo_`, `buscarFilaPorId_`, `COL` y `apuntarDeshacer_` | `id`, `veces`, `anterior`, `desc` (detalle en «Fase 17») |
 | `arrastre` | `etiqueta` (el mes que recibe el arrastre) | `arrastre_` (nuevo, `backend/Ingresos.gs`) con `libro_`, `conBloqueo_`, `enMes_`, `siguienteId_`, `escribirFila_` y `mes_` | `etiqueta`, `id` (o `null` si da 0), `desde`, `concepto`, `anterior`, `importe`, `mes` (detalle en «Fase 15») |
-| `guardar_registro` | `hoja` (`Recurrentes` \| `Movimientos`), `id`, `concepto?`, `cambios?: { importe?, categoria?, modo?, desde?, fecha? }` (los de `editar`; `fecha`, fase 22, solo en Movimientos), `veces?` (solo mensuales que no son presupuesto) | `guardarRegistro_` (nuevo, `backend/Guardar.gs`): `editarRegistro` (v1), `cambiarFecha_`, `renombrar_` y `veces_`, con un solo `apuntarDeshacer_` al final | `id`, `id_nuevo` (la regla nueva tras un cambio de precio, o `null`), `desc`, `mes_anterior` y `mes_nuevo` (por periodo; `null` en Recurrentes), `aviso` (detalle en «Fase 18» y «Fase 22») |
+| `guardar_registro` | `hoja` (`Recurrentes` \| `Movimientos`), `id`, `concepto?`, `cambios?: { importe?, categoria?, modo?, desde?, fecha? }` (los de `editar`; `fecha`, fase 22, solo en Movimientos), `veces?` (solo mensuales que no son presupuesto), `veces_mes?: { etiqueta, veces }` o `{ etiqueta, habitual: true }` (fase 23: solo ese mes, 0–10; no junto a un cambio de precio) | `guardarRegistro_` (nuevo, `backend/Guardar.gs`): `editarRegistro` (v1), `cambiarFecha_`, `renombrar_`, `veces_` y `aplicarVecesMes_` (`backend/Excepciones.gs`), con un solo `apuntarDeshacer_` al final | `id`, `id_nuevo` (la regla nueva tras un cambio de precio, o `null`), `desc`, `mes_anterior` y `mes_nuevo` (por periodo; `null` en Recurrentes), `aviso` (detalle en «Fase 18», «Fase 22» y «Fase 23») |
 | `editar_ingreso` | `id`, `concepto?`, `importe?`, `fecha?`, `mes?` (no en nómina; el tipo y los arrastres no se editan) | `editarIngreso_` (nuevo, `backend/Ingresos.gs`) con `conBloqueo_`, `buscarFilaPorId_`, `fechaSerial_`, `aJSON_` y `apuntarDeshacer_` | `id`, `desc`, `aviso` (arrastre que puede haber cambiado, o `null`) |
 | `editar_ahorro` | `id`, `de?` (fase 21), `concepto?`, `importe?`, `fecha?`, `quien?` (en el saldo inicial, solo concepto e importe; el tipo no se edita) | `editarAhorro_` (nuevo, `backend/Ahorros.gs`) con `conBloqueo_`, `buscarFilaPorId_`, `fechaSerial_`, `aJSON_` y `apuntarDeshacer_` | `id`, `desc`, `meses` (los que cambian), `ahorros` |
 
@@ -123,13 +123,14 @@ backend/Renombrar.gs    acción renombrar (fase 8.1): cambia el concepto de un g
 backend/Pagos.gs        acción pagar (fases 8.2 y 11.1): marca cargos fijos y gastos puntuales en la pestaña Pagos; se copia a mano
 backend/Ingresos.gs     acciones ingresos, ingreso y borrar_ingreso (fase 9.1), arrastre (fase 15) y editar_ingreso (fase 18); se copia a mano
 backend/Latencia.gs     medirLatencia() (fase B.1): cronometra libro_, leerContexto_ e interpretar; se copia a mano
-backend/Migraciones.gs  cambios en la hoja de cada fase (aplicarFase13 a aplicarFase17 y aplicarFase19), se ejecutan una vez desde el editor; se copia a mano
+backend/Migraciones.gs  cambios en la hoja de cada fase (aplicarFase13 a aplicarFase17, aplicarFase19 y aplicarFase23), se ejecutan una vez desde el editor; se copia a mano
 backend/Veces.gs        acción veces y veces en registros (fase 17): recurrentes de varias veces al mes; se copia a mano
 backend/Ahorros.gs      acciones ahorros, ahorro, borrar_ahorro y objetivo (fase 16), editar_ahorro (fase 18) y lo programado (fase 19); se copia a mano
 backend/Guardar.gs      acción guardar_registro (fase 18.2): un solo «Guardar cambios» con Deshacer compuesto, y la fecha de un puntual y eliminar con aviso (fase 22); se copia a mano
 backend/Previstos.gs    acción previsto (fase 14): comisiones previstas de un mes (Meses D); se copia a mano
 backend/Usuarios.gs     fase 20: la persona de cada petición, plantilla, altas y bajas, migraciones en todas las hojas; se copia a mano
 backend/Conjunta.gs     fase 21: ahorro conjunto entre dos personas (la cuenta, sus reglas, altas y bajas); se copia a mano
+backend/Excepciones.gs  fase 23: las veces de un recurrente solo en un mes (pestaña Excepciones, Pagos, cambio de precio, huérfanas); se copia a mano
 docs/                   capturas del README (generadas con datos inventados)
 CLAUDE.md               este archivo
 README.md               README de portfolio (fase 6.5)
@@ -516,6 +517,49 @@ lápiz cambia el total; su fecha a otro mes lo mueve con «movido a …»; el l�
 del Barbero abre la regla con «Desde» el día 1 del mes visto; el lápiz de la barra de Ocio cambia el presupuesto; el aviso de
 «Recalcular» en un mes con arrastre; Deshacer; bien en oscuro y en el móvil de Aina.
 **Propuesta sin implementar:** el aviso de arrastre también al «Dar de baja» con una fecha pasada (hoy no lo da).
+
+**Fase 23 — Cambiar las veces de un recurrente solo en un mes (v2.18) — en pruebas.** Detalle en la sección «Fase 23».
+`?v=` 7.22.0. Hoja cambiada con `aplicarFase23()` (y `aplicarFase23EnTodas()`). Probado en local con el simulador de la 22
+ampliado (Cálculo calculado como la hoja para el mes de `Resumen!B1`, con R, O y P, y las fórmulas de R guardadas):
+`aplicarFase23()` con «,» y «;» (pestaña, 40 filas de R, Guía; total y suma de P iguales, B7 = 0; la segunda vez sin cambios;
+se para sin tocar nada si una fila de R no tiene la fórmula de la 17); `probarExcepciones()` todo ✅ a la primera (validaciones
+9/9; 1 vez → una línea de 10 € y el mes siguiente con 2 y 20 €, `cuadra` ✅; Deshacer; 0 veces → «este mes no»; 3 veces y
+marcar la 3.ª; la limpieza respeta la «#3» y bajar a 1 borra las marcas; de 1 a 2 con la única pagada → «#1» pagada; volver a lo
+habitual y Deshacer; cambio de precio con la excepción del mes siguiente en la regla nueva y Deshacer; huérfanas; limpieza);
+`probarVeces()`, `probarPagos()` y `probarGuardarRegistro()` en verde con y sin la fase 23 (`probarMes()`: `cuadra` ✅; las
+reglas reales no están en el simulador). Interfaz en el iPhone 13 simulado (claro y oscuro), 13/13 y la de la fase 22 18/18.
+
+## Fase 23 — Cambiar las veces de un recurrente solo en un mes (v2.18)
+Caso real: el barbero es un mensual de 2 veces, pero en noviembre Pau solo fue una; el parking de Aina son bonos, casi siempre
+2 al mes y algunos meses 1. Antes había que bajar a 1 vez y acordarse de volver a subir. Decisiones (confirmadas por Pau, con
+las recomendaciones; el texto del botón, «Volver a lo habitual», lo eligió Pau):
+- **Una excepción por mes y regla en la pestaña «Excepciones»** (`ID (X001) · Creado · Mes · Regla · Veces`; sin fórmulas). El
+  ID va en la A porque el Deshacer de la v1 busca las filas por ella; al recuperar una fila («fila») formatea las columnas 2,
+  4 y 7 como Movimientos, así que ahí van Creado (fecha), Regla (texto) y nada.
+- **La hoja calcula:** Cálculo!R = la excepción del mes de `Resumen!B1` para ese ID (`COUNTIFS`/`SUMIFS` sobre Excepciones) o,
+  si no hay, la fórmula de la fase 17. O, P, el Resumen, `cuadra` y «Mes» salen solos.
+- **Solo mensuales que no son presupuesto**, de 0 a 10 veces (0 = ese mes no se cobra; más de lo habitual también vale) y **solo
+  en un mes en que la regla tiene cargo** (el servidor mira Cálculo!N de ese mes con `enMes_`, ~1,5 s al guardar). **Poner las
+  veces habituales es volver a lo habitual:** se borra la fila. Con un cambio de precio en la misma petición → `rechazado`.
+- **0 veces:** la regla sigue saliendo en «Mes» como «este mes no» (sin casilla ni importe, `sin_cargo`), para poder volver a lo
+  habitual desde ese mes.
+- **Pagos:** al bajar, se borran las marcas que sobran ese mes (todas con 0); de 1 a más, una marca «R011» pasa a «R011#1» (si
+  no, como marca antigua de la fase 17, daría por pagadas todas). `estadoNormal_` y `limpiarPagosHuerfanos_` usan las veces del
+  mes (`maxVecesEnMes_`), no las de la regla. Las marcas borradas no vuelven con el Deshacer (como en la 17).
+- **Cambio de precio:** las excepciones de los meses desde el primer cargo de la regla nueva pasan a ella
+  (`moverExcepcionesTrasCambioDePrecio_`, con su paso en el Deshacer compuesto; también tras `editar` en `Api.gs`).
+- **IDs reutilizados:** tras `eliminar` y `deshacer`, `limpiarExcepcionesTrasBorrar_` borra las excepciones de reglas que ya no
+  existen (como las marcas de Pagos, 11.3). Eliminar una regla y deshacerlo la devuelve sin excepciones (aceptado).
+- **Arrastre:** el aviso de «Recalcular» si el mes tiene uno detrás (fase 22).
+- **Interfaz:** en el editor de una regla mensual abierto desde «Mes», arriba, «Solo <mes>» con «Veces este mes» (0–10),
+  «Guardar este mes» y, si ya tiene excepción, «Volver a lo habitual»; debajo, «Todos los meses» (el editor de siempre). En la
+  línea, «1 vez este mes · normalmente 2» o «este mes no · normalmente 2». «Mis registros» no lo tiene (no tiene mes).
+- Multiusuario: `aplicarFase23EnTodas()`; «Excepciones» entra en las pestañas que vacía la plantilla y en la estructura que se
+  compara (`Usuarios.gs`).
+
+Pruebas: `probarExcepciones()` (regla de prueba de 2 veces a 10 € desde el penúltimo mes; los casos de la línea de estado;
+limpieza en `finally`). En el iPhone: X1–X7 (Barbero a 1 en noviembre con la nota; diciembre sigue en 2; volver a lo habitual;
+el parking de Aina a 1; 0 veces; Deshacer; oscuro).
 
 ## Fase 22 — Editar cualquier gasto desde «Mes», también la fecha de un puntual (v2.17)
 «Mis registros» enseña los últimos 20 puntuales (`listarRegistros` de la v1): los antiguos o programados a meses vista no se

@@ -30,10 +30,10 @@ const USU_NOMBRE_PLANTILLA_ = 'Control de gastos — plantilla';
 const USU_CATEGORIAS_ = ['Formación', 'Financiación', 'Alimentación', 'Ocio', 'Suscripciones', 'Transporte', 'Salud',
                          'Cuidado personal', 'Otros'];
 // Pestañas con datos de una persona: la plantilla las deja sin filas (salvo la cabecera).
-const USU_PESTANAS_DATOS_ = ['Recurrentes', 'Movimientos', 'Ingresos', 'Ahorros', 'Pagos', 'Evaluación', 'Evaluación resumen'];
+const USU_PESTANAS_DATOS_ = ['Recurrentes', 'Movimientos', 'Ingresos', 'Ahorros', 'Pagos', 'Excepciones', 'Evaluación', 'Evaluación resumen'];
 // Estructura que tiene que tener la hoja de una persona: la fila 1 de estas pestañas y estas celdas, iguales que en la
 // hoja de Pau (que siempre lleva todas las migraciones). Una fase que añada columnas queda cubierta sola.
-const USU_FILA1_ = ['Recurrentes', 'Movimientos', 'Ingresos', 'Ahorros', 'Objetivos', 'Meses', 'Cálculo', 'Categorías'];
+const USU_FILA1_ = ['Recurrentes', 'Movimientos', 'Ingresos', 'Ahorros', 'Objetivos', 'Meses', 'Cálculo', 'Categorías', 'Excepciones'];
 const USU_CELDAS_ = [['Resumen', 'D2:D8'], ['Objetivos', 'H1:H13']];
 
 /* ---------- La persona de cada petición ---------- */

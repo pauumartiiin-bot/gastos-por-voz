@@ -1070,14 +1070,15 @@ function tarjetaCategoria(k) {
 
   // Las reglas de presupuesto no son un cargo: se ven como barra, no como línea, y no se marcan.
   // Fase 22: cada línea lleva su lápiz; las de una misma regla («1.ª vez», «2.ª semana») abren el editor de la regla.
+  // Fase 23: una regla con 0 veces este mes sale como «este mes no» (sin casilla), para poder volver a lo habitual.
   k.reglas.filter((g) => g.tipo !== 'presupuesto').forEach((g) => t.append(conLapiz(
-    lineaPagable(g, g.fecha_cargo ? fechaCorta(g.fecha_cargo) : (g.vez ? '' : 'semanal'), textoVez(g)),
-    [['Editar ' + g.concepto, g.id, () => editorReglaMes(g.base || g.id)]])));
+    g.sin_cargo ? lineaSinCargo(g) : conNotaMes(lineaPagable(g, g.fecha_cargo ? fechaCorta(g.fecha_cargo) : (g.vez ? '' : 'semanal'), textoVez(g)), g),
+    [['Editar ' + g.concepto, g.id, () => editorReglaMes(g)]])));
   // El lápiz de la barra abre el editor de su regla de presupuesto (normalmente una por categoría).
   const presupuestos = k.reglas.filter((g) => g.tipo === 'presupuesto');
   if (k.presupuesto > 0) {
     t.append(conLapiz(barraPresupuesto(k), presupuestos.map((g) =>
-      ['Editar el presupuesto ' + g.concepto, g.id, () => editorReglaMes(g.id)])));
+      ['Editar el presupuesto ' + g.concepto, g.id, () => editorReglaMes(g)])));
   }
   if (k.movimientos.length) {
     const movs = crear('div', 'movimientos-mes');
@@ -1162,7 +1163,8 @@ function cerrarEditorMes(repintar = true) {
 
 // La regla con sus datos de siempre (importe de cada vez, veces, categoría), los de «Mis registros». Un cambio de precio
 // propone empezar el día 1 del mes que se está viendo. Una regla que ya terminó no está en esa lista: no se edita aquí.
-function editorReglaMes(id) {
+function editorReglaMes(g) {
+  const id = g.base || g.id;
   const regla = registros.recurrentes.filter((x) => x.id === id)[0];
   if (!regla) {
     const aviso = crear('div', 'editor');
@@ -1170,7 +1172,9 @@ function editorReglaMes(id) {
       'búscala en la pestaña Recurrentes de la hoja.'));
     return aviso;
   }
-  return editorRegistro(regla, 'Recurrentes', destinoMes(), { desde: mesDatos.mes_inicio });
+  // Fase 23: en los mensuales que no son presupuesto (traen veces_normales), las veces solo de este mes.
+  const soloMes = g.veces_normales != null ? { etiqueta: mesDatos.etiqueta, linea: g } : null;
+  return editorRegistro(regla, 'Recurrentes', destinoMes(), { desde: mesDatos.mes_inicio, soloMes });
 }
 
 // Dónde avisa y qué hace el editor al terminar, en «Mes»: los mensajes, dentro del editor (lo escrito no se borra); al
@@ -1206,6 +1210,28 @@ function lineaMes(concepto, cuando, importe, veces, etiqueta = 'div') {
     crear('span', 'linea-fecha', [cuando, veces].filter((x) => x).join(' ')),
     crear('span', 'linea-importe', euros(importe)));
   return linea;
+}
+
+// Fase 23: «1 vez este mes · normalmente 2» bajo el nombre, solo en la primera línea de una regla con excepción este mes.
+function conNotaMes(linea, g) {
+  if (g.excepcion == null || (g.vez && g.vez > 1)) return linea;
+  linea.querySelector('.linea-concepto').append(crear('small', 'nota-mes',
+    textoVecesMes(g.excepcion) + ' este mes · normalmente ' + g.veces_normales));
+  return linea;
+}
+
+// Fase 23: la regla que este mes no se cobra (excepción de 0 veces): sin casilla ni importe.
+function lineaSinCargo(g) {
+  const linea = lineaMes(g.concepto, g.fecha_cargo ? fechaCorta(g.fecha_cargo) : '', 0, '');
+  linea.classList.add('linea-sin-cargo');
+  linea.prepend(crear('span', 'sin-casilla'));   // el hueco de la casilla, para que el nombre quede alineado con los demás
+  linea.querySelector('.linea-importe').textContent = '—';
+  linea.querySelector('.linea-concepto').append(crear('small', 'nota-mes', 'este mes no · normalmente ' + g.veces_normales));
+  return linea;
+}
+
+function textoVecesMes(n) {
+  return n + (n === 1 ? ' vez' : ' veces');
 }
 
 // Cargo fijo o gasto puntual (fase 11.2) con su casilla de «pagado»: toda la línea es la zona de toque (un <label>).
@@ -1849,6 +1875,9 @@ function editorRegistro(r, hoja, destino = destinoRegistros, opciones = {}) {
     esCambioPrecio = () => cambio.radio.checked;
   }
 
+  if (opciones.soloMes) editor.prepend(seccionSoloMes(r, opciones.soloMes, destino), crear('hr', 'separador'),
+    crear('p', 'editor-titulo', 'Todos los meses'));
+
   const guardar = crear('button', 'btn-primario', 'Guardar cambios');
   guardar.type = 'button';
   guardar.addEventListener('click', () => ejecutarRegistro(guardar, 'Guardando…', async () => {
@@ -1896,6 +1925,52 @@ function editorRegistro(r, hoja, destino = destinoRegistros, opciones = {}) {
   acciones.append(eliminar);
   editor.append(acciones);
   return editor;
+}
+
+/*
+ * Fase 23: «Solo este mes» en el editor de una regla mensual abierto desde «Mes»: las veces de ese mes (0–10; 0 = este mes no
+ * se cobra) sin tocar los demás, y «Volver a lo habitual» si ya tiene excepción. Se guarda con guardar_registro (veces_mes),
+ * con su Deshacer; las marcas de pagado que sobran ese mes se borran.
+ */
+function seccionSoloMes(r, { etiqueta, linea }, destino) {
+  const caja = crear('div', 'solo-mes');
+  const habituales = linea.veces_normales;
+  const ahora = linea.excepcion != null ? linea.excepcion : habituales;
+  caja.append(crear('p', 'editor-titulo', 'Solo ' + partirEtiqueta(etiqueta)[0]));
+  const veces = document.createElement('select');
+  veces.replaceChildren(...Array.from({ length: 11 }, (_, k) => {
+    const o = crear('option', null, k === 0 ? '0 (este mes no)' : String(k));
+    o.value = String(k);
+    o.selected = k === ahora;
+    return o;
+  }));
+  caja.append(campo('Veces este mes', veces), crear('small', 'ayuda-veces', 'Lo habitual: ' + textoVecesMes(habituales) +
+    ' al mes. Solo cambia este mes; los demás siguen igual.'));
+  const botones = crear('div', 'fila');
+  const guardarMes = crear('button', 'btn-suave', 'Guardar este mes');
+  guardarMes.type = 'button';
+  guardarMes.addEventListener('click', () => ejecutarRegistro(guardarMes, 'Guardando…', () => {
+    const n = Number(veces.value);
+    if (n === ahora) throw new Error('Este mes ya va con ' + textoVecesMes(n) + '.');
+    return guardarVecesMes(r.id, n === habituales && linea.excepcion != null ? { etiqueta, habitual: true } : { etiqueta, veces: n });
+  }, destino));
+  botones.append(guardarMes);
+  if (linea.excepcion != null) {
+    const habitual = crear('button', 'btn-borde', 'Volver a lo habitual');
+    habitual.type = 'button';
+    habitual.addEventListener('click', () => ejecutarRegistro(habitual, 'Guardando…',
+      () => guardarVecesMes(r.id, { etiqueta, habitual: true }), destino));
+    botones.append(habitual);
+  }
+  caja.append(botones);
+  return caja;
+}
+
+async function guardarVecesMes(id, vecesMes) {
+  const x = await api('guardar_registro', { hoja: 'Recurrentes', id, veces_mes: vecesMes });
+  cacheMes.clear();
+  if (x.aviso) x.desc += ' · ' + x.aviso;   // el arrastre de un mes cerrado (fase 22)
+  return x;
 }
 
 // Acciones con consecuencias: el primer toque pide confirmación y el segundo la ejecuta.

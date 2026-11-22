@@ -666,6 +666,121 @@ function aplicarFase17() {
 }
 
 
+// Fase 23: Cálculo!R de la fase 17 y la nueva, con la excepción del mes de Resumen!B1 (pestaña Excepciones). Se comparan
+// sin espacios y con «;» → «,» (la hoja puede guardarlas con «;», como en la configuración de España).
+function migRFase17_(r) {
+  return '=IF(OR($A' + r + '="",$E' + r + '<>"mensual",$D' + r + '="presupuesto"),1,' +
+         'IF(INDEX(Recurrentes!$N:$N,ROW())="",1,INDEX(Recurrentes!$N:$N,ROW())))';
+}
+function migRFase23_(r) {
+  const filtro = 'Excepciones!$C:$C,Resumen!$B$1,Excepciones!$D:$D,$A' + r;
+  return '=IF(OR($A' + r + '="",$E' + r + '<>"mensual",$D' + r + '="presupuesto"),1,' +
+         'IF(COUNTIFS(' + filtro + ')>0,SUMIFS(Excepciones!$E:$E,' + filtro + '),' +
+         'IF(INDEX(Recurrentes!$N:$N,ROW())="",1,INDEX(Recurrentes!$N:$N,ROW()))))';
+}
+const MIG_EXC_COLUMNAS_ = ['ID', 'Creado', 'Mes', 'Regla', 'Veces'];
+
+/**
+ * Fase 23: las veces de un recurrente solo en un mes. Pestaña «Excepciones» (ID X001 · Creado · Mes · Regla · Veces; sin
+ * fórmulas: se escribe tras getLastRow()) y Cálculo!R: si hay una excepción para ese ID en el mes de Resumen!B1, sus
+ * veces; si no, las de la fase 17. O, P, el Resumen y «Mes» salen solos. Como nadie tiene excepciones todavía, los totales
+ * no deben moverse: se comprueban la suma de Cálculo!P, B5 y B7 antes y después; si algo no cuadra, se deshace todo.
+ * Mismas garantías que las anteriores: separador de la hoja, comprobar antes y la segunda vez no cambia nada.
+ */
+function aplicarFase23() {
+  const libro = libro_();   // v1
+  conBloqueo_(() => {       // v1
+    const calc = libro.getSheetByName('Cálculo');
+    const resumen = libro.getSheetByName('Resumen');
+    const guia = libro.getSheetByName('Guía');
+    const ultima = calc.getLastRow();
+    const rangoR = calc.getRange(2, 18, ultima - 1, 1);
+    const formulasR = rangoR.getFormulas().map((f) => f[0]);
+    const sep = separadorDeHoja_(calc.getRange(2, 1, ultima - 1, 18).getFormulas());
+    const local = (formula) => formula.replace(/,/g, sep);   // estas fórmulas no llevan comas dentro de textos
+    const normal = (formula) => formula.replace(/\s+/g, '').replace(/;/g, ',');
+
+    // 1. Comprobaciones: nada se escribe si algo no cuadra.
+    if (calc.getRange(1, 18).getValue() !== 'Veces') return Logger.log('❌ Falta la fase 17 (Cálculo!R1 no es «Veces»). No se ha cambiado nada.');
+    let exc = libro.getSheetByName('Excepciones');
+    const yaHoja = !!exc;
+    if (yaHoja && MIG_EXC_COLUMNAS_.some((c, i) => exc.getRange(1, i + 1).getValue() !== c)) {
+      return Logger.log('❌ Ya hay una pestaña «Excepciones» con otra cabecera. No se ha cambiado nada.');
+    }
+    const filas = formulasR.map((f, i) => ({ fila: i + 2, f: normal(f) })).filter((x) => x.f);
+    const porCambiar = filas.filter((x) => x.f === migRFase17_(x.fila)).length;
+    const cambiadas = filas.filter((x) => x.f === migRFase23_(x.fila)).length;
+    if (!filas.length || porCambiar + cambiadas !== filas.length) {
+      return Logger.log('❌ Cálculo!R no tiene la fórmula de la fase 17 en todas sus filas (' + porCambiar + ' por cambiar + ' + cambiadas +
+                        ' ya cambiadas de ' + filas.length + '). No se ha cambiado nada.\nR2: ' + formulasR[0]);
+    }
+    SpreadsheetApp.flush();
+    const sumaP = () => calc.getRange(2, 16, ultima - 1, 1).getValues().reduce((t, f) => t + (Number(f[0]) || 0), 0);
+    const antes = { p: sumaP(), b5: resumen.getRange('B5').getValue() };
+
+    // 2. Pestaña «Excepciones»: cabecera, formatos y validaciones (Mes de la lista de Meses, Veces entero 0–10).
+    if (!yaHoja) {
+      exc = libro.insertSheet('Excepciones');
+      exc.getRange(1, 1, 1, MIG_EXC_COLUMNAS_.length).setValues([MIG_EXC_COLUMNAS_]).setFontWeight('bold');
+      exc.setFrozenRows(1);
+      exc.getRange('B2:B').setNumberFormat('dd/mm/yyyy hh:mm');
+      exc.getRange('C2:C').setDataValidation(SpreadsheetApp.newDataValidation()
+        .requireValueInRange(libro.getSheetByName('Meses').getRange('B2:B'), true).setAllowInvalid(false).build());
+      exc.getRange('E2:E').setDataValidation(SpreadsheetApp.newDataValidation()
+        .requireFormulaSatisfied(local('=AND(INT(E2)=E2, E2>=0, E2<=10)'))
+        .setHelpText('Veces ese mes: entero del 0 al 10 (0 = ese mes no se cobra).').setAllowInvalid(false).build());
+      Logger.log('✅ Excepciones: pestaña nueva (ID · Creado · Mes · Regla · Veces)');
+    } else {
+      Logger.log('· Excepciones: ya estaba');
+    }
+    const deshacer = (motivo) => {
+      rangoR.setFormulas(formulasR.map((f) => [f]));
+      if (!yaHoja) libro.deleteSheet(exc);
+      Logger.log('❌ ' + motivo + ' Se ha deshecho: no se ha cambiado nada (separador «' + sep + '»).');
+    };
+
+    // 3. Cálculo!R con la excepción del mes. Solo las filas que aún tienen la fórmula de la fase 17.
+    if (porCambiar) {
+      rangoR.setFormulas(formulasR.map((f, i) => [f && normal(f) === migRFase17_(i + 2) ? local(migRFase23_(i + 2)) : f]));
+      Logger.log('✅ Cálculo: R con la excepción del mes (' + porCambiar + ' filas)');
+    } else {
+      Logger.log('· Cálculo: R ya usaba las excepciones');
+    }
+
+    // 4. Comprobación: R con números y los totales iguales que antes (nadie tiene excepciones todavía).
+    SpreadsheetApp.flush();
+    const r = rangoR.getValues().map((f) => f[0]);
+    const despues = { p: sumaP(), b5: resumen.getRange('B5').getValue(), b7: resumen.getRange('B7').getValue() };
+    const igual = (x, y) => Math.round(Number(x) * 100) === Math.round(Number(y) * 100);
+    const vacia = exc.getLastRow() < 2;
+    if (!r.every((v) => typeof v === 'number') ||
+        (vacia && (!igual(despues.p, antes.p) || !igual(despues.b5, antes.b5))) || despues.b7 !== 0) {
+      return deshacer('Cálculo o el Resumen no dan lo esperado (R2 «' + calc.getRange(2, 18).getDisplayValue() + '», suma de P ' + antes.p +
+                      ' → ' + despues.p + ', B5 ' + antes.b5 + ' → ' + despues.b5 + ', B7 ' + despues.b7 + ').');
+    }
+
+    // 5. Guía.
+    const filasGuia = guia.getRange(1, 1, guia.getLastRow(), 2).getValues();
+    if (!filasGuia.some((f) => f[0] === 'Excepciones')) {
+      const nuevas = [
+        ['Excepciones', 'Mes · Regla · Veces', 'Las veces de un gasto mensual solo en un mes (el barbero, 1 vez en noviembre aunque normalmente son 2; 0 = ese mes no se cobra). Se ponen desde «Mes» (lápiz → «Solo este mes»). Una fila por mes y regla.', 'Se escribe desde la app: no editar a mano', 'X001 · Noviembre 2026 (nómina de octubre) · R011 · 1'],
+        ['Cálculo', 'R Veces (fase 23)', 'Si el mes de Resumen!B1 tiene una excepción para la regla, sus veces; si no, las de Veces_mes.', 'Solo fórmulas: no editar', '']
+      ];
+      guia.getRange(guia.getLastRow() + 1, 1, nuevas.length, 5).setValues(nuevas);
+      Logger.log('✅ Guía: 2 filas nuevas');
+    } else {
+      Logger.log('· Guía: las filas ya estaban');
+    }
+    Logger.log('✅ ' + resumen.getRange('B1').getValue() + ': total previsto ' + despues.b5 + ' (antes ' + antes.b5 + ') · suma de Cálculo!P ' +
+               Math.round(despues.p * 100) / 100 + ' (antes ' + Math.round(antes.p * 100) / 100 + ') · B7 = ' + despues.b7);
+  });
+}
+
+/** Fase 23 en la hoja de Pau, en la plantilla y en la de cada persona (Usuarios.gs). Primero, aplicarFase23() en la de Pau. */
+function aplicarFase23EnTodas() {
+  enTodasLasHojas_(aplicarFase23);
+}
+
 /**
  * Fase 19: movimientos de ahorro programados (hasta un año vista). En Objetivos, el total y el desglose (I1:I4) pasan a
  * sumar solo lo ya ocurrido (fecha ≤ TODAY(), con la zona de la hoja); con ellos, el progreso, lo que falta y la cuota

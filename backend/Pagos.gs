@@ -70,7 +70,10 @@ function estadoNormal_(libro, id, mes, zona) {
     if (String(f[COL.TIPO - 1]).trim() === 'presupuesto') {
       return { error: 'Los presupuestos no se marcan como pagados.' };
     }
-    if (vez != null && (vez < 1 || vez > maxVecesRegla_(f))) return { error: 'Esa vez ya no existe. Recarga el mes.' };
+    // Fase 23: las veces de ese mes (su excepción, si la tiene; Excepciones.gs), no las de la regla.
+    const max = maxVecesEnMes_(f, mes.etiqueta, excepcionesPorMes_(libro));
+    if (max === 0) return { error: 'Este mes «' + f[COL.CONCEPTO - 1] + '» no se cobra. Recarga el mes.' };
+    if (vez != null && (vez < 1 || vez > max)) return { error: 'Esa vez ya no existe. Recarga el mes.' };
     return { pagado: false };
   }
   if (vez != null) return { error: 'Ese gasto ya no existe (¿se borró a mano?). Recarga el mes.' };
@@ -122,21 +125,26 @@ function hojaPagos_(libro) {
 function limpiarPagosHuerfanos_(libro) {
   const hoja = libro.getSheetByName(PAG_HOJA_);
   if (!hoja || hoja.getLastRow() < 2) return [];
-  // ID → cuántas veces puede tener en un mes (fase 17): las marcas «R011#3» de una regla que ya solo tiene 2 sobran.
-  const existen = {};
+  // ID → cuántas veces puede tener en un mes (fase 17): las marcas «R011#3» de una regla que ya solo tiene 2 sobran. Fase 23:
+  // en un mes con excepción, las de la excepción (Excepciones.gs); con 0, ninguna marca de ese mes vale.
+  const reglas = {};
   const rec = libro.getSheetByName('Recurrentes');
   if (rec.getLastRow() > 1) {
-    rec.getRange(2, 1, rec.getLastRow() - 1, VEC_COL_).getValues().forEach((f) => { existen[String(f[0])] = maxVecesRegla_(f); });   // Veces.gs
+    rec.getRange(2, 1, rec.getLastRow() - 1, VEC_COL_).getValues().forEach((f) => { reglas[String(f[0])] = f; });   // Veces.gs
   }
+  const puntuales = {};
   const movs = libro.getSheetByName('Movimientos');
-  if (movs.getLastRow() > 1) movs.getRange(2, 1, movs.getLastRow() - 1, 1).getValues().forEach((f) => { existen[String(f[0])] = 1; });
-  const ids = hoja.getRange(2, 2, hoja.getLastRow() - 1, 1).getValues().map((f) => String(f[0]));
+  if (movs.getLastRow() > 1) movs.getRange(2, 1, movs.getLastRow() - 1, 1).getValues().forEach((f) => { puntuales[String(f[0])] = true; });
+  const excepciones = excepcionesPorMes_(libro);
+  const filas = hoja.getRange(2, 1, hoja.getLastRow() - 1, 2).getValues();
   const borrados = [];
-  for (let i = ids.length - 1; i >= 0; i--) {   // de abajo arriba, para no mover las filas pendientes
-    const { base, vez } = partirId_(ids[i]);
-    if (!existen[base] || (vez != null && vez > existen[base])) {
+  for (let i = filas.length - 1; i >= 0; i--) {   // de abajo arriba, para no mover las filas pendientes
+    const id = String(filas[i][1]);
+    const { base, vez } = partirId_(id);
+    const max = puntuales[base] ? 1 : reglas[base] ? maxVecesEnMes_(reglas[base], String(filas[i][0]), excepciones) : 0;
+    if (!max || (vez != null && vez > max)) {
       hoja.deleteRow(i + 2);
-      borrados.unshift(ids[i]);
+      borrados.unshift(id);
     }
   }
   return borrados;

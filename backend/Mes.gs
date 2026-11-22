@@ -44,7 +44,8 @@ function mes_(p) {
   return Object.assign(
     { etiqueta: elegido.etiqueta, mes_inicio: elegido.inicio, por_defecto: porDefecto.etiqueta,
       meses: meses.map((m) => m.etiqueta) },
-    construirMes_(hoja, zona, pagosDelMes_(libro, elegido.etiqueta, zona)),   // Pagos.gs (fases 8.2 y 11.1)
+    construirMes_(hoja, zona, pagosDelMes_(libro, elegido.etiqueta, zona),   // Pagos.gs (fases 8.2 y 11.1)
+                  vecesDelMes_(libro, elegido.etiqueta)),                     // fase 23
     { ingresos: ingresosDelMes_(libro, elegido.etiqueta, zona), ms: Date.now() - inicio });
 }
 
@@ -142,8 +143,9 @@ function leerMesEnHoja_(libro, etiqueta) {
  * pagos = lo que se aparta de lo normal ese mes, { id: { estado, el } } (Pagos.gs): un cargo fijo está pendiente
  * salvo que se marque «pagado»; un gasto puntual está pagado salvo que se marque «pendiente» (fase 11.1).
  */
-function construirMes_(h, zona, pagos) {
+function construirMes_(h, zona, pagos, veces) {
   pagos = pagos || {};
+  veces = veces || { excepciones: {}, habituales: {} };
   // Los puntuales van por el periodo del mes (Resumen E2:E3), no por el mes natural (fase 13).
   const desde = textoFecha_(h.periodo[0], zona);
   const hasta = textoFecha_(h.periodo[1], zona);
@@ -151,7 +153,9 @@ function construirMes_(h, zona, pagos) {
   // Cálculo: A ID, B Concepto, C Categoría, D Tipo, E Frecuencia, F Importe, N Fecha_cargo, O Veces_en_mes, P Importe_en_mes.
   // Las semanales no tienen Fecha_cargo en la hoja: van con null. Fase 17: una regla con varias veces en el mes (mensual
   // con Veces_mes o semanal) sale como una línea por vez, «R011#1»…, con el importe de una vez (F) y su casilla.
-  const reglas = agrupar_([].concat(...h.calculo.filter((f) => f[0] && Number(f[14]) > 0).map((f) => lineasRegla_(f, zona, pagos))));
+  // Fase 23: una regla con 0 veces ese mes (excepción) también sale, como «este mes no», para poder volver a lo habitual.
+  const reglas = agrupar_([].concat(...h.calculo.filter((f) => f[0] && (Number(f[14]) > 0 || (veces.excepciones[String(f[0])] === 0 &&
+    f[13] instanceof Date))).map((f) => lineasRegla_(f, zona, pagos, veces))));
 
   // Movimientos: A ID, B Fecha, C Concepto, D Importe, E Categoría; solo los del periodo.
   const movimientos = agrupar_(h.movimientos.filter((f) => f[0] && f[1] instanceof Date).map((f) => ({
@@ -171,7 +175,7 @@ function construirMes_(h, zona, pagos) {
         (a.base || a.id).localeCompare(b.base || b.id) || (a.vez || 0) - (b.vez || 0)),
       movimientos: (movimientos[nombre] || []).sort((a, b) => a.fecha.localeCompare(b.fecha))
     };
-  }).filter((c) => c.total > 0 || c.movimientos.length);
+  }).filter((c) => c.total > 0 || c.movimientos.length || c.reglas.some((g) => g.sin_cargo));
 
   const totalPrevisto = redondear2_(h.cabecera[3]);
   const suma = categorias.reduce((s, c) => s + c.total, 0);
@@ -198,11 +202,19 @@ function construirMes_(h, zona, pagos) {
  * queda al bajar a 1 vez). Varias (y no es presupuesto, que se pinta como barra): una por vez, { id: 'R011#2', base, vez,
  * importe: F }, pagada por «R011#2» o por una fila antigua «R011» (antes, una sola casilla: todo pagado).
  */
-function lineasRegla_(f, zona, pagos) {
+function lineasRegla_(f, zona, pagos, vecesMes) {
   const base = String(f[0]);
   const veces = Number(f[14]);
   const comun = { categoria: String(f[2]).trim(), concepto: String(f[1]), tipo: String(f[3]), frecuencia: String(f[4]),
                   fecha_cargo: f[13] instanceof Date ? textoFecha_(f[13], zona) : null, veces: veces };
+  // Fase 23: en los mensuales que no son presupuesto, las veces habituales y la excepción de este mes (o null).
+  if (vecesMes && comun.frecuencia === 'mensual' && comun.tipo !== 'presupuesto') {
+    comun.veces_normales = vecesMes.habituales[base] || 1;
+    comun.excepcion = base in vecesMes.excepciones ? vecesMes.excepciones[base] : null;
+  }
+  if (comun.excepcion === 0) {   // este mes no se cobra: sin importe ni casilla
+    return [Object.assign({}, comun, { id: base, importe: 0, sin_cargo: true, pagado: false, pagado_el: null })];
+  }
   const marca = (ids) => ids.map((id) => pagos[id]).filter((p) => p)[0];
   const linea = (extra, p) => Object.assign({}, comun, extra,
     { pagado: p ? p.estado === 'pagado' : false, pagado_el: p && p.estado === 'pagado' ? p.el : null });
@@ -211,6 +223,16 @@ function lineasRegla_(f, zona, pagos) {
       importe: redondear2_(f[5]) }, marca([base + '#' + (k + 1), base])));
   }
   return [linea({ id: base, importe: redondear2_(f[15]) }, marca([base, base + '#1']))];
+}
+
+/** Fase 23: { excepciones: { regla: veces } de ese mes (Excepciones.gs), habituales: { regla: Veces_mes } } para lineasRegla_. */
+function vecesDelMes_(libro, etiqueta) {
+  const habituales = {};
+  const rec = libro.getSheetByName('Recurrentes');
+  if (rec.getLastRow() > 1 && rec.getLastColumn() >= VEC_COL_) {   // Veces.gs
+    rec.getRange(2, 1, rec.getLastRow() - 1, VEC_COL_).getValues().forEach((f) => { habituales[String(f[0])] = vecesDe_(f[VEC_COL_ - 1]); });
+  }
+  return { excepciones: excepcionesDelMes_(libro, etiqueta), habituales: habituales };
 }
 
 /** ¿Está pagado? Sin fila en Pagos, el estado normal; con fila, el que dice su Estado. */

@@ -12,7 +12,10 @@
  * cambiado (son fotos, fase 15).
  */
 
-/** Acción "guardar_registro": { hoja, id, concepto?, cambios?: { importe?, categoria?, modo?, desde?, fecha? }, veces? }. */
+/**
+ * Acción "guardar_registro": { hoja, id, concepto?, cambios?: { importe?, categoria?, modo?, desde?, fecha? }, veces?,
+ * veces_mes?: { etiqueta, veces } | { etiqueta, habitual: true } } (fase 23: solo ese mes, Excepciones.gs).
+ */
 function guardarRegistro_(p, token) {
   const hoja = String(p.hoja == null ? '' : p.hoja);
   if (hoja !== 'Recurrentes' && hoja !== 'Movimientos') return { ok: false, error: 'entrada' };
@@ -29,9 +32,9 @@ function guardarRegistro_(p, token) {
   // 1. Qué cambia, y validarlo todo antes de escribir nada.
   const zona = libro.getSpreadsheetTimeZone();
   const meses = mesesDeLaHoja_(libro, zona);   // Mes.gs
-  const plan = planGuardado_(p, esRec, actual, C, meses, zona);
+  const plan = planGuardado_(p, esRec, actual, C, meses, zona, libro, fila);
   if (plan.error) return { ok: false, error: 'rechazado', mensaje: plan.error };
-  if (!plan.nombre && !plan.editar && !plan.veces && !plan.fecha) return { ok: false, error: 'rechazado', mensaje: 'No hay cambios que guardar.' };
+  if (!plan.nombre && !plan.editar && !plan.veces && !plan.fecha && !plan.vecesMes) return { ok: false, error: 'rechazado', mensaje: 'No hay cambios que guardar.' };
 
   // 2. Escribir: la v1 primero; después el nombre (también en la regla nueva de un cambio de precio) y las veces.
   const props = PropertiesService.getScriptProperties();
@@ -71,7 +74,17 @@ function guardarRegistro_(p, token) {
       tandas.push(pasosDe());
       partes.push(textoVeces_(vecesDe_(actual[VEC_COL_ - 1])) + ' → ' + textoVeces_(plan.veces) + ' al mes');
     }
-    if (idNuevo) copiarVecesTrasCambioDePrecio_(id);   // Veces.gs: la regla nueva nace sin las veces (13 columnas)
+    if (idNuevo) {
+      copiarVecesTrasCambioDePrecio_(id);   // Veces.gs: la regla nueva nace sin las veces (13 columnas)
+      tandas.push(moverExcepcionesTrasCambioDePrecio_(libro, id, idNuevo));   // Excepciones.gs (fase 23)
+    }
+    if (plan.vecesMes) {
+      const vm = plan.vecesMes;
+      tandas.push(aplicarVecesMes_(vm));   // Excepciones.gs
+      const texto = (n) => (n === 0 ? 'no se cobra' : textoVeces_(n));
+      partes.push(vm.etiqueta.split(' (')[0] + ': ' + (vm.accion === 'quitar' ? 'vuelve a lo habitual (' + textoVeces_(vm.habituales) + ')'
+        : texto(vm.antes) + ' → ' + texto(vm.veces) + ', solo este mes'));
+    }
   } catch (err) {
     if (!tandas.length) throw err;   // nada escrito: el error de la v1 llega tal cual (clasificarError_)
     // Algo ya escrito y un paso posterior falla: se deshace lo hecho para no dejar cambios a medias.
@@ -89,12 +102,18 @@ function guardarRegistro_(p, token) {
            mes_anterior: mesAntes, mes_nuevo: mesNuevo, aviso: avisoTrasGuardar_(libro, meses, plan, esRec, actual, mesAntes, mesNuevo) };
 }
 
-/** Lo que cuenta en el mes es el importe, las veces y la fecha: el nombre y la categoría no cambian el restante. */
+/**
+ * Lo que cuenta en el mes es el importe, las veces y la fecha: el nombre y la categoría no cambian el restante. Las veces de
+ * un solo mes (fase 23) tocan solo ese mes.
+ */
 function avisoTrasGuardar_(libro, meses, plan, esRec, actual, mesAntes, mesNuevo) {
   const cuenta = (plan.editar && plan.editar.importe != null) || plan.veces || plan.fecha;
-  if (!cuenta) return null;
-  const desde = plan.editar && plan.editar.modo === 'cambioPrecio' ? plan.editar.desde : null;
-  return avisoArrastreDe_(libro, meses, esRec, actual, [mesAntes, mesNuevo], desde);
+  if (cuenta) {
+    const desde = plan.editar && plan.editar.modo === 'cambioPrecio' ? plan.editar.desde : null;
+    return avisoArrastreDe_(libro, meses, esRec, actual, [mesAntes, mesNuevo], desde);
+  }
+  if (plan.vecesMes) return avisoArrastre_(libro.getSheetByName(ING_HOJA_), meses.map((m) => m.etiqueta), [plan.vecesMes.etiqueta], false);   // Ingresos.gs
+  return null;
 }
 
 /** Fase 22: escribe la fecha nueva de un gasto puntual y devuelve su paso de Deshacer (la de antes, como número de serie). */
@@ -169,7 +188,7 @@ function avisoArrastreDe_(libro, meses, esRec, fila, mesesPuntual, desde) {
  * Lo que hay que hacer, ya validado: { nombre?, editar?: cambios para editarRegistro (v1), veces? } o { error }.
  * Los mensajes son los de la v1, renombrar y veces, para que digan lo mismo por cualquier camino.
  */
-function planGuardado_(p, esRec, actual, C, meses, zona) {
+function planGuardado_(p, esRec, actual, C, meses, zona, libro, filaRegla) {
   const plan = {};
   if (p.concepto != null) {
     const concepto = String(p.concepto).replace(/\s+/g, ' ').trim();
@@ -218,6 +237,14 @@ function planGuardado_(p, esRec, actual, C, meses, zona) {
       }
       plan.veces = veces;
     }
+  }
+  // Fase 23: las veces de un solo mes (Excepciones.gs). Lo último: es lo único que lee la hoja en otro mes (~1,5 s). Un
+  // cambio de precio cambia de regla a partir de una fecha: las dos cosas, por separado.
+  if (p.veces_mes != null) {
+    if (plan.editar && plan.editar.modo === 'cambioPrecio') return { error: 'Guarda el cambio de precio y las veces de este mes por separado.' };
+    const vm = planVecesMes_(libro, p.veces_mes, esRec, actual, filaRegla, meses);
+    if (vm.error) return { error: vm.error };
+    plan.vecesMes = vm.vecesMes;
   }
   return plan;
 }

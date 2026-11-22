@@ -544,6 +544,15 @@ input[type="checkbox"]:checked, input[type="radio"]:checked {
 .editor-mes-estado { margin: 8px 0 0; text-align: left; }
 .editor-mes-estado:empty { display: none; }
 
+/* Veces solo de un mes (fase 23): nota bajo el nombre y la línea «este mes no». */
+.nota-mes { display: block; margin-top: 2px; font-size: 12px; font-weight: 600; color: var(--acento-tinta); }
+.linea-sin-cargo { grid-template-columns: auto 1fr auto auto; align-items: center; }
+.linea-sin-cargo > .sin-casilla { width: 22px; }
+.linea-sin-cargo > .linea-fecha, .linea-sin-cargo > .linea-importe { opacity: 0.6; }
+.linea-sin-cargo .linea-concepto { color: var(--secundario); }
+.solo-mes { display: flex; flex-direction: column; gap: 12px; }
+.editor-titulo { margin: 0; font-size: 13px; font-weight: 800; letter-spacing: 0.02em; text-transform: uppercase; color: var(--secundario); }
+
 /* ---------- Ahorro (fase 16) ---------- */
 
 .segmentado-2 { grid-template-columns: repeat(2, 1fr); }
