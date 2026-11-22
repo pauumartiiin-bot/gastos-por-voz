@@ -175,6 +175,10 @@ el mismo editor de «Mis registros». Así se llega a cualquier gasto, también 
 salen en «Mis registros». Ahí se puede cambiar además la fecha de un gasto puntual, con el mismo rango que al crearlo; si
 cae en otro mes, el gasto pasa a ese mes y su marca de «pendiente» lo sigue.
 
+**Un mes distinto, sin tocar los demás.** Desde ese mismo lápiz, un recurrente mensual puede tener otras veces solo ese mes
+(el barbero, una vez en noviembre aunque lo habitual son dos; 0 = ese mes no se cobra). Se guarda como una excepción en su
+propia pestaña y la fórmula de la hoja la usa para ese mes; las marcas de pagado que sobran ese mes se borran.
+
 ## Categorías: la descripción también es un prompt
 
 Desde la pestaña «Crear» se puede añadir una categoría con **nombre y descripción**
@@ -346,6 +350,7 @@ acabaría en «Aina»; por eso la frase solo nombra la categoría elegida.
 | Ni una fórmula en la pestaña «Ahorros»; los totales, en «Objetivos» | Totales al pie de la propia pestaña | La v1 escribe cada fila nueva tras la última ocupada: una fórmula debajo la desplazaría (la misma lección de la fase 13) |
 | Varias veces al mes como un valor en la regla y la clave «R011#2» solo cuando hay más de una vez | Un día concreto por vez, o una fila de Pagos por vez siempre | Sin días, el modelo es un número; con la clave nueva solo donde hace falta, las marcas antiguas siguen valiendo sin migrarlas |
 | Editar cualquier gasto desde su línea en «Mes», con el mismo editor | Alargar «Mis registros» o ponerle un buscador | «Mes» ya es un índice de todos los gastos, cada uno en su mes: cualquiera queda a dos toques, sin una pantalla nueva que mantener |
+| Las veces de un mes como una excepción aparte (mes + regla), que la fórmula de la hoja aplica | Cambiar las veces de la regla y acordarse de devolverlas, o dar de baja y crear otra regla | La regla dice lo habitual y la excepción, lo que pasó ese mes: cada dato en un sitio y nada que acordarse de deshacer. El precio fue revisar todo lo que daba por hecho que las veces eran las mismas cada mes (Pagos, el cambio de precio, los IDs reutilizados) |
 | Gasto con formulario que reutiliza el guardado de los dictados | Una acción nueva en el servidor, o pasar el texto por Haiku | Una sola validación para todo; sin LLM, lo escrito no se reinterpreta |
 
 ## Latencia
