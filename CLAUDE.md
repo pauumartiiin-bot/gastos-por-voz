@@ -518,7 +518,7 @@ del Barbero abre la regla con «Desde» el día 1 del mes visto; el lápiz de la
 «Recalcular» en un mes con arrastre; Deshacer; bien en oscuro y en el móvil de Aina.
 **Propuesta sin implementar:** el aviso de arrastre también al «Dar de baja» con una fecha pasada (hoy no lo da).
 
-**Fase 23 — Cambiar las veces de un recurrente solo en un mes (v2.18) — en pruebas.** Detalle en la sección «Fase 23».
+**Fase 23 — Cambiar las veces de un recurrente solo en un mes (v2.18) — hecha.** Detalle en la sección «Fase 23».
 `?v=` 7.22.0. Hoja cambiada con `aplicarFase23()` (y `aplicarFase23EnTodas()`). Probado en local con el simulador de la 22
 ampliado (Cálculo calculado como la hoja para el mes de `Resumen!B1`, con R, O y P, y las fórmulas de R guardadas):
 `aplicarFase23()` con «,» y «;» (pestaña, 40 filas de R, Guía; total y suma de P iguales, B7 = 0; la segunda vez sin cambios;
@@ -528,6 +528,12 @@ marcar la 3.ª; la limpieza respeta la «#3» y bajar a 1 borra las marcas; de 1
 habitual y Deshacer; cambio de precio con la excepción del mes siguiente en la regla nueva y Deshacer; huérfanas; limpieza);
 `probarVeces()`, `probarPagos()` y `probarGuardarRegistro()` en verde con y sin la fase 23 (`probarMes()`: `cuadra` ✅; las
 reglas reales no están en el simulador). Interfaz en el iPhone 13 simulado (claro y oscuro), 13/13 y la de la fase 22 18/18.
+En Apps Script (22 nov; Nueva versión publicada) D1–D7 OK: `aplicarFase23()` a la primera (pestaña, R, Guía; total y suma de
+P iguales, B7 = 0) y la segunda vez sin cambios; `aplicarFase23EnTodas()` en la hoja de Pau, la plantilla y la de Aina;
+`probarExcepciones()` 9/9 y todo ✅ con limpieza; `probarVeces()`, `probarMes()`, `probarPagos()` y `probarGuardarRegistro()` en
+verde. En los móviles X1–X7 OK: Barbero a 1 vez en noviembre con la nota «1 vez este mes · normalmente 2» y diciembre con 2;
+volver a lo habitual; el parking de Aina a 1 en un mes; 0 veces → «este mes no» sin casilla y el total baja; Deshacer; bien en
+oscuro.
 
 ## Fase 23 — Cambiar las veces de un recurrente solo en un mes (v2.18)
 Caso real: el barbero es un mensual de 2 veces, pero en noviembre Pau solo fue una; el parking de Aina son bonos, casi siempre
